@@ -14,6 +14,7 @@ import (
 type Rules struct {
 	IncludeTests bool
 	SkipTags     []string
+	SkipFiles    []string
 }
 
 // Find returns the Go files under paths, as sorted slash-separated paths relative to dir.
@@ -51,6 +52,9 @@ func Find(dir string, paths []string, rules Rules) ([]string, error) {
 			if strings.HasSuffix(rel, "_test.go") && !rules.IncludeTests {
 				return nil
 			}
+			if matchesAny(rules.SkipFiles, rel) {
+				return nil
+			}
 			source, err := os.ReadFile(file)
 			if err != nil {
 				return err
@@ -74,6 +78,22 @@ func Find(dir string, paths []string, rules Rules) ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+// matchesAny tests a pattern with no slash against the file name alone, so that one pattern covers
+// a file that every package repeats.
+func matchesAny(patterns []string, rel string) bool {
+	for _, pattern := range patterns {
+		target := rel
+		if !strings.Contains(pattern, "/") {
+			target = path.Base(rel)
+		}
+		// The command-line module has already rejected bad patterns.
+		if matched, _ := path.Match(pattern, target); matched {
+			return true
+		}
+	}
+	return false
 }
 
 // inSkippedDir checks every folder of dir, because an explicit path can start below a skipped one.

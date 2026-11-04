@@ -85,6 +85,7 @@ Errors include an invalid flag, a Go file that doesn't parse, a `//go:build` lin
 | `--warn-only` | off | Exit with `0` when duplicates exist |
 | `--include-tests` | off | Scan `*_test.go` files |
 | `--skip-tags a,b` | none | Skip files that can only build with these tags |
+| `--skip-files a,b` | none | Skip files that match these patterns |
 | `--help` | | Print usage |
 
 godry has no config file and no baseline file. It writes no files.
@@ -98,9 +99,23 @@ These rules apply to both modes, and to paths that you name:
 - Files with the header `Code generated ... DO NOT EDIT.`
 - Files with an `ignore` build constraint.
 - Files that can only build with a tag in `--skip-tags`.
+- Files that match a pattern in `--skip-files`.
 - Pairs in one package with the same function name and the same receiver type. These are usually platform variants.
 
 Other build constraints and `GOOS` or `GOARCH` file suffixes have no effect. The same commit gives the same result on every machine.
+
+### Skipping files by name
+
+Use `--skip-files` for files that repeat on purpose, such as dependency wiring in every package.
+
+| Pattern | Matches |
+| --- | --- |
+| `packages.go` | `packages.go` in any folder |
+| `wire_*.go` | Any file name that starts with `wire_`, in any folder |
+| `internal/users/packages.go` | That one file, from the directory godry runs in |
+| `internal/*/packages.go` | `packages.go` one folder below `internal`, because `*` does not cross folders |
+
+A skipped file is not read, so it can't cause a parse error. Its functions are not compared on either side of a pair. You can repeat the flag or use a comma-separated list. A bad pattern exits with `2`.
 
 ### Exclude one function
 

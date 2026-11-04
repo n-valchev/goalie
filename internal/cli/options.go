@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"path"
 	"strings"
 
 	"github.com/n-valchev/godry/internal/compare"
@@ -34,6 +35,10 @@ Flags:
   --warn-only      Exit with 0 when duplicates exist.
   --include-tests  Scan *_test.go files.
   --skip-tags a,b  Skip files that can only build with these tags.
+  --skip-files a,b Skip files that match these patterns. A pattern with no
+                   slash matches the file name in any folder. A pattern with a
+                   slash matches the path from the current directory. * does
+                   not cross folders. Example: --skip-files packages.go
   --help           Print this help.
 
 Skip rules, for both modes and for paths you name:
@@ -42,6 +47,7 @@ Skip rules, for both modes and for paths you name:
   - Files with the header "Code generated ... DO NOT EDIT."
   - Files with an ignore build constraint.
   - Files that can only build with a tag in --skip-tags.
+  - Files that match a pattern in --skip-files.
   - Pairs in one package with the same function name and the same receiver type.
   - Functions with //godry:ignore <reason> in the comment directly above them.
 Other build constraints and GOOS or GOARCH file suffixes have no effect.
@@ -75,6 +81,7 @@ type options struct {
 	warnOnly     bool
 	includeTests bool
 	skipTags     []string
+	skipFiles    []string
 	help         bool
 	paths        []string
 }
@@ -100,6 +107,16 @@ func parseOptions(args []string) (options, error) {
 	flags.BoolVar(&opts.includeTests, "include-tests", false, "")
 	flags.Func("skip-tags", "", func(value string) error {
 		opts.skipTags = strings.Split(value, ",")
+		return nil
+	})
+	flags.Func("skip-files", "", func(value string) error {
+		for _, pattern := range strings.Split(value, ",") {
+			if _, err := path.Match(pattern, ""); err != nil {
+				return fmt.Errorf("bad pattern %q", pattern)
+			}
+			// Scanned paths never start with ./, so that spelling would otherwise match nothing.
+			opts.skipFiles = append(opts.skipFiles, path.Clean(pattern))
+		}
 		return nil
 	})
 
