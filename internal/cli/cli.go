@@ -34,6 +34,14 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	if len(paths) == 0 {
+		if opts.format == "json" {
+			// A reader of --format json must always be able to parse stdout.
+			fmt.Fprintln(stderr, "No Go files found.")
+			if err := report.JSON(stdout, nil); err != nil {
+				return fail(stderr, err)
+			}
+			return exitClean
+		}
 		fmt.Fprintln(stdout, "No Go files found.")
 		return exitClean
 	}
@@ -42,7 +50,13 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	pairs := compare.Find(candidates(functions, opts), nil, opts.threshold)
-	report.Text(stdout, pairs)
+	write := report.Text
+	if opts.format == "json" {
+		write = report.JSON
+	}
+	if err := write(stdout, pairs); err != nil {
+		return fail(stderr, err)
+	}
 	if len(pairs) > 0 && !opts.warnOnly {
 		return exitDuplicates
 	}

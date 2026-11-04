@@ -8,7 +8,46 @@ import (
 	"strings"
 )
 
-const usage = "Usage: godry [flags] [paths]\n"
+const usage = `godry finds Go functions with the same structure.
+
+Usage:
+  godry [flags] [paths]
+
+Modes:
+  godry [paths]
+      Whole repo: compare every function with every other function.
+  godry --base <rev> [paths]
+      New code: compare each new or changed function with every scanned
+      function. Report only pairs with at least one new or changed function.
+
+Paths limit both modes. With no paths, godry scans the current directory tree.
+
+Flags:
+  --base <rev>     Turn on new-code mode against this revision.
+  --threshold N    Minimum similarity score (default 0.82).
+  --min-lines N    Minimum lines in a function (default 9).
+  --min-nodes N    Minimum nodes in the normalized function (default 20).
+  --format F       Output format: text or json (default text).
+  --warn-only      Exit with 0 when duplicates exist.
+  --include-tests  Scan *_test.go files.
+  --skip-tags a,b  Skip files that can only build with these tags.
+  --help           Print this help.
+
+Skip rules, for both modes and for paths you name:
+  - Directories: vendor, testdata, node_modules, and names that start with . or _.
+  - *_test.go files, unless you set --include-tests.
+  - Files with the header "Code generated ... DO NOT EDIT."
+  - Files with an ignore build constraint.
+  - Files that can only build with a tag in --skip-tags.
+  - Pairs in one package with the same function name and the same receiver type.
+  - Functions with //godry:ignore <reason> in the comment directly above them.
+Other build constraints and GOOS or GOARCH file suffixes have no effect.
+
+Exit codes:
+  0  No duplicates, or duplicates with --warn-only.
+  1  Duplicates exist.
+  2  Any error, even with --warn-only.
+`
 
 type options struct {
 	base         string
