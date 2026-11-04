@@ -38,7 +38,9 @@ Flags:
   --skip-files a,b Skip files that match these patterns. A pattern with no
                    slash matches the file name in any folder. A pattern with a
                    slash matches the path from the current directory. * does
-                   not cross folders. Example: --skip-files packages.go
+                   not cross folders. ** matches any number of folders.
+                   Quote patterns so that the shell doesn't expand them.
+                   Example: --skip-files 'packages.go,internal/generated/**'
   --help           Print this help.
 
 Skip rules, for both modes and for paths you name:
@@ -55,7 +57,7 @@ Other build constraints and GOOS or GOARCH file suffixes have no effect.
 Ignore file:
   godry reads .godryignore from the current directory only. Write one
   --skip-files pattern per line. Lines that start with # are comments.
-  Both the file and the flag apply. !, **, and a trailing / are errors.
+  Both the file and the flag apply. ! and a trailing / are errors.
 
 Exit codes:
   0  No duplicates, or duplicates with --warn-only.

@@ -25,6 +25,7 @@ func TestIgnoreFileSkipsMatchingFiles(t *testing.T) {
 		{"no final newline", "packages.go", "packages.go"},
 		{"Windows line endings", "packages.go", "# Wiring.\r\npackages.go\r\n"},
 		{"spaces around a pattern", "packages.go", "  packages.go  \n"},
+		{"everything below a folder", "internal/generated/a/copy.go", "internal/generated/**\n"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -83,7 +84,7 @@ func TestABadIgnoreFilePatternNamesItsLine(t *testing.T) {
 }
 
 func TestUnsupportedPatternsAreErrors(t *testing.T) {
-	for _, pattern := range []string{"!keep.go", "internal/generated/", "internal/**/packages.go"} {
+	for _, pattern := range []string{"!keep.go", "internal/generated/", "internal/a**b/packages.go", "**.go", "[a/b].go"} {
 		t.Run(pattern, func(t *testing.T) {
 			dir := ignoreTree(t, "copy.go", pattern+"\n")
 			if code, _, stderr := runGodry(t, dir); code != 2 || !strings.Contains(stderr, ".godryignore:1:") {
@@ -111,5 +112,12 @@ func TestHelpListsTheIgnoreFile(t *testing.T) {
 	_, stdout, _ := runGodry(t, t.TempDir(), "--help")
 	if !strings.Contains(stdout, ".godryignore") {
 		t.Errorf("stdout = %q; want .godryignore listed", stdout)
+	}
+}
+
+func TestATrailingSlashErrorSuggestsTheFolderPattern(t *testing.T) {
+	dir := ignoreTree(t, "copy.go", "internal/generated/\n")
+	if code, _, stderr := runGodry(t, dir); code != 2 || !strings.Contains(stderr, "internal/generated/**") {
+		t.Errorf("exit code = %d, stderr = %q; want exit 2 suggesting internal/generated/**", code, stderr)
 	}
 }

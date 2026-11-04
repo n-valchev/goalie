@@ -87,11 +87,20 @@ func Find(dir string, paths []string, rules Rules) ([]string, error) {
 // CleanPattern rejects the gitignore forms that the pattern rules don't support. Accepted, each
 // would match nothing, so the user would believe a file was skipped.
 func CleanPattern(pattern string) (string, error) {
-	if _, err := path.Match(pattern, ""); err != nil {
-		return "", fmt.Errorf("bad pattern %q", pattern)
+	if strings.HasPrefix(pattern, "!") {
+		return "", fmt.Errorf("unsupported pattern %q: ! is not supported", pattern)
 	}
-	if strings.HasPrefix(pattern, "!") || strings.HasSuffix(pattern, "/") || strings.Contains(pattern, "**") {
-		return "", fmt.Errorf("unsupported pattern %q: !, **, and a trailing / are not supported", pattern)
+	if strings.HasSuffix(pattern, "/") {
+		return "", fmt.Errorf("unsupported pattern %q: to skip a folder, write %s**", pattern, pattern)
+	}
+	// Each part alone, because matching splits at slashes, which would break a [a/b] class.
+	for _, part := range strings.Split(pattern, "/") {
+		if _, err := path.Match(part, ""); err != nil {
+			return "", fmt.Errorf("bad pattern %q", pattern)
+		}
+		if part != "**" && strings.Contains(part, "**") {
+			return "", fmt.Errorf("unsupported pattern %q: ** must be a whole path part", pattern)
+		}
 	}
 	// Scanned paths never start with ./, so that spelling would otherwise match nothing.
 	return path.Clean(pattern), nil
@@ -127,15 +136,34 @@ func ReadIgnoreFile(dir string) ([]string, error) {
 func matchesAny(patterns []string, rel string) bool {
 	for _, pattern := range patterns {
 		target := rel
-		if !strings.Contains(pattern, "/") {
+		if !strings.Contains(pattern, "/") && pattern != "**" {
 			target = path.Base(rel)
 		}
-		// The command-line module has already rejected bad patterns.
-		if matched, _ := path.Match(pattern, target); matched {
+		if matchParts(strings.Split(pattern, "/"), strings.Split(target, "/")) {
 			return true
 		}
 	}
 	return false
+}
+
+func matchParts(pattern, parts []string) bool {
+	if len(pattern) == 0 {
+		return len(parts) == 0
+	}
+	if pattern[0] == "**" {
+		for skipped := 0; skipped <= len(parts); skipped++ {
+			if matchParts(pattern[1:], parts[skipped:]) {
+				return true
+			}
+		}
+		return false
+	}
+	if len(parts) == 0 {
+		return false
+	}
+	// CleanPattern has already rejected bad patterns.
+	matched, _ := path.Match(pattern[0], parts[0])
+	return matched && matchParts(pattern[1:], parts[1:])
 }
 
 // inSkippedDir checks every folder of dir, because an explicit path can start below a skipped one.

@@ -114,8 +114,13 @@ Use `--skip-files` for files that repeat on purpose, such as dependency wiring i
 | `wire_*.go` | Any file name that starts with `wire_`, in any folder |
 | `internal/users/packages.go` | That one file, from the directory godry runs in |
 | `internal/*/packages.go` | `packages.go` one folder below `internal`, because `*` does not cross folders |
+| `internal/generated/**` | Everything below that folder, at any depth |
+| `**/generated/**` | Everything below any folder named `generated` |
+| `internal/**/packages.go` | `packages.go` anywhere below `internal` |
 
 A skipped file is not read, so it can't cause a parse error. Its functions are not compared on either side of a pair. You can repeat the flag or use a comma-separated list. A bad pattern exits with `2`.
+
+Quote patterns on the command line, so that the shell doesn't expand them: `godry --skip-files 'internal/generated/**'`.
 
 To keep the patterns in the repo, write them in a `.godryignore` file:
 
@@ -130,7 +135,7 @@ internal/legacy/client.go
 - Write one pattern per line. The patterns follow the table above. Blank lines and lines that start with `#` are ignored.
 - `.godryignore` and `--skip-files` both apply.
 - A missing file is not an error. A bad pattern exits with `2` and names the line.
-- This is not full `.gitignore` syntax. `!`, `**`, and a trailing `/` exit with `2`, in the file and in the flag.
+- This is not full `.gitignore` syntax. `!`, a trailing `/`, and `**` inside a longer name such as `a**b` exit with `2`, in the file and in the flag. To skip a folder, write `folder/**`.
 
 ### Exclude one function
 

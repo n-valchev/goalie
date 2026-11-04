@@ -16,6 +16,14 @@ func TestSkipFilesSkipsMatchingFiles(t *testing.T) {
 		{"glob inside a path", "internal/users/packages.go", "internal/*/packages.go"},
 		{"path written with a leading dot", "internal/users/packages.go", "./internal/users/packages.go"},
 		{"second pattern in a list", "packages.go", "other.go,packages.go"},
+		{"everything below a folder", "internal/generated/copy.go", "internal/generated/**"},
+		{"everything deep below a folder", "internal/generated/a/b/copy.go", "internal/generated/**"},
+		{"any folder with that name", "x/y/generated/a/copy.go", "**/generated/**"},
+		{"a folder with that name in the root", "generated/copy.go", "**/generated/**"},
+		{"any depth inside a path", "internal/a/b/packages.go", "internal/**/packages.go"},
+		{"no folders inside a path", "internal/packages.go", "internal/**/packages.go"},
+		{"glob after any depth", "a/b/wire_users.go", "**/wire_*.go"},
+		{"file in the root after any depth", "copy.go", "**/copy.go"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -31,6 +39,9 @@ func TestSkipFilesLeavesOtherFilesScanned(t *testing.T) {
 		{"longer file name", "mypackages.go", "packages.go"},
 		{"path from another folder", "other/packages.go", "internal/packages.go"},
 		{"star does not cross folders", "internal/a/b/packages.go", "internal/*/packages.go"},
+		{"sibling folder with a longer name", "internal/generated2/copy.go", "internal/generated/**"},
+		{"folder name only inside a word", "x/mygenerated/copy.go", "**/generated/**"},
+		{"different file below the folder", "internal/a/other.go", "internal/**/packages.go"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
