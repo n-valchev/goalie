@@ -28,7 +28,6 @@ type Function struct {
 	Decl      *ast.FuncDecl
 }
 
-// Lines returns the number of lines in the function's span.
 func (f Function) Lines() int {
 	return f.EndLine - f.StartLine + 1
 }
@@ -145,7 +144,7 @@ func hasIgnoreDirective(fset *token.FileSet, fn *ast.FuncDecl) (bool, error) {
 			continue
 		}
 		if len(words) == 1 {
-			position := fset.Position(comment.Pos())
+			position := fset.PositionFor(comment.Pos(), false)
 			return false, fmt.Errorf("%s:%d: %s needs a reason", position.Filename, position.Line, ignoreDirective)
 		}
 		ignored = true

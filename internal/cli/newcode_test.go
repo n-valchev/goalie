@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // git runs in dir with the machine's own Git config hidden, so that a developer's settings can't
@@ -28,7 +29,6 @@ func git(t *testing.T, dir string, args ...string) string {
 	return string(out)
 }
 
-// gitRepo creates a repo on branch main with files in its first commit.
 func gitRepo(t *testing.T, files map[string]string) string {
 	t.Helper()
 	dir := writeTree(t, files)
@@ -41,17 +41,6 @@ func commitAll(t *testing.T, dir, message string) {
 	t.Helper()
 	git(t, dir, "add", "--all")
 	git(t, dir, "commit", "--allow-empty", "--message", message)
-}
-
-func write(t *testing.T, dir, name, content string) {
-	t.Helper()
-	path := filepath.Join(dir, filepath.FromSlash(name))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func wantReport(t *testing.T, dir string, wantCode int, want string, args ...string) {
@@ -241,6 +230,13 @@ func TestAChangedFunctionOutsideThePathsIsNotCompared(t *testing.T) {
 	write(t, dir, "out/copy.go", "package a\n\n"+sumFunc("Copy"))
 
 	wantReport(t, dir, 0, "No new functions found.\n", "--base", "main", "in")
+}
+
+func TestANewFunctionWhoseOnlyDuplicateIsOutsideThePathsIsClean(t *testing.T) {
+	dir := gitRepo(t, map[string]string{"out/old.go": "package a\n\n" + sumFunc("Old")})
+	write(t, dir, "in/copy.go", "package a\n\n"+sumFunc("Copy"))
+
+	wantReport(t, dir, 0, "No duplicates found.\n", "--base", "main", "in")
 }
 
 func TestPathsStayRelativeToASubdirectoryOfTheRepo(t *testing.T) {
@@ -457,6 +453,77 @@ func TestDiffSettingsHaveNoEffect(t *testing.T) {
 
 			wantReport(t, dir, 1, settingsReport, "--base", "main")
 		})
+	}
+}
+
+func touch(t *testing.T, path string) {
+	t.Helper()
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(path, later, later); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(content)
+}
+
+func TestATouchedFileIsNotNewAndTheIndexStaysUnchanged(t *testing.T) {
+	dir := gitRepo(t, map[string]string{
+		"old.go":  "package a\n\n" + sumFunc("Old"),
+		"work.go": "package a\n\n" + sumFunc("Work"),
+	})
+	touch(t, filepath.Join(dir, "work.go"))
+	index := filepath.Join(dir, ".git", "index")
+	before := readFile(t, index)
+
+	wantReport(t, dir, 0, "No new functions found.\n", "--base", "main")
+
+	if readFile(t, index) != before {
+		t.Error("the run rewrote .git/index")
+	}
+}
+
+func TestEveryGitCommandLeavesTheIndexUnchanged(t *testing.T) {
+	dir := gitRepo(t, map[string]string{
+		"old.go":         "package a\n\n" + sumFunc("Old"),
+		"work.go":        "package a\n\n" + joinFunc("Work"),
+		composed + ".go": "package a\n\n" + joinFunc("Tracked"),
+	})
+	touch(t, filepath.Join(dir, "work.go"))
+	write(t, dir, "zcopy.go", "package a\n\n"+sumFunc("Copy"))
+	write(t, dir, decomposed+"2.go", "package a\n\n"+sumFunc("Untracked"))
+	index := filepath.Join(dir, ".git", "index")
+	before := readFile(t, index)
+
+	code, _, stderr := runGodry(t, dir, "--base", "main")
+
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
+	}
+	if readFile(t, index) != before {
+		t.Error("the run rewrote .git/index")
+	}
+}
+
+func TestATouchedFileInASubmoduleLeavesItsIndexUnchanged(t *testing.T) {
+	inner := gitRepo(t, map[string]string{"inner.go": "package inner\n"})
+	dir := gitRepo(t, map[string]string{"old.go": "package a\n\n" + sumFunc("Old")})
+	git(t, dir, "-c", "protocol.file.allow=always", "submodule", "add", inner, "sub")
+	commitAll(t, dir, "add submodule")
+	touch(t, filepath.Join(dir, "sub", "inner.go"))
+	index := filepath.Join(dir, ".git", "modules", "sub", "index")
+	before := readFile(t, index)
+
+	wantReport(t, dir, 0, "No new functions found.\n", "--base", "HEAD")
+
+	if readFile(t, index) != before {
+		t.Error("the run rewrote the index of the submodule")
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"testing"
 )
 
-// compareFuncs scans left and right, each a function source, with the size limits off.
 func compareFuncs(t *testing.T, left, right string, args ...string) (code int, stdout string) {
 	t.Helper()
 	dir := writeTree(t, map[string]string{
@@ -21,7 +20,6 @@ func compareFuncs(t *testing.T, left, right string, args ...string) (code int, s
 	return code, stdout
 }
 
-// sameStructure reports whether left and right score exactly 1.
 func sameStructure(t *testing.T, left, right string) bool {
 	t.Helper()
 	code, _ := compareFuncs(t, left, right, "--threshold", "1")
@@ -54,7 +52,6 @@ func wantDifferentStructure(t *testing.T, pairs []funcPair) {
 	}
 }
 
-// statements builds a pair of functions that differ only in one body.
 func statements(name, left, right string) funcPair {
 	return funcPair{
 		name,

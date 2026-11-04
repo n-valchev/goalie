@@ -71,7 +71,7 @@ Use `--format json` to get an object with a `findings` array.
 | `1` | Duplicates exist |
 | `2` | Any error, even with `--warn-only` |
 
-Errors include an invalid flag, a Go file that doesn't parse, an unknown revision, and `--base` outside a Git repository.
+Errors include an invalid flag, a Go file that doesn't parse, a `//go:build` line that doesn't parse, an unknown revision, and `--base` outside a Git repository.
 
 ## Change what godry reports
 

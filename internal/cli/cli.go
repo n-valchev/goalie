@@ -19,7 +19,6 @@ const (
 	exitError      = 2
 )
 
-// Run executes godry against dir and returns the process exit code.
 func Run(args []string, dir string, stdout, stderr io.Writer) int {
 	opts, err := parseOptions(args)
 	if err != nil {
@@ -48,19 +47,15 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	all := candidates(functions, opts)
-	var fresh map[int]bool
+	newFunctions := compare.WholeRepo()
 	if opts.base != "" {
-		fresh = newFunctions(all, changes)
-		if len(fresh) == 0 {
+		newFunctions = findNew(all, changes.For(dir, paths))
+		if newFunctions.Empty() {
 			return nothingToCompare("No new functions found.", opts, stdout, stderr)
 		}
 	}
-	pairs := compare.Find(all, fresh, opts.threshold)
-	write := report.Text
-	if opts.format == "json" {
-		write = report.JSON
-	}
-	if err := write(stdout, pairs); err != nil {
+	pairs := compare.Find(all, newFunctions, opts.threshold)
+	if err := opts.format.write(stdout, pairs); err != nil {
 		return fail(stderr, err)
 	}
 	if len(pairs) > 0 && !opts.warnOnly {
@@ -70,7 +65,7 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 }
 
 func nothingToCompare(message string, opts options, stdout, stderr io.Writer) int {
-	if opts.format == "json" {
+	if opts.format == formatJSON {
 		// A reader of --format json must always be able to parse stdout.
 		fmt.Fprintln(stderr, message)
 		if err := report.JSON(stdout, nil); err != nil {

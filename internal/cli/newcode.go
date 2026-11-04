@@ -5,13 +5,12 @@ import (
 	"github.com/n-valchev/godry/internal/gitchange"
 )
 
-// newFunctions never returns nil, because compare.Find reads nil as whole-repo mode.
-func newFunctions(all []compare.Candidate, changes gitchange.Changes) map[int]bool {
-	result := map[int]bool{}
+func findNew(all []compare.Candidate, changes gitchange.Changes) compare.NewFunctions {
+	var indexes []int
 	for i, fn := range all {
 		if changes.Touches(fn.File, fn.StartLine, fn.EndLine) {
-			result[i] = true
+			indexes = append(indexes, i)
 		}
 	}
-	return result
+	return compare.Only(indexes)
 }

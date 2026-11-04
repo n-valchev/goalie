@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Range is the lines from Start to End. A deletion is the empty range between two lines, so its
@@ -53,11 +55,15 @@ func Since(dir, rev string) (Changes, error) {
 		return nil, err
 	}
 	// Without the :/ pathspec, ls-files lists only the files below dir.
-	untracked, err := git(dir, "ls-files", "--others", "--exclude-standard", "--full-name", "-z", ":/")
+	listed, err := git(dir, "ls-files", "--others", "--exclude-standard", "--full-name", "-z", ":/")
 	if err != nil {
 		return nil, err
 	}
-	for _, file := range strings.Split(strings.TrimSuffix(untracked, "\x00"), "\x00") {
+	untracked, err := withoutTracked(dir, nulSeparated(listed))
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range untracked {
 		fromRoot[file] = append(fromRoot[file], Range{1, math.MaxInt})
 	}
 
@@ -70,6 +76,90 @@ func Since(dir, rev string) (Changes, error) {
 		changes[filepath.ToSlash(rel)] = ranges
 	}
 	return changes, nil
+}
+
+// For returns c keyed by files, which are relative to dir. The standard library can't normalize
+// Unicode, and core.precomposeunicode can't help alone, because Git prints the stored form of a
+// tracked name and the disk may hold the other one. So a name that matches no file byte for byte
+// falls back to asking the filesystem whether both names are one file. Only a non-ASCII name can
+// have two forms, which keeps hard links between ASCII names apart.
+func (c Changes) For(dir string, files []string) Changes {
+	result := make(Changes, len(c))
+	var unmatched []string
+	for _, file := range files {
+		if ranges, ok := c[file]; ok {
+			result[file] = ranges
+		} else {
+			unmatched = append(unmatched, file)
+		}
+	}
+	var otherForms []string
+	for name := range c {
+		if _, matched := result[name]; !matched && !isASCII(name) {
+			otherForms = append(otherForms, name)
+		}
+	}
+	if len(otherForms) == 0 {
+		return result
+	}
+	scanned := identify(dir, unmatched)
+	for name, info := range identify(dir, otherForms) {
+		for file, identity := range scanned {
+			if os.SameFile(info, identity) {
+				result[file] = append(result[file], c[name]...)
+			}
+		}
+	}
+	return result
+}
+
+// withoutTracked drops the names that are another form of a tracked name. ls-files compares names
+// byte by byte, so it calls an old file untracked when the disk and Git hold different forms.
+func withoutTracked(dir string, untracked []string) ([]string, error) {
+	suspects := slices.DeleteFunc(slices.Clone(untracked), isASCII)
+	if len(suspects) == 0 {
+		return untracked, nil
+	}
+	root, err := git(dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return nil, err
+	}
+	root = strings.TrimSuffix(root, "\n")
+	listed, err := git(dir, "ls-files", "--cached", "--full-name", "-z", ":/")
+	if err != nil {
+		return nil, err
+	}
+	tracked := identify(root, slices.DeleteFunc(nulSeparated(listed), isASCII))
+	aliases := map[string]bool{}
+	for name, info := range identify(root, suspects) {
+		for _, identity := range tracked {
+			aliases[name] = aliases[name] || os.SameFile(info, identity)
+		}
+	}
+	return slices.DeleteFunc(untracked, func(file string) bool { return aliases[file] }), nil
+}
+
+// identify uses Lstat, because a symlink is a different file from its target. A name that is gone
+// from the disk gets no entry, so it matches nothing.
+func identify(dir string, files []string) map[string]os.FileInfo {
+	identities := make(map[string]os.FileInfo, len(files))
+	for _, file := range files {
+		if info, err := os.Lstat(filepath.Join(dir, filepath.FromSlash(file))); err == nil {
+			identities[file] = info
+		}
+	}
+	return identities
+}
+
+func isASCII(name string) bool {
+	return !strings.ContainsFunc(name, func(r rune) bool { return r >= utf8.RuneSelf })
+}
+
+func nulSeparated(list string) []string {
+	if list == "" {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(list, "\x00"), "\x00")
 }
 
 // diffArgs states every setting that could change the hunks or their headers, because user config
@@ -192,9 +282,13 @@ func environment(env []string) []string {
 }
 
 func git(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-c", "core.quotePath=true"}, args...)...)
+	// godry writes no files, and each setting stops a different write. autoRefreshIndex covers the
+	// index of this repo. It doesn't reach the git status that git diff runs in each submodule, and
+	// GIT_OPTIONAL_LOCKS covers only that one.
+	settings := []string{"-c", "core.quotePath=true", "-c", "diff.autoRefreshIndex=false"}
+	cmd := exec.Command("git", append(settings, args...)...)
 	cmd.Dir = dir
-	cmd.Env = environment(cmd.Environ())
+	cmd.Env = append(environment(cmd.Environ()), "GIT_OPTIONAL_LOCKS=0")
 	out, err := cmd.Output()
 	if err != nil {
 		var exit *exec.ExitError

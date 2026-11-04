@@ -153,9 +153,9 @@ func detailOf(n ast.Node) string {
 	case *ast.ChanType:
 		return strconv.Itoa(int(n.Dir))
 	case *ast.SliceExpr:
-		return filled(n.Low, n.High, n.Max)
+		return slotPattern(n.Low, n.High, n.Max)
 	case *ast.ForStmt:
-		return filled(n.Init, n.Cond, n.Post)
+		return slotPattern(n.Init, n.Cond, n.Post)
 	case *ast.TypeSpec:
 		if n.Assign.IsValid() {
 			return token.ASSIGN.String()
@@ -168,7 +168,7 @@ func detailOf(n ast.Node) string {
 	return ""
 }
 
-func filled(slots ...ast.Node) string {
+func slotPattern(slots ...ast.Node) string {
 	var pattern strings.Builder
 	for _, slot := range slots {
 		if slot == nil {

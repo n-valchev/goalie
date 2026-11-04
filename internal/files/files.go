@@ -55,7 +55,11 @@ func Find(dir string, paths []string, rules Rules) ([]string, error) {
 			if err != nil {
 				return err
 			}
-			if !skippedByHeader(source, tags) {
+			skipped, err := skippedByHeader(rel, source, tags)
+			if err != nil {
+				return err
+			}
+			if !skipped {
 				found[rel] = true
 			}
 			return nil

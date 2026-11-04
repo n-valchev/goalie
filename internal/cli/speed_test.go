@@ -2,11 +2,9 @@ package cli_test
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"math/rand"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -167,10 +165,15 @@ func TestScanEqualsAllPairsAtAndNearEveryScore(t *testing.T) {
 	for i, function := range functions {
 		files[fileName(i)] = oneFunctionFile(function)
 	}
-	dir := writeTree(t, files)
+	wantEachThreshold(t, writeTree(t, files), findings)
+}
+
+func wantEachThreshold(t *testing.T, dir string, findings []map[string]any, args ...string) {
+	t.Helper()
 	for _, threshold := range thresholdsAround(findings) {
 		text := strconv.FormatFloat(threshold, 'g', -1, 64)
-		_, stdout, stderr := runGodry(t, dir, "--format", "json", "--threshold", text, "--min-lines", "1", "--min-nodes", "1")
+		all := append([]string{"--format", "json", "--threshold", text, "--min-lines", "1", "--min-nodes", "1"}, args...)
+		_, stdout, stderr := runGodry(t, dir, all...)
 		got := decodeReport(t, stdout).Findings
 		want := reportedAt(findings, threshold)
 		if len(got) == 0 && len(want) == 0 {
@@ -180,6 +183,78 @@ func TestScanEqualsAllPairsAtAndNearEveryScore(t *testing.T) {
 			t.Fatalf("threshold %s: %d findings differ from %d all-pairs findings; stderr: %s", text, len(got), len(want), stderr)
 		}
 	}
+}
+
+func withSide(side any, function string, isNew bool) map[string]any {
+	result := maps.Clone(side.(map[string]any))
+	result["function"] = function
+	result["new"] = isNew
+	return result
+}
+
+// The all-pairs findings come from functions with distinct names, because the same-name rule would
+// hide a pair in them. The repo then gets the shared names, so this also proves the rule holds in
+// new-code mode.
+func TestNewCodeEqualsAllPairsWithSameNamePairsLeftOut(t *testing.T) {
+	functions := generatedFunctions(6, 8, 5, 40)
+	findings := allPairsFindings(t, functions)
+
+	committed := func(i int) bool { return i%3 == 0 }
+	untracked := func(i int) bool { return i%3 == 1 }
+	isNew := func(i int) bool { return committed(i) || untracked(i) }
+	// Neighbors come from one family, so most of these same-name pairs would otherwise be reported.
+	nameOf := func(i int) string { return fmt.Sprintf("F%05d", i-i%2) }
+	source := func(i int) string {
+		return oneFunctionFile(strings.Replace(functions[i], fmt.Sprintf("F%05d", i), nameOf(i), 1))
+	}
+
+	indexOf := map[string]int{}
+	old := map[string]string{}
+	for i := range functions {
+		indexOf[fileName(i)] = i
+		if !isNew(i) {
+			old[fileName(i)] = source(i)
+		}
+	}
+	dir := gitRepo(t, old)
+	git(t, dir, "checkout", "-b", "feature")
+	for i := range functions {
+		if committed(i) {
+			write(t, dir, fileName(i), source(i))
+		}
+	}
+	commitAll(t, dir, "new functions")
+	for i := range functions {
+		if untracked(i) {
+			write(t, dir, fileName(i), source(i))
+		}
+	}
+
+	expected := []map[string]any{}
+	hidden := 0
+	for _, finding := range findings {
+		a, b := indexOf[fileOf(finding, "left")], indexOf[fileOf(finding, "right")]
+		if !isNew(a) && !isNew(b) {
+			continue
+		}
+		if nameOf(a) == nameOf(b) {
+			if scoreOf(finding) >= 0.82 {
+				hidden++
+			}
+			continue
+		}
+		left := withSide(finding["left"], nameOf(a), isNew(a))
+		right := withSide(finding["right"], nameOf(b), isNew(b))
+		if isNew(b) && !isNew(a) {
+			left, right = right, left
+		}
+		expected = append(expected, map[string]any{"score": finding["score"], "left": left, "right": right})
+	}
+	if hidden < 5 {
+		t.Fatalf("%d same-name pairs score above the default threshold, want at least 5", hidden)
+	}
+
+	wantEachThreshold(t, dir, expected, "--base", "main")
 }
 
 func TestTenThousandFunctionsScanWithinBudget(t *testing.T) {
@@ -227,24 +302,48 @@ func TestParseErrorNamesTheFirstBadFileEveryTime(t *testing.T) {
 	}
 }
 
-func TestOneNewFunctionInTenThousandChecksWithinBudget(t *testing.T) {
-	functions := generatedFunctions(5, 10000, 1, 2000)
-	dir := writeTree(t, spreadOverFiles(functions))
-	for _, args := range [][]string{
-		{"init", "--quiet"},
-		{"add", "."},
-		{"-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", "base"},
-	} {
-		command := exec.Command("git", args...)
-		command.Dir = dir
-		if output, err := command.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, output)
+func TestOldPairsInALargeRepoAreLeftOut(t *testing.T) {
+	functions := generatedFunctions(7, 2000, 5, 2000)
+	dir := gitRepo(t, spreadOverFiles(functions))
+	copied := strings.Replace(functions[42], "F00042", "Copied", 1)
+	write(t, dir, "a_new.go", "package copied\n\n"+copied)
+
+	_, stdout, _ := runGodry(t, dir, "--format", "json")
+	var want []string
+	oldPairs := 0
+	for _, finding := range decodeReport(t, stdout).Findings {
+		if fileOf(finding, "left") == "a_new.go" {
+			want = append(want, fileOf(finding, "right"))
+		} else {
+			oldPairs++
 		}
 	}
-	copied := strings.Replace(functions[42], "F00042", "Copied", 1)
-	if err := os.WriteFile(filepath.Join(dir, "a_new.go"), []byte("package fresh\n\n"+copied), 0o644); err != nil {
-		t.Fatal(err)
+	if len(want) == 0 || oldPairs < 100 {
+		t.Fatalf("%d pairs with the new function and %d old pairs, want at least 1 and 100", len(want), oldPairs)
 	}
+
+	code, stdout, stderr := runGodry(t, dir, "--base", "HEAD", "--format", "json")
+
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
+	}
+	var got []string
+	for _, finding := range decodeReport(t, stdout).Findings {
+		if fileOf(finding, "left") != "a_new.go" {
+			t.Errorf("finding %v doesn't lead with the new function", finding)
+		}
+		got = append(got, fileOf(finding, "right"))
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("--base reported %v, want %v", got, want)
+	}
+}
+
+func TestOneNewFunctionInTenThousandChecksWithinBudget(t *testing.T) {
+	functions := generatedFunctions(5, 10000, 1, 2000)
+	dir := gitRepo(t, spreadOverFiles(functions))
+	copied := strings.Replace(functions[42], "F00042", "Copied", 1)
+	write(t, dir, "a_new.go", "package fresh\n\n"+copied)
 
 	start := time.Now()
 	code, stdout, stderr := runGodry(t, dir, "--base", "HEAD", "--format", "json")

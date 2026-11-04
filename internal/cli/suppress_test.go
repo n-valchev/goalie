@@ -85,6 +85,21 @@ func TestCommentThatIsNotADirectiveAboveTheFunctionSuppressesNothing(t *testing.
 	}
 }
 
+func TestMissingReasonNamesTheFileOnDiskNotALineDirective(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"a.go": "package a\n\n//line template.y:100\n//godry:ignore\n" + sumFunc("One"),
+	})
+
+	code, _, stderr := runGodry(t, dir)
+
+	if code != 2 {
+		t.Errorf("exit code = %d, want 2", code)
+	}
+	if !strings.HasPrefix(stderr, "godry: a.go:4: ") {
+		t.Errorf("stderr = %q, want the location a.go:4", stderr)
+	}
+}
+
 func TestIgnoreCommentWithoutAReasonIsAnError(t *testing.T) {
 	tests := []struct {
 		name   string

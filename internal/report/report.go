@@ -9,7 +9,6 @@ import (
 	"github.com/n-valchev/godry/internal/compare"
 )
 
-// Text writes one line per pair.
 func Text(w io.Writer, pairs []compare.Pair) error {
 	if len(pairs) == 0 {
 		_, err := fmt.Fprintln(w, "No duplicates found.")
@@ -44,7 +43,6 @@ type jsonSide struct {
 	New       bool   `json:"new"`
 }
 
-// JSON writes one object with a findings array.
 func JSON(w io.Writer, pairs []compare.Pair) error {
 	findings := make([]jsonFinding, 0, len(pairs))
 	for _, pair := range pairs {

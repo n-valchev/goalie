@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/n-valchev/godry/internal/compare"
+	"github.com/n-valchev/godry/internal/report"
 )
 
 const usage = `godry finds Go functions with the same structure.
@@ -49,12 +52,26 @@ Exit codes:
   2  Any error, even with --warn-only.
 `
 
+type format string
+
+const (
+	formatText format = "text"
+	formatJSON format = "json"
+)
+
+func (f format) write(w io.Writer, pairs []compare.Pair) error {
+	if f == formatJSON {
+		return report.JSON(w, pairs)
+	}
+	return report.Text(w, pairs)
+}
+
 type options struct {
 	base         string
 	threshold    float64
 	minLines     int
 	minNodes     int
-	format       string
+	format       format
 	warnOnly     bool
 	includeTests bool
 	skipTags     []string
@@ -78,7 +95,7 @@ func parseOptions(args []string) (options, error) {
 	flags.Float64Var(&opts.threshold, "threshold", 0.82, "")
 	flags.IntVar(&opts.minLines, "min-lines", 9, "")
 	flags.IntVar(&opts.minNodes, "min-nodes", 20, "")
-	flags.StringVar(&opts.format, "format", "text", "")
+	flags.StringVar((*string)(&opts.format), "format", string(formatText), "")
 	flags.BoolVar(&opts.warnOnly, "warn-only", false, "")
 	flags.BoolVar(&opts.includeTests, "include-tests", false, "")
 	flags.Func("skip-tags", "", func(value string) error {
@@ -122,7 +139,7 @@ func (o options) validate() error {
 	if o.minNodes < 0 {
 		return fmt.Errorf("invalid --min-nodes %d: must not be negative", o.minNodes)
 	}
-	if o.format != "text" && o.format != "json" {
+	if o.format != formatText && o.format != formatJSON {
 		return fmt.Errorf("invalid --format %q: must be text or json", o.format)
 	}
 	return nil

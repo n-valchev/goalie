@@ -1,6 +1,7 @@
 package files
 
 import (
+	"fmt"
 	"go/build/constraint"
 	"go/scanner"
 	"go/token"
@@ -10,36 +11,49 @@ import (
 // The pattern from https://go.dev/s/generatedcode.
 var generatedHeader = regexp.MustCompile(`^// Code generated .* DO NOT EDIT\.$`)
 
-// skippedByHeader reports whether the comments above the package clause rule the file out.
-func skippedByHeader(source []byte, tags []string) bool {
+// skippedByHeader reads every comment even after one rules the file out, because a //go:build line
+// that doesn't parse is an error in any file that the header alone would skip. A +build line that
+// doesn't parse is no error, because go/build ignores it too.
+func skippedByHeader(file string, source []byte, tags []string) (bool, error) {
+	skipped := false
 	for _, comment := range headerComments(source) {
-		if generatedHeader.MatchString(comment) {
-			return true
+		if generatedHeader.MatchString(comment.text) {
+			skipped = true
 		}
-		if !constraint.IsGoBuild(comment) && !constraint.IsPlusBuild(comment) {
+		goBuild := constraint.IsGoBuild(comment.text)
+		if !goBuild && !constraint.IsPlusBuild(comment.text) {
 			continue
 		}
-		// A line that doesn't parse can't show that a tag is required, so the file stays scanned.
-		if expr, err := constraint.Parse(comment); err == nil && requiresTag(expr, tags) {
-			return true
+		expr, err := constraint.Parse(comment.text)
+		switch {
+		case err == nil:
+			skipped = skipped || requiresTag(expr, tags)
+		case goBuild:
+			return false, fmt.Errorf("%s:%d: %w", file, comment.line, err)
 		}
 	}
-	return false
+	return skipped, nil
+}
+
+type headerComment struct {
+	text string
+	line int
 }
 
 // headerComments uses the scanner, not go/parser, because a skipped file need not parse.
 // An ignored template can break even its package clause, and go/parser then drops the comments.
-func headerComments(source []byte) []string {
-	var comments []string
+func headerComments(source []byte) []headerComment {
+	var comments []headerComment
 	var s scanner.Scanner
 	fset := token.NewFileSet()
 	s.Init(fset.AddFile("", fset.Base(), len(source)), source, nil, scanner.ScanComments)
 	for {
-		_, tok, text := s.Scan()
+		pos, tok, text := s.Scan()
 		if tok != token.COMMENT {
 			return comments
 		}
-		comments = append(comments, text)
+		// The scanner applies //line directives, and an error must point into the file on disk.
+		comments = append(comments, headerComment{text, fset.PositionFor(pos, false).Line})
 	}
 }
 
@@ -70,7 +84,6 @@ func satisfiable(expr constraint.Expr, known map[string]bool) bool {
 	return false
 }
 
-// evaluate returns the value of expr, or the name of a tag that must be known first.
 func evaluate(expr constraint.Expr, known map[string]bool) (value bool, open string) {
 	switch expr := expr.(type) {
 	case *constraint.TagExpr:

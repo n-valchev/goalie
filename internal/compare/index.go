@@ -18,13 +18,13 @@ type match struct {
 func integerSets(all []Candidate) [][]int32 {
 	counts := map[string]int{}
 	for _, candidate := range all {
-		for print := range candidate.Fingerprints {
-			counts[print]++
+		for printed := range candidate.Fingerprints {
+			counts[printed]++
 		}
 	}
 	prints := make([]string, 0, len(counts))
-	for print := range counts {
-		prints = append(prints, print)
+	for printed := range counts {
+		prints = append(prints, printed)
 	}
 	sort.Slice(prints, func(i, j int) bool {
 		a, b := prints[i], prints[j]
@@ -34,14 +34,14 @@ func integerSets(all []Candidate) [][]int32 {
 		return a < b
 	})
 	ids := make(map[string]int32, len(prints))
-	for id, print := range prints {
-		ids[print] = int32(id)
+	for id, printed := range prints {
+		ids[printed] = int32(id)
 	}
 	sets := make([][]int32, len(all))
 	for i, candidate := range all {
 		set := make([]int32, 0, len(candidate.Fingerprints))
-		for print := range candidate.Fingerprints {
-			set = append(set, ids[print])
+		for printed := range candidate.Fingerprints {
+			set = append(set, ids[printed])
 		}
 		slices.Sort(set)
 		sets[i] = set
@@ -49,24 +49,22 @@ func integerSets(all []Candidate) [][]int32 {
 	return sets
 }
 
-// findMatches returns every pair that scores at or above threshold, and at least one new function
-// in each pair when newFunctions is non-nil. Only the functions it must check look up candidates,
-// so new-code mode costs in proportion to the new functions, after one pass to build the index.
-func findMatches(sets [][]int32, newFunctions map[int]bool, threshold float64) []match {
-	checked := func(i int) bool { return newFunctions == nil || newFunctions[i] }
-	index := buildIndex(sets, threshold)
+// findMatches looks up partners only for the functions it must check, so new-code mode costs in
+// proportion to the new functions, after one pass to build the index.
+func findMatches(sets [][]int32, newFunctions NewFunctions, threshold float64) []match {
+	visitPartners := partnerVisitor(sets, threshold)
 	matches := []match{}
 	seen := make([]int, len(sets))
 	for i := range sets {
 		seen[i] = -1
 	}
 	for i, set := range sets {
-		if !checked(i) {
+		if !newFunctions.checked(i) {
 			continue
 		}
-		consider := func(j int) {
-			// Candidates are symmetric, so a pair of two checked functions belongs to the lower one.
-			if seen[j] == i || j == i || (checked(j) && j < i) {
+		visitPartners(set, func(j int) {
+			// Partners are symmetric, so a pair of two checked functions belongs to the lower one.
+			if seen[j] == i || j == i || (newFunctions.checked(j) && j < i) {
 				return
 			}
 			seen[j] = i
@@ -76,44 +74,42 @@ func findMatches(sets [][]int32, newFunctions map[int]bool, threshold float64) [
 			if score := similarity(set, sets[j]); score >= threshold {
 				matches = append(matches, match{min(i, j), max(i, j), score})
 			}
-		}
-		// At threshold 0 a pair that shares nothing still qualifies, and no index can find it.
-		if threshold <= 0 {
-			for j := range sets {
-				consider(j)
-			}
-			continue
-		}
-		for _, print := range set[:prefixLength(len(set), threshold)] {
-			for _, j := range index[print] {
-				consider(int(j))
-			}
-		}
+		})
 	}
 	return matches
 }
 
-// buildIndex lists, for each fingerprint, the functions that have it in their prefix.
-func buildIndex(sets [][]int32, threshold float64) map[int32][]int32 {
-	index := map[int32][]int32{}
+func partnerVisitor(sets [][]int32, threshold float64) func(set []int32, visit func(int)) {
+	// At threshold 0 a pair that shares nothing still qualifies, and no index can find it.
 	if threshold <= 0 {
-		return index
-	}
-	for i, set := range sets {
-		for _, print := range set[:prefixLength(len(set), threshold)] {
-			index[print] = append(index[print], int32(i))
+		return func(_ []int32, visit func(int)) {
+			for j := range sets {
+				visit(j)
+			}
 		}
 	}
-	return index
+	index := map[int32][]int32{}
+	for i, set := range sets {
+		for _, id := range prefix(set, threshold) {
+			index[id] = append(index[id], int32(i))
+		}
+	}
+	return func(set []int32, visit func(int)) {
+		for _, id := range prefix(set, threshold) {
+			for _, j := range index[id] {
+				visit(int(j))
+			}
+		}
+	}
 }
 
-// prefixLength returns how many of a set's rarest fingerprints the index must hold.
+// prefix returns the rarest fingerprints of a set, which are all that the index must hold.
 // A qualifying pair shares at least minShared fingerprints. The rarest of those has the others
 // after it in both sets, because both use one rarity order, so it lies in both prefixes. Indexing
 // only the prefix keeps out the fingerprints that every function has, which would otherwise make
-// every pair a candidate.
-func prefixLength(size int, threshold float64) int {
-	return size - minShared(size, threshold) + 1
+// every pair a partner.
+func prefix(set []int32, threshold float64) []int32 {
+	return set[:len(set)-minShared(len(set), threshold)+1]
 }
 
 // minShared returns the smallest count whose score against a set of this size reaches threshold.
