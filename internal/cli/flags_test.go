@@ -16,7 +16,7 @@ func TestWarnOnlyReportsDuplicatesAndExitsZero(t *testing.T) {
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
 	}
-	if want := "a.go:3: duplicates b.go:3 (score 1.00)\n"; stdout != want {
+	if want := "a.go:3: duplicates b.go:3 (score 1.00, literals 1.00, anchors 0)\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 }
@@ -115,7 +115,7 @@ func TestFlagsMayFollowPaths(t *testing.T) {
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
 	}
-	if want := "one/a.go:3: duplicates one/b.go:3 (score 1.00)\n"; stdout != want {
+	if want := "one/a.go:3: duplicates one/b.go:3 (score 1.00, literals 1.00, anchors 0)\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 }
@@ -129,7 +129,7 @@ func TestDoubleDashEndsTheFlags(t *testing.T) {
 
 	_, stdout, stderr := runGodry(t, dir, "--", "-odd")
 
-	if want := "-odd/a.go:3: duplicates -odd/b.go:3 (score 1.00)\n"; stdout != want {
+	if want := "-odd/a.go:3: duplicates -odd/b.go:3 (score 1.00, literals 1.00, anchors 0)\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q; stderr: %s", stdout, want, stderr)
 	}
 }

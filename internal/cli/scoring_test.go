@@ -263,7 +263,7 @@ func TestScoreEqualToTheThresholdIsReported(t *testing.T) {
 
 	code, stdout := compareFuncs(t, copied, copied, "--threshold", "1")
 
-	if want := "left.go:3: duplicates right.go:3 (score 1.00)\n"; code != 1 || stdout != want {
+	if want := "left.go:3: duplicates right.go:3 (score 1.00, literals 1.00, anchors 0)\n"; code != 1 || stdout != want {
 		t.Errorf("exit code = %d, stdout = %q, want %q", code, stdout, want)
 	}
 }
@@ -310,7 +310,7 @@ func TestFunctionWithNoBodyDoesNotHideItsNeighbour(t *testing.T) {
 
 	_, stdout := compareFuncs(t, declared+sumFunc("One"), sumFunc("Two"))
 
-	if want := "left.go:5: duplicates right.go:3 (score 1.00)\n"; stdout != want {
+	if want := "left.go:5: duplicates right.go:3 (score 1.00, literals 1.00, anchors 0)\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 }
@@ -318,7 +318,7 @@ func TestFunctionWithNoBodyDoesNotHideItsNeighbour(t *testing.T) {
 func TestMethodsAreComparedWithFunctions(t *testing.T) {
 	_, stdout := compareFuncs(t, sumFunc("(a Adder) Sum"), sumFunc("Total"))
 
-	if want := "left.go:3: duplicates right.go:3 (score 1.00)\n"; stdout != want {
+	if want := "left.go:3: duplicates right.go:3 (score 1.00, literals 1.00, anchors 0)\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 }
@@ -334,7 +334,7 @@ func TestSpanRunsFromFuncToTheClosingBrace(t *testing.T) {
 	})
 
 	_, stdout, _ := runGodry(t, dir, "--min-nodes", "0", "--min-lines", "9")
-	if want := "a.go:4: duplicates b.go:4 (score 1.00)\n"; stdout != want {
+	if want := "a.go:4: duplicates b.go:4 (score 1.00, literals -, anchors 1)\n"; stdout != want {
 		t.Errorf("--min-lines 9: stdout = %q, want %q", stdout, want)
 	}
 
@@ -412,7 +412,7 @@ func TestLineDirectiveDoesNotMoveTheSpan(t *testing.T) {
 
 	_, stdout, _ := runGodry(t, dir, "--min-lines", "11", "--min-nodes", "0")
 
-	if want := "a.go:3: duplicates b.go:4 (score 1.00)\n"; stdout != want {
+	if want := "a.go:3: duplicates b.go:4 (score 1.00, literals -, anchors 1)\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 }
@@ -422,7 +422,7 @@ func TestDeepExpressionIsRead(t *testing.T) {
 
 	code, stdout := compareFuncs(t, fmt.Sprintf(deep, "alpha"), fmt.Sprintf(deep, "beta"))
 
-	if want := "left.go:3: duplicates right.go:3 (score 1.00)\n"; code != 1 || stdout != want {
+	if want := "left.go:3: duplicates right.go:3 (score 1.00, literals -, anchors 0)\n"; code != 1 || stdout != want {
 		t.Errorf("exit code = %d, stdout = %q", code, stdout)
 	}
 }

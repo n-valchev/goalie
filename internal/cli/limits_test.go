@@ -62,7 +62,7 @@ func TestMinLinesFlagChangesTheLimit(t *testing.T) {
 	})
 
 	_, stdout, _ := runGodry(t, dir, "--min-lines", "6")
-	if want := "a.go:3: duplicates b.go:3 (score 1.00)\nc.go:3: duplicates d.go:3 (score 1.00)\n"; stdout != want {
+	if want := "a.go:3: duplicates b.go:3 (score 1.00, literals 1.00, anchors 1)\nc.go:3: duplicates d.go:3 (score 1.00, literals 1.00, anchors 0)\n"; stdout != want {
 		t.Errorf("--min-lines 6: stdout = %q, want %q", stdout, want)
 	}
 

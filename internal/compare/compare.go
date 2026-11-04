@@ -11,8 +11,7 @@ import (
 // Candidate is a function that passed the size limits.
 type Candidate struct {
 	extract.Function
-	Fingerprints fingerprint.Set
-	Nodes        int
+	fingerprint.Result
 }
 
 type Side struct {
@@ -20,9 +19,13 @@ type Side struct {
 	New bool
 }
 
+// Pair describes one finding. Literals is nil when neither function has a literal to compare.
+// Literals and Anchors never decide whether a pair is reported.
 type Pair struct {
 	Left, Right Side
 	Score       float64
+	Literals    *float64
+	Anchors     int
 }
 
 // NewFunctions decides which pairs a comparison reports. Build one with WholeRepo or Only.
@@ -71,7 +74,10 @@ func Find(all []Candidate, newFunctions NewFunctions, threshold float64) []Pair 
 		}
 		left := Side{all[match.first], newFunctions.indexes[match.first]}
 		right := Side{all[match.second], newFunctions.indexes[match.second]}
-		pairs = append(pairs, orient(left, right, match.score))
+		pair := orient(left, right, match.score)
+		pair.Literals = literalScore(left.Literals, right.Literals)
+		pair.Anchors = left.Calls.Shared(right.Calls)
+		pairs = append(pairs, pair)
 	}
 	sort.Slice(pairs, func(i, j int) bool {
 		a, b := pairs[i], pairs[j]
@@ -84,6 +90,16 @@ func Find(all []Candidate, newFunctions NewFunctions, threshold float64) []Pair 
 		return before(a.Right, b.Right)
 	})
 	return pairs
+}
+
+func literalScore(a, b fingerprint.Set) *float64 {
+	shared := a.Shared(b)
+	either := len(a) + len(b) - shared
+	if either == 0 {
+		return nil
+	}
+	score := float64(shared) / float64(either)
+	return &score
 }
 
 // variants reports whether two functions are one function built for different platforms.

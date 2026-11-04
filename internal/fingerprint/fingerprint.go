@@ -17,18 +17,39 @@ const (
 	literalMarker = "literal"
 )
 
+// Result is what a comparison needs to know about one function.
+type Result struct {
+	Fingerprints Set
+	Nodes        int
+	Literals     Set
+	Calls        Set
+}
+
+// Shared returns the number of members that s and other have in common.
+func (s Set) Shared(other Set) int {
+	count := 0
+	for member := range s {
+		if _, found := other[member]; found {
+			count++
+		}
+	}
+	return count
+}
+
 // A frame with an empty label is a parenthesis, which hands its children to its parent.
 type frame struct {
 	label    string
 	children []string
 }
 
-// Of returns the fingerprint set and node count of fn.
-// It walks only the signature and body. Leaving out the function name and the receiver lets
+// Of returns the fingerprints of fn, and the literals and called names that normalization hides
+// or keeps. It walks only the signature and body. Leaving out the function name and the receiver lets
 // a renamed copy, or a method copied onto another type, score as an exact match.
-func Of(fn *ast.FuncDecl) (Set, int) {
+func Of(fn *ast.FuncDecl) Result {
 	called := map[*ast.Ident]bool{}
 	set := Set{}
+	literals := Set{}
+	calls := Set{}
 	nodes := 0
 	stack := []*frame{{}}
 	visit := func(n ast.Node) bool {
@@ -56,6 +77,12 @@ func Of(fn *ast.FuncDecl) (Set, int) {
 		if call, ok := n.(*ast.CallExpr); ok {
 			if name := calledName(call.Fun); name != nil {
 				called[name] = true
+				calls[name.Name] = struct{}{}
+			}
+		}
+		if lit, ok := n.(*ast.BasicLit); ok {
+			if value, counted := literalValue(lit); counted {
+				literals[value] = struct{}{}
 			}
 		}
 		nodes++
@@ -72,7 +99,26 @@ func Of(fn *ast.FuncDecl) (Set, int) {
 	}
 	ast.Inspect(fn.Type, visit)
 	ast.Inspect(fn.Body, visit)
-	return set, nodes
+	return Result{Fingerprints: set, Nodes: nodes, Literals: literals, Calls: calls}
+}
+
+// literalValue leaves out 0, 1, and "", because they appear in almost every function and would
+// raise every score. nil, true, and false are identifiers, so they never reach this function.
+// The kind stays in the value, so that "1" and 1 stay different.
+func literalValue(lit *ast.BasicLit) (string, bool) {
+	value := lit.Value
+	if lit.Kind == token.STRING {
+		if unquoted, err := strconv.Unquote(value); err == nil {
+			value = unquoted
+		}
+		if value == "" {
+			return "", false
+		}
+	}
+	if lit.Kind == token.INT && (value == "0" || value == "1") {
+		return "", false
+	}
+	return lit.Kind.String() + " " + value, true
 }
 
 func (f *frame) print() string {

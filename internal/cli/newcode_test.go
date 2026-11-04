@@ -62,7 +62,7 @@ func TestCommittedCopyOfAnOldFunctionIsReported(t *testing.T) {
 	write(t, dir, "zcopy.go", "package a\n\n"+sumFunc("Copy"))
 	commitAll(t, dir, "copy")
 
-	wantReport(t, dir, 1, "zcopy.go:3: duplicates old.go:3 (score 1.00)\n", "--base", "main")
+	wantReport(t, dir, 1, "zcopy.go:3: duplicates old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
 }
 
 func TestUncommittedCopyIsReported(t *testing.T) {
@@ -72,7 +72,7 @@ func TestUncommittedCopyIsReported(t *testing.T) {
 	})
 	write(t, dir, "zwork.go", "package a\n\n"+joinFunc("Work")+"\n"+sumFunc("Copy"))
 
-	wantReport(t, dir, 1, "zwork.go:14: duplicates old.go:3 (score 1.00)\n", "--base", "main")
+	wantReport(t, dir, 1, "zwork.go:14: duplicates old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
 }
 
 func TestStagedCopyIsReported(t *testing.T) {
@@ -80,14 +80,14 @@ func TestStagedCopyIsReported(t *testing.T) {
 	write(t, dir, "zcopy.go", "package a\n\n"+sumFunc("Copy"))
 	git(t, dir, "add", "zcopy.go")
 
-	wantReport(t, dir, 1, "zcopy.go:3: duplicates old.go:3 (score 1.00)\n", "--base", "main")
+	wantReport(t, dir, 1, "zcopy.go:3: duplicates old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
 }
 
 func TestUntrackedCopyIsReported(t *testing.T) {
 	dir := gitRepo(t, map[string]string{"old.go": "package a\n\n" + sumFunc("Old")})
 	write(t, dir, "zcopy.go", "package a\n\n"+sumFunc("Copy"))
 
-	wantReport(t, dir, 1, "zcopy.go:3: duplicates old.go:3 (score 1.00)\n", "--base", "main")
+	wantReport(t, dir, 1, "zcopy.go:3: duplicates old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
 }
 
 func TestIgnoredFileIsNotNew(t *testing.T) {
@@ -119,7 +119,7 @@ func TestAnEditedFunctionWithAnOldDuplicateIsReported(t *testing.T) {
 	edited := strings.Replace(sumFunc("Edited"), "return 100", "return 200", 1)
 	write(t, dir, "edit.go", "package a\n\n"+edited)
 
-	wantReport(t, dir, 1, "edit.go:3: duplicates a_old.go:3 (score 1.00)\n", "--base", "main")
+	wantReport(t, dir, 1, "edit.go:3: duplicates a_old.go:3 (score 1.00, literals 0.50, anchors 0)\n", "--base", "main")
 }
 
 func TestABothNewPairIsReportedOnceInLocationOrder(t *testing.T) {
@@ -127,7 +127,7 @@ func TestABothNewPairIsReportedOnceInLocationOrder(t *testing.T) {
 	write(t, dir, "z.go", "package a\n\n"+sumFunc("Second"))
 	write(t, dir, "b.go", "package a\n\n"+sumFunc("First"))
 
-	wantReport(t, dir, 1, "b.go:3: duplicates z.go:3 (score 1.00)\n", "--base", "main")
+	wantReport(t, dir, 1, "b.go:3: duplicates z.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
 }
 
 func TestAChangeOutsideAFunctionSpanMarksNothing(t *testing.T) {
@@ -149,7 +149,7 @@ func TestADeletionInsideAFunctionMarksIt(t *testing.T) {
 	shorter := strings.Replace(sumFunc("Work"), "\tif total > 100 {\n\t\treturn 100\n\t}\n", "", 1)
 	write(t, dir, "work.go", "package a\n\n"+shorter)
 
-	wantReport(t, dir, 1, "work.go:3: duplicates a_old.go:3 (score 0.79)\n",
+	wantReport(t, dir, 1, "work.go:3: duplicates a_old.go:3 (score 0.79, literals 0.00, anchors 0)\n",
 		"--base", "main", "--threshold", "0.5")
 }
 
@@ -184,7 +184,7 @@ func TestARenamedFileCountsAsNew(t *testing.T) {
 	git(t, dir, "mv", "src.go", "zdst.go")
 	commitAll(t, dir, "rename")
 
-	wantReport(t, dir, 1, "zdst.go:3: duplicates old.go:3 (score 1.00)\n", "--base", "main")
+	wantReport(t, dir, 1, "zdst.go:3: duplicates old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
 }
 
 func TestAFunctionMovedToAnotherFileCountsAsNew(t *testing.T) {
@@ -196,7 +196,7 @@ func TestAFunctionMovedToAnotherFileCountsAsNew(t *testing.T) {
 	write(t, dir, "zdst.go", "package a\n\n"+sumFunc("Moved"))
 	git(t, dir, "add", "--all")
 
-	wantReport(t, dir, 1, "zdst.go:3: duplicates old.go:3 (score 1.00)\n", "--base", "main")
+	wantReport(t, dir, 1, "zdst.go:3: duplicates old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
 }
 
 func TestChangesOnTheBaseBranchAfterTheMergeBaseDoNotCount(t *testing.T) {
@@ -222,7 +222,7 @@ func TestPathsLimitNewCodeMode(t *testing.T) {
 	write(t, dir, "in/zcopy.go", "package a\n\n"+sumFunc("InCopy"))
 	write(t, dir, "out/zcopy.go", "package a\n\n"+joinFunc("OutCopy"))
 
-	wantReport(t, dir, 1, "in/zcopy.go:3: duplicates in/old.go:3 (score 1.00)\n", "--base", "main", "in")
+	wantReport(t, dir, 1, "in/zcopy.go:3: duplicates in/old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main", "in")
 }
 
 func TestAChangedFunctionOutsideThePathsIsNotCompared(t *testing.T) {
@@ -260,9 +260,9 @@ func TestPathsStayRelativeToASubdirectoryOfTheRepo(t *testing.T) {
 			git(t, dir, "config", "diff.relative", "true")
 			sub := filepath.Join(dir, "sub")
 
-			wantReport(t, sub, 1, "zcopy.go:3: duplicates old.go:3 (score 1.00)\n", "--base", "main")
-			wantReport(t, sub, 1, "../zroot.go:3: duplicates ../zzroot.go:3 (score 1.00)\n"+
-				"zcopy.go:3: duplicates old.go:3 (score 1.00)\n", "--base", "main", "..")
+			wantReport(t, sub, 1, "zcopy.go:3: duplicates old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
+			wantReport(t, sub, 1, "../zroot.go:3: duplicates ../zzroot.go:3 (score 1.00, literals 1.00, anchors 3)\n"+
+				"zcopy.go:3: duplicates old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main", "..")
 		})
 	}
 }
@@ -348,7 +348,7 @@ func TestPatchLikeSourceLinesAreNotReadAsHeaders(t *testing.T) {
 	})
 	write(t, dir, "work.go", "package a\n\nconst text = `\n++ b/elsewhere.go\n`\n\n"+edited)
 
-	wantReport(t, dir, 1, "work.go:7: duplicates a_old.go:3 (score 1.00)\n", "--base", "main")
+	wantReport(t, dir, 1, "work.go:7: duplicates a_old.go:3 (score 1.00, literals 0.50, anchors 0)\n", "--base", "main")
 }
 
 func TestFileNamesThatGitQuotesOrPadsAreFound(t *testing.T) {
@@ -364,7 +364,8 @@ func TestFileNamesThatGitQuotesOrPadsAreFound(t *testing.T) {
 	}
 	edited := strings.Replace(sumFunc("Copy"), "return 100", "return 200", 1)
 	for _, name := range names {
-		want := name + ":3: duplicates a_old.go:3 (score 1.00)\n"
+		want := name + ":3: duplicates a_old.go:3 (score 1.00, literals 1.00, anchors 0)\n"
+		wantEdited := name + ":3: duplicates a_old.go:3 (score 1.00, literals 0.50, anchors 0)\n"
 		old := map[string]string{"a_old.go": "package a\n\n" + sumFunc("Old")}
 
 		t.Run("untracked "+name, func(t *testing.T) {
@@ -380,7 +381,7 @@ func TestFileNamesThatGitQuotesOrPadsAreFound(t *testing.T) {
 			})
 			write(t, dir, name, "package a\n\n"+edited)
 
-			wantReport(t, dir, 1, want, "--base", "main")
+			wantReport(t, dir, 1, wantEdited, "--base", "main")
 		})
 	}
 }
@@ -404,9 +405,9 @@ func settingsRepo(t *testing.T) string {
 	return dir
 }
 
-const settingsReport = "work.go:3: duplicates other.go:16 (score 1.00)\n" +
-	"work.go:3: duplicates work.go:27 (score 1.00)\n" +
-	"work.go:27: duplicates other.go:16 (score 1.00)\n"
+const settingsReport = "work.go:3: duplicates other.go:16 (score 1.00, literals 0.00, anchors 3)\n" +
+	"work.go:3: duplicates work.go:27 (score 1.00, literals 1.00, anchors 3)\n" +
+	"work.go:27: duplicates other.go:16 (score 1.00, literals 0.00, anchors 3)\n"
 
 func TestDiffSettingsHaveNoEffect(t *testing.T) {
 	tests := []struct {
@@ -575,7 +576,7 @@ func TestASkippedFileCannotContributeNewFunctions(t *testing.T) {
 	write(t, dir, "copy_test.go", "package a\n\n"+sumFunc("Copy"))
 
 	wantReport(t, dir, 0, "No new functions found.\n", "--base", "main")
-	wantReport(t, dir, 1, "copy_test.go:3: duplicates old.go:3 (score 1.00)\n",
+	wantReport(t, dir, 1, "copy_test.go:3: duplicates old.go:3 (score 1.00, literals 1.00, anchors 0)\n",
 		"--base", "main", "--include-tests")
 }
 

@@ -96,7 +96,7 @@ func TestJSONReportsEveryFieldOfAFinding(t *testing.T) {
 		t.Errorf("left nodes = %v, want a positive number", nodes)
 	}
 	want := map[string]any{
-		"score": 1.0,
+		"score": 1.0, "literals": 1.0, "anchors": 0.0,
 		"left": map[string]any{
 			"file": "pkg/a.go", "function": "One", "startLine": 3.0, "endLine": 14.0,
 			"nodes": nodes, "new": false,
@@ -121,7 +121,7 @@ func TestTextLineHasTwoDecimalScore(t *testing.T) {
 	_, stdout, _ := runGodry(t, dir, "--threshold", "0.5")
 
 	// The exact score belongs to normalization. This pins the line's format.
-	line := regexp.MustCompile(`^internal/a\.go:3: duplicates internal/b\.go:3 \(score 0\.\d\d\)\n$`)
+	line := regexp.MustCompile(`^internal/a\.go:3: duplicates internal/b\.go:3 \(score 0\.\d\d, literals 0\.50, anchors 0\)\n$`)
 	if !line.MatchString(stdout) {
 		t.Errorf("stdout = %q", stdout)
 	}
@@ -132,7 +132,7 @@ func TestPathsAreRelativeToTheRunDirectory(t *testing.T) {
 		"pkg/sub/a.go": "package a\n\n" + sumFunc("One"),
 		"pkg/sub/b.go": "package a\n\n" + sumFunc("Two"),
 	})
-	want := "pkg/sub/a.go:3: duplicates pkg/sub/b.go:3 (score 1.00)\n"
+	want := "pkg/sub/a.go:3: duplicates pkg/sub/b.go:3 (score 1.00, literals 1.00, anchors 0)\n"
 
 	for _, path := range []string{"pkg", "./pkg/sub/", filepath.Join(dir, "pkg")} {
 		t.Run(path, func(t *testing.T) {
@@ -155,7 +155,7 @@ func TestHigherScoreComesFirstWhateverThePaths(t *testing.T) {
 
 	_, stdout, _ := runGodry(t, dir, "--threshold", "0.6")
 
-	order := regexp.MustCompile(`^z1\.go:3: duplicates z2\.go:3 \(score 1\.00\)\na1\.go:3: duplicates a2\.go:3 \(score 0\.\d\d\)\n$`)
+	order := regexp.MustCompile(`^z1\.go:3: duplicates z2\.go:3 \(score 1\.00, literals 1\.00, anchors 3\)\na1\.go:3: duplicates a2\.go:3 \(score 0\.\d\d, literals 0\.50, anchors 0\)\n$`)
 	if !order.MatchString(stdout) {
 		t.Errorf("stdout = %q", stdout)
 	}
@@ -170,12 +170,12 @@ func TestEqualScoresSortByFirstThenSecondLocation(t *testing.T) {
 
 	_, stdout, _ := runGodry(t, dir)
 
-	want := "a.go:3: duplicates a.go:16 (score 1.00)\n" +
-		"a.go:3: duplicates b.go:3 (score 1.00)\n" +
-		"a.go:3: duplicates b.go:16 (score 1.00)\n" +
-		"a.go:16: duplicates b.go:3 (score 1.00)\n" +
-		"a.go:16: duplicates b.go:16 (score 1.00)\n" +
-		"b.go:3: duplicates b.go:16 (score 1.00)\n"
+	want := "a.go:3: duplicates a.go:16 (score 1.00, literals 1.00, anchors 0)\n" +
+		"a.go:3: duplicates b.go:3 (score 1.00, literals 1.00, anchors 0)\n" +
+		"a.go:3: duplicates b.go:16 (score 1.00, literals 1.00, anchors 0)\n" +
+		"a.go:16: duplicates b.go:3 (score 1.00, literals 1.00, anchors 0)\n" +
+		"a.go:16: duplicates b.go:16 (score 1.00, literals 1.00, anchors 0)\n" +
+		"b.go:3: duplicates b.go:16 (score 1.00, literals 1.00, anchors 0)\n"
 	if stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
@@ -343,5 +343,165 @@ func TestFailedWriteOfTheReportExitsTwo(t *testing.T) {
 				t.Errorf("stderr = %q", stderr.String())
 			}
 		})
+	}
+}
+
+// evidenceLine runs godry on two functions, with limits low enough for short examples.
+func evidenceLine(t *testing.T, left, right string) string {
+	t.Helper()
+	dir := writeTree(t, map[string]string{
+		"a.go": "package a\n\n" + left,
+		"b.go": "package a\n\n" + right,
+	})
+	code, stdout, stderr := runGodry(t, dir, "--min-lines", "1", "--min-nodes", "1", "--threshold", "0.1")
+	if code != 1 {
+		t.Fatalf("exit code = %d, stdout = %q, stderr = %q; want a finding", code, stdout, stderr)
+	}
+	return stdout
+}
+
+func wantEvidence(t *testing.T, left, right, want string) {
+	t.Helper()
+	if line := evidenceLine(t, left, right); !strings.Contains(line, want) {
+		t.Errorf("line = %q, want it to contain %q", line, want)
+	}
+}
+
+const operationName = `func operationName(operation inference.InferenceOperation) string {
+	switch operation {
+	case inference.OperationEmbedding:
+		return "embeddings"
+	case inference.OperationChat:
+		return "chat"
+	default:
+		return "unknown"
+	}
+}
+`
+
+const outcome = `func outcome(value inference.InferenceOutcome) string {
+	switch value {
+	case inference.OutcomeError:
+		return "error"
+	case inference.OutcomeSuccess:
+		return "success"
+	default:
+		return "unknown"
+	}
+}
+`
+
+const loadUser = `func loadUser(ctx context.Context, id string) (*User, error) {
+	row := db.QueryRowContext(ctx, "SELECT * FROM users WHERE id = $1", id)
+	var user User
+	if err := row.Scan(&user.ID, &user.Name); err != nil {
+		return nil, fmt.Errorf("load user: %w", err)
+	}
+	return &user, nil
+}
+`
+
+const loadOrder = `func loadOrder(ctx context.Context, id string) (*Order, error) {
+	row := db.QueryRowContext(ctx, "SELECT * FROM orders WHERE id = $1", id)
+	var order Order
+	if err := row.Scan(&order.ID, &order.Total); err != nil {
+		return nil, fmt.Errorf("load order: %w", err)
+	}
+	return &order, nil
+}
+`
+
+func TestAMappingPairShowsLowLiteralsAndNoAnchors(t *testing.T) {
+	want := "a.go:3: duplicates b.go:3 (score 1.00, literals 0.20, anchors 0)\n"
+	if line := evidenceLine(t, operationName, outcome); line != want {
+		t.Errorf("line = %q, want %q", line, want)
+	}
+}
+
+func TestACopyWithNewDataStaysReportedWithItsAnchors(t *testing.T) {
+	want := "a.go:3: duplicates b.go:3 (score 1.00, literals 0.00, anchors 3)\n"
+	if line := evidenceLine(t, loadUser, loadOrder); line != want {
+		t.Errorf("line = %q, want %q", line, want)
+	}
+}
+
+func TestLiteralScoreCases(t *testing.T) {
+	wrap := func(name, body string) string {
+		return "func " + name + "() {\n\tuse(" + body + ")\n\tuse(1 + 2)\n}\n"
+	}
+	tests := []struct {
+		name, left, right, want string
+	}{
+		{"same literals", `"a", 7`, `"a", 7`, "literals 1.00"},
+		{"each different literal counts once", `"a", "a", "b"`, `"a", "c", "c"`, "literals 0.50"},
+		{"a raw string equals a quoted string", "`a`", `"a"`, "literals 1.00"},
+		{"a string never equals a number", `"8080"`, `8080`, "literals 0.33"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			wantEvidence(t, wrap("one", test.left), wrap("two", test.right), test.want)
+		})
+	}
+}
+
+func TestCommonLiteralsAreNotCounted(t *testing.T) {
+	left := "func one() {\n\tuse(0, 1, \"\", nil, true, false)\n}\n"
+	right := "func two() {\n\tuse(1, 0, ``, false, nil, true)\n}\n"
+	wantEvidence(t, left, right, "literals -,")
+}
+
+func TestOneSideWithoutLiteralsScoresZero(t *testing.T) {
+	left := "func one() {\n\tuse(0, 1)\n}\n"
+	right := "func two() {\n\tuse(5, 1)\n}\n"
+	wantEvidence(t, left, right, "literals 0.00")
+}
+
+func TestAnchorCountsSharedCalledNamesOnly(t *testing.T) {
+	tests := []struct {
+		name, left, right, want string
+	}{
+		{"a name called twice counts once", "shared()\n\tshared()", "shared()\n\tshared()", "anchors 1)"},
+		{"a name on one side only does not count", "shared()\n\tmine()", "shared()\n\tyours()", "anchors 1)"},
+		{"a method counts, not its receiver", "user.Save()", "order.Save()", "anchors 1)"},
+		{"a package call counts by its last name", "fmt.Errorf(x)", "errors.Errorf(x)", "anchors 1)"},
+		{"a generic call counts", "convert[int](x)", "convert[string](x)", "anchors 1)"},
+		{"a call inside a function literal counts", "go func() { work() }()", "go func() { work() }()", "anchors 1)"},
+		{"operators do not count", "x = a != b", "x = a != b", "anchors 0)"},
+		{"a field read does not count", "x = user.Name", "x = user.Name", "anchors 0)"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			wrap := func(name, body string) string {
+				return "func " + name + "() {\n\t" + body + "\n}\n"
+			}
+			wantEvidence(t, wrap("one", test.left), wrap("two", test.right), test.want)
+		})
+	}
+}
+
+func TestJSONHasLiteralsAndAnchors(t *testing.T) {
+	type finding struct {
+		Literals *float64 `json:"literals"`
+		Anchors  *int     `json:"anchors"`
+	}
+	run := func(left, right string) (finding, string) {
+		dir := writeTree(t, map[string]string{"a.go": "package a\n\n" + left, "b.go": "package a\n\n" + right})
+		_, stdout, _ := runGodry(t, dir, "--format", "json", "--min-lines", "1", "--min-nodes", "1")
+		var parsed struct {
+			Findings []finding `json:"findings"`
+		}
+		if err := json.Unmarshal([]byte(stdout), &parsed); err != nil || len(parsed.Findings) != 1 {
+			t.Fatalf("stdout = %q, err = %v; want one finding", stdout, err)
+		}
+		return parsed.Findings[0], stdout
+	}
+
+	found, _ := run(loadUser, loadOrder)
+	if found.Literals == nil || *found.Literals != 0 || found.Anchors == nil || *found.Anchors != 3 {
+		t.Errorf("finding = %+v; want literals 0 and anchors 3", found)
+	}
+	unknown, stdout := run("func one() {\n\tuse(0)\n}\n", "func two() {\n\tuse(1)\n}\n")
+	if unknown.Literals != nil || !strings.Contains(stdout, `"literals": null`) {
+		t.Errorf("stdout = %q; want literals to be null", stdout)
 	}
 }

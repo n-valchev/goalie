@@ -50,7 +50,7 @@ func TestIgnoredFunctionLeavesOtherPairsInPlace(t *testing.T) {
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1", code)
 	}
-	if want := "a.go:3: duplicates c.go:3 (score 1.00)\n"; stdout != want {
+	if want := "a.go:3: duplicates c.go:3 (score 1.00, literals 1.00, anchors 0)\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 }
@@ -77,7 +77,7 @@ func TestCommentThatIsNotADirectiveAboveTheFunctionSuppressesNothing(t *testing.
 			if code != 1 {
 				t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
 			}
-			want := fmt.Sprintf("a.go:%d: duplicates b.go:3 (score 1.00)\n", test.line)
+			want := fmt.Sprintf("a.go:%d: duplicates b.go:3 (score 1.00, literals 1.00, anchors 0)\n", test.line)
 			if stdout != want {
 				t.Errorf("stdout = %q, want %q", stdout, want)
 			}

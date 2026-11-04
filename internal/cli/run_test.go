@@ -20,7 +20,7 @@ func TestCopyInAnotherPackageIsReported(t *testing.T) {
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
 	}
-	want := "internal/a/a.go:3: duplicates internal/b/b.go:5 (score 1.00)\n"
+	want := "internal/a/a.go:3: duplicates internal/b/b.go:5 (score 1.00, literals 1.00, anchors 0)\n"
 	if stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
@@ -37,7 +37,7 @@ func TestCommentsInsideAFunctionDoNotChangeTheScore(t *testing.T) {
 
 	_, stdout, _ := runGodry(t, dir)
 
-	if want := "a.go:3: duplicates b.go:3 (score 1.00)\n"; stdout != want {
+	if want := "a.go:3: duplicates b.go:3 (score 1.00, literals 1.00, anchors 0)\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 }
@@ -68,7 +68,7 @@ func TestCopiedMethodIsReported(t *testing.T) {
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1", code)
 	}
-	if want := "a.go:5: duplicates b.go:5 (score 1.00)\n"; stdout != want {
+	if want := "a.go:5: duplicates b.go:5 (score 1.00, literals 1.00, anchors 0)\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 }
@@ -82,9 +82,9 @@ func TestEachPairIsReportedOnce(t *testing.T) {
 
 	_, stdout, _ := runGodry(t, dir)
 
-	want := "a.go:3: duplicates b.go:3 (score 1.00)\n" +
-		"a.go:3: duplicates c.go:3 (score 1.00)\n" +
-		"b.go:3: duplicates c.go:3 (score 1.00)\n"
+	want := "a.go:3: duplicates b.go:3 (score 1.00, literals 1.00, anchors 0)\n" +
+		"a.go:3: duplicates c.go:3 (score 1.00, literals 1.00, anchors 0)\n" +
+		"b.go:3: duplicates c.go:3 (score 1.00, literals 1.00, anchors 0)\n"
 	if stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
@@ -130,9 +130,9 @@ func TestPathsLimitTheScan(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"one folder", []string{"one"}, "one/a.go:3: duplicates one/b.go:3 (score 1.00)\n"},
-		{"two files", []string{"two/c.go", "three/d.go"}, "three/d.go:3: duplicates two/c.go:3 (score 1.00)\n"},
-		{"absolute path", []string{filepath.Join(dir, "one")}, "one/a.go:3: duplicates one/b.go:3 (score 1.00)\n"},
+		{"one folder", []string{"one"}, "one/a.go:3: duplicates one/b.go:3 (score 1.00, literals 1.00, anchors 0)\n"},
+		{"two files", []string{"two/c.go", "three/d.go"}, "three/d.go:3: duplicates two/c.go:3 (score 1.00, literals 1.00, anchors 0)\n"},
+		{"absolute path", []string{filepath.Join(dir, "one")}, "one/a.go:3: duplicates one/b.go:3 (score 1.00, literals 1.00, anchors 0)\n"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

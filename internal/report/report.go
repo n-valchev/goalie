@@ -15,8 +15,9 @@ func Text(w io.Writer, pairs []compare.Pair) error {
 		return err
 	}
 	for _, pair := range pairs {
-		_, err := fmt.Fprintf(w, "%s:%d: duplicates %s:%d (score %.2f)\n",
-			pair.Left.File, pair.Left.StartLine, pair.Right.File, pair.Right.StartLine, pair.Score)
+		_, err := fmt.Fprintf(w, "%s:%d: duplicates %s:%d (score %.2f, literals %s, anchors %d)\n",
+			pair.Left.File, pair.Left.StartLine, pair.Right.File, pair.Right.StartLine,
+			pair.Score, literalText(pair.Literals), pair.Anchors)
 		if err != nil {
 			return err
 		}
@@ -24,14 +25,23 @@ func Text(w io.Writer, pairs []compare.Pair) error {
 	return nil
 }
 
+func literalText(score *float64) string {
+	if score == nil {
+		return "-"
+	}
+	return fmt.Sprintf("%.2f", *score)
+}
+
 type jsonReport struct {
 	Findings []jsonFinding `json:"findings"`
 }
 
 type jsonFinding struct {
-	Score float64  `json:"score"`
-	Left  jsonSide `json:"left"`
-	Right jsonSide `json:"right"`
+	Score    float64  `json:"score"`
+	Literals *float64 `json:"literals"`
+	Anchors  int      `json:"anchors"`
+	Left     jsonSide `json:"left"`
+	Right    jsonSide `json:"right"`
 }
 
 type jsonSide struct {
@@ -46,7 +56,7 @@ type jsonSide struct {
 func JSON(w io.Writer, pairs []compare.Pair) error {
 	findings := make([]jsonFinding, 0, len(pairs))
 	for _, pair := range pairs {
-		findings = append(findings, jsonFinding{pair.Score, toJSON(pair.Left), toJSON(pair.Right)})
+		findings = append(findings, jsonFinding{pair.Score, pair.Literals, pair.Anchors, toJSON(pair.Left), toJSON(pair.Right)})
 	}
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")

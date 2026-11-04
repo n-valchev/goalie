@@ -248,7 +248,10 @@ func TestNewCodeEqualsAllPairsWithSameNamePairsLeftOut(t *testing.T) {
 		if isNew(b) && !isNew(a) {
 			left, right = right, left
 		}
-		expected = append(expected, map[string]any{"score": finding["score"], "left": left, "right": right})
+		expected = append(expected, map[string]any{
+			"score": finding["score"], "literals": finding["literals"], "anchors": finding["anchors"],
+			"left": left, "right": right,
+		})
 	}
 	if hidden < 5 {
 		t.Fatalf("%d same-name pairs score above the default threshold, want at least 5", hidden)

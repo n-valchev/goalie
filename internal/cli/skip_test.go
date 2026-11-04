@@ -464,7 +464,7 @@ func TestSameNamePairDoesNotHideOtherPairs(t *testing.T) {
 
 	_, stdout, _ := runGodry(t, dir)
 
-	want := "a.go:3: duplicates c.go:3 (score 1.00)\nb.go:3: duplicates c.go:3 (score 1.00)\n"
+	want := "a.go:3: duplicates c.go:3 (score 1.00, literals 1.00, anchors 0)\nb.go:3: duplicates c.go:3 (score 1.00, literals 1.00, anchors 0)\n"
 	if stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}

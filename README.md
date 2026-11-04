@@ -56,12 +56,19 @@ With no paths, godry scans the current directory tree. Paths limit both modes: g
 godry prints one line for each pair:
 
 ```text
-internal/a.go:12: duplicates internal/b.go:40 (score 0.91)
+internal/a.go:12: duplicates internal/b.go:40 (score 0.91, literals 0.20, anchors 3)
 ```
 
-The score runs from `0` to `1`, and `1.00` means the two functions have the same structure. In new-code mode, the new function comes first. A clean scan prints `No duplicates found.`
+The score runs from `0` to `1`, and `1.00` means the two functions have the same structure. The other two numbers describe the match. They never decide whether godry reports a pair:
 
-Use `--format json` to get an object with a `findings` array.
+| Number | Meaning | How to read it |
+| --- | --- | --- |
+| `literals` | Literals both functions share, divided by all literals in either function. `-` means neither has one to compare. `0`, `1`, `""`, `nil`, `true`, and `false` don't count. | High: a pasted copy. Low: the same code with different data. |
+| `anchors` | Different called names that both functions use. Operators don't count. A type conversion such as `string(x)` looks like a call, so it counts. | `0` with low `literals`: only the shape of the code matches, as with two `switch` mappings. |
+
+In new-code mode, the new function comes first. A clean scan prints `No duplicates found.`
+
+Use `--format json` to get an object with a `findings` array. Each finding has `score`, `literals` (a number, or `null` for `-`), `anchors`, `left`, and `right`.
 
 ### Use the exit code
 

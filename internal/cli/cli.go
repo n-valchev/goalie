@@ -91,11 +91,11 @@ func candidates(functions []extract.Function, opts options) []compare.Candidate 
 		if fn.Lines() < opts.minLines {
 			continue
 		}
-		set, nodes := fingerprint.Of(fn.Decl)
-		if nodes < opts.minNodes {
+		fingerprints := fingerprint.Of(fn.Decl)
+		if fingerprints.Nodes < opts.minNodes {
 			continue
 		}
-		result = append(result, compare.Candidate{Function: fn, Fingerprints: set, Nodes: nodes})
+		result = append(result, compare.Candidate{Function: fn, Result: fingerprints})
 	}
 	return result
 }
