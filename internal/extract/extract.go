@@ -62,13 +62,18 @@ func Parse(dir string, files []string) ([]Function, error) {
 				Package:   path.Join(path.Dir(file), parsed.Name.Name),
 				Name:      fn.Name.Name,
 				Receiver:  receiverType(fn),
-				StartLine: fset.Position(fn.Pos()).Line,
-				EndLine:   fset.Position(fn.Body.Rbrace).Line,
+				StartLine: fileLine(fset, fn.Pos()),
+				EndLine:   fileLine(fset, fn.Body.Rbrace),
 				Decl:      fn,
 			})
 		}
 	}
 	return functions, nil
+}
+
+// fileLine ignores //line directives, because a span must point into the file on disk.
+func fileLine(fset *token.FileSet, pos token.Pos) int {
+	return fset.PositionFor(pos, false).Line
 }
 
 // receiverType drops the pointer and type parameters, because platform variants of one method
