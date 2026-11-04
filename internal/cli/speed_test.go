@@ -1,0 +1,264 @@
+package cli_test
+
+import (
+	"fmt"
+	"math"
+	"math/rand"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+)
+
+// A plain all-pairs comparison of this set takes minutes, so this budget fails without the
+// speedups and still leaves slow build machines room.
+const scanBudget = 30 * time.Second
+
+var statementShapes = []string{
+	"total += %s(total)",
+	"label = %s(label)",
+	"defer %s(label)",
+	"values = append(values, %s(total))",
+	"if total > 10 {\n\t\ttotal = %s(total)\n\t}",
+	"if label == \"\" {\n\t\treturn %s(total)\n\t}",
+	"for _, value := range values {\n\t\ttotal -= %s(value)\n\t}",
+	"switch total {\n\tcase 0:\n\t\ttotal = %s(1)\n\tdefault:\n\t\ttotal *= 2\n\t}",
+}
+
+func randomStatement(rng *rand.Rand, callees int) string {
+	shape := statementShapes[rng.Intn(len(statementShapes))]
+	return fmt.Sprintf(shape, fmt.Sprintf("step%d", rng.Intn(callees)))
+}
+
+// generatedFunctions returns families of near-duplicates. Each member edits a few statements of
+// its family's base, and the base length varies, so scores spread around the default threshold
+// and fingerprint set sizes differ inside and between families.
+func generatedFunctions(seed int64, families, perFamily, callees int) []string {
+	rng := rand.New(rand.NewSource(seed))
+	var functions []string
+	for range families {
+		base := make([]string, 8+rng.Intn(24))
+		for i := range base {
+			base[i] = randomStatement(rng, callees)
+		}
+		for range perFamily {
+			body := slices.Clone(base)
+			for range rng.Intn(4) {
+				body[rng.Intn(len(body))] = randomStatement(rng, callees)
+			}
+			body = body[:len(body)-rng.Intn(3)]
+			functions = append(functions, fmt.Sprintf(
+				"func F%05d(values []int, label string) int {\n\ttotal := 0\n\t%s\n\treturn total\n}\n",
+				len(functions), strings.Join(body, "\n\t")))
+		}
+	}
+	return functions
+}
+
+// spreadOverFiles puts the functions into packages of many files, as a real repo would have them.
+func spreadOverFiles(functions []string) map[string]string {
+	const perFile = 50
+	files := map[string]string{}
+	for start := 0; start < len(functions); start += perFile {
+		number := start / perFile
+		name := fmt.Sprintf("pkg%02d/file%03d.go", number%20, number)
+		end := min(start+perFile, len(functions))
+		files[name] = fmt.Sprintf("package pkg%02d\n\n%s", number%20, strings.Join(functions[start:end], "\n"))
+	}
+	return files
+}
+
+func fileName(index int) string {
+	return fmt.Sprintf("f%03d.go", index)
+}
+
+func oneFunctionFile(function string) string {
+	return "package gen\n\n" + function
+}
+
+// allPairsFindings runs godry on every pair alone. A threshold of 0 reports each pair, so the
+// result is the finding and score of every pair, with no help from anything a scan of the whole
+// set can use.
+func allPairsFindings(t *testing.T, functions []string) []map[string]any {
+	t.Helper()
+	var findings []map[string]any
+	for i := range functions {
+		for j := i + 1; j < len(functions); j++ {
+			dir := writeTree(t, map[string]string{
+				fileName(i): oneFunctionFile(functions[i]),
+				fileName(j): oneFunctionFile(functions[j]),
+			})
+			_, stdout, stderr := runGodry(t, dir, "--format", "json", "--threshold", "0", "--min-lines", "1", "--min-nodes", "1")
+			report := decodeReport(t, stdout)
+			if len(report.Findings) != 1 {
+				t.Fatalf("pair %d, %d: %d findings, want 1; stderr: %s", i, j, len(report.Findings), stderr)
+			}
+			findings = append(findings, report.Findings[0])
+		}
+	}
+	return findings
+}
+
+func scoreOf(finding map[string]any) float64 {
+	return finding["score"].(float64)
+}
+
+func fileOf(finding map[string]any, side string) string {
+	return finding[side].(map[string]any)["file"].(string)
+}
+
+// reportedAt filters the all-pairs findings to what a scan at threshold must print, in report order.
+func reportedAt(findings []map[string]any, threshold float64) []map[string]any {
+	expected := []map[string]any{}
+	for _, finding := range findings {
+		if scoreOf(finding) >= threshold {
+			expected = append(expected, finding)
+		}
+	}
+	sort.Slice(expected, func(i, j int) bool {
+		a, b := expected[i], expected[j]
+		if scoreOf(a) != scoreOf(b) {
+			return scoreOf(a) > scoreOf(b)
+		}
+		if fileOf(a, "left") != fileOf(b, "left") {
+			return fileOf(a, "left") < fileOf(b, "left")
+		}
+		return fileOf(a, "right") < fileOf(b, "right")
+	})
+	return expected
+}
+
+// thresholdsAround returns each score from 0.5 up and the nearest numbers on both sides of it,
+// because a speedup that rounds differently from the score fails only at those exact values.
+func thresholdsAround(findings []map[string]any) []float64 {
+	thresholds := []float64{0, 1e-12, 0.25, 0.5, 0.82, 0.9, 1}
+	seen := map[float64]bool{}
+	for _, finding := range findings {
+		score := scoreOf(finding)
+		if score >= 0.5 && !seen[score] {
+			seen[score] = true
+			thresholds = append(thresholds, score, math.Nextafter(score, 0), math.Nextafter(score, 1))
+		}
+	}
+	return thresholds
+}
+
+func TestScanEqualsAllPairsAtAndNearEveryScore(t *testing.T) {
+	functions := generatedFunctions(1, 10, 6, 40)
+	findings := allPairsFindings(t, functions)
+
+	nearDefault := 0
+	for _, finding := range findings {
+		if score := scoreOf(finding); score >= 0.72 && score <= 0.92 {
+			nearDefault++
+		}
+	}
+	if nearDefault < 20 {
+		t.Fatalf("%d pairs score near the default threshold, want at least 20", nearDefault)
+	}
+
+	files := map[string]string{}
+	for i, function := range functions {
+		files[fileName(i)] = oneFunctionFile(function)
+	}
+	dir := writeTree(t, files)
+	for _, threshold := range thresholdsAround(findings) {
+		text := strconv.FormatFloat(threshold, 'g', -1, 64)
+		_, stdout, stderr := runGodry(t, dir, "--format", "json", "--threshold", text, "--min-lines", "1", "--min-nodes", "1")
+		got := decodeReport(t, stdout).Findings
+		want := reportedAt(findings, threshold)
+		if len(got) == 0 && len(want) == 0 {
+			continue
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("threshold %s: %d findings differ from %d all-pairs findings; stderr: %s", text, len(got), len(want), stderr)
+		}
+	}
+}
+
+func TestTenThousandFunctionsScanWithinBudget(t *testing.T) {
+	functions := generatedFunctions(2, 2000, 5, 2000)
+	dir := writeTree(t, spreadOverFiles(functions))
+
+	start := time.Now()
+	code, stdout, stderr := runGodry(t, dir, "--format", "json")
+	elapsed := time.Since(start)
+
+	t.Logf("%d functions, %d findings, %v", len(functions), len(decodeReport(t, stdout).Findings), elapsed)
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
+	}
+	if elapsed > scanBudget {
+		t.Errorf("scan took %v, want at most %v", elapsed, scanBudget)
+	}
+}
+
+func TestRepeatedScansPrintTheSameBytes(t *testing.T) {
+	dir := writeTree(t, spreadOverFiles(generatedFunctions(3, 100, 5, 200)))
+
+	_, first, _ := runGodry(t, dir)
+	for range 5 {
+		if _, again, _ := runGodry(t, dir); again != first {
+			t.Fatal("two scans of the same files printed different output")
+		}
+	}
+}
+
+func TestParseErrorNamesTheFirstBadFileEveryTime(t *testing.T) {
+	files := spreadOverFiles(generatedFunctions(4, 100, 5, 200))
+	files["pkg00/file000.go"] = "package pkg00\n\nfunc broken( {\n"
+	files["pkg19/file099.go"] = "package pkg19\n\nfunc broken( {\n"
+	dir := writeTree(t, files)
+
+	for range 20 {
+		code, _, stderr := runGodry(t, dir)
+		if code != 2 {
+			t.Fatalf("exit code = %d, want 2", code)
+		}
+		if !strings.Contains(stderr, "pkg00/file000.go") || strings.Contains(stderr, "pkg19/file099.go") {
+			t.Fatalf("stderr = %q, want only the first bad file", stderr)
+		}
+	}
+}
+
+func TestOneNewFunctionInTenThousandChecksWithinBudget(t *testing.T) {
+	functions := generatedFunctions(5, 10000, 1, 2000)
+	dir := writeTree(t, spreadOverFiles(functions))
+	for _, args := range [][]string{
+		{"init", "--quiet"},
+		{"add", "."},
+		{"-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", "base"},
+	} {
+		command := exec.Command("git", args...)
+		command.Dir = dir
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, output)
+		}
+	}
+	copied := strings.Replace(functions[42], "F00042", "Copied", 1)
+	if err := os.WriteFile(filepath.Join(dir, "a_new.go"), []byte("package fresh\n\n"+copied), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	start := time.Now()
+	code, stdout, stderr := runGodry(t, dir, "--base", "HEAD", "--format", "json")
+	elapsed := time.Since(start)
+
+	t.Logf("%v", elapsed)
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
+	}
+	findings := decodeReport(t, stdout).Findings
+	if len(findings) != 1 || fileOf(findings[0], "left") != "a_new.go" {
+		t.Errorf("findings = %v, want one pair led by a_new.go", findings)
+	}
+	if elapsed > scanBudget {
+		t.Errorf("check took %v, want at most %v", elapsed, scanBudget)
+	}
+}

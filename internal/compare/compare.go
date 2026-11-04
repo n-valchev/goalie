@@ -31,22 +31,24 @@ type Pair struct {
 // newFunctions holds indexes into all. When it is non-nil, only pairs with at least one new
 // function are returned, and the new function is the left side. A nil set means whole-repo mode.
 func Find(all []Candidate, newFunctions map[int]bool, threshold float64) []Pair {
-	pairs := []Pair{}
-	for i := range all {
-		for j := i + 1; j < len(all); j++ {
-			if newFunctions != nil && !newFunctions[i] && !newFunctions[j] {
-				continue
-			}
-			if variants(all[i], all[j]) {
-				continue
-			}
-			score := similarity(all[i].Fingerprints, all[j].Fingerprints)
-			if score >= threshold {
-				left := Side{all[i], newFunctions[i]}
-				right := Side{all[j], newFunctions[j]}
-				pairs = append(pairs, orient(left, right, score))
-			}
+	sets := integerSets(all)
+	matches := findMatches(sets, newFunctions, threshold)
+	// All-pairs order, so that report order never depends on how the index found a pair.
+	sort.Slice(matches, func(i, j int) bool {
+		a, b := matches[i], matches[j]
+		if a.first != b.first {
+			return a.first < b.first
 		}
+		return a.second < b.second
+	})
+	pairs := make([]Pair, 0, len(matches))
+	for _, match := range matches {
+		if variants(all[match.first], all[match.second]) {
+			continue
+		}
+		left := Side{all[match.first], newFunctions[match.first]}
+		right := Side{all[match.second], newFunctions[match.second]}
+		pairs = append(pairs, orient(left, right, match.score))
 	}
 	sort.Slice(pairs, func(i, j int) bool {
 		a, b := pairs[i], pairs[j]
@@ -64,16 +66,6 @@ func Find(all []Candidate, newFunctions map[int]bool, threshold float64) []Pair 
 // variants reports whether two functions are one function built for different platforms.
 func variants(a, b Candidate) bool {
 	return a.Package == b.Package && a.Name == b.Name && a.Receiver == b.Receiver
-}
-
-func similarity(a, b fingerprint.Set) float64 {
-	shared := 0
-	for print := range a {
-		if _, ok := b[print]; ok {
-			shared++
-		}
-	}
-	return float64(shared) / float64(len(a)+len(b)-shared)
 }
 
 func orient(a, b Side, score float64) Pair {

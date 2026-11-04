@@ -9,7 +9,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 const ignoreDirective = "//godry:ignore"
@@ -33,40 +36,70 @@ func (f Function) Lines() int {
 // Parse reads files, given relative to dir, and returns their functions in file order.
 // A function under a //godry:ignore comment is left out.
 func Parse(dir string, files []string) ([]Function, error) {
+	type result struct {
+		functions []Function
+		err       error
+	}
+	results := make([]result, len(files))
+	var next atomic.Int64
+	var workers sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), len(files)) {
+		workers.Go(func() {
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= len(files) {
+					return
+				}
+				functions, err := parseFile(dir, files[i])
+				results[i] = result{functions, err}
+			}
+		})
+	}
+	workers.Wait()
+	// Results stay in file order, so the first error and the function order match a serial parse.
 	var functions []Function
+	for _, result := range results {
+		if result.err != nil {
+			return nil, result.err
+		}
+		functions = append(functions, result.functions...)
+	}
+	return functions, nil
+}
+
+func parseFile(dir, file string) ([]Function, error) {
+	source, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
+	if err != nil {
+		return nil, err
+	}
 	fset := token.NewFileSet()
-	for _, file := range files {
-		source, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
+	parsed, err := parser.ParseFile(fset, file, source, parser.ParseComments|parser.SkipObjectResolution)
+	if err != nil {
+		return nil, err
+	}
+	var functions []Function
+	for _, decl := range parsed.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		// Before the body check, because a directive with no reason fails on any function.
+		ignored, err := hasIgnoreDirective(fset, fn)
 		if err != nil {
 			return nil, err
 		}
-		parsed, err := parser.ParseFile(fset, file, source, parser.ParseComments|parser.SkipObjectResolution)
-		if err != nil {
-			return nil, err
+		if ignored || fn.Body == nil {
+			continue
 		}
-		for _, decl := range parsed.Decls {
-			fn, ok := decl.(*ast.FuncDecl)
-			if !ok {
-				continue
-			}
-			// Before the body check, because a directive with no reason fails on any function.
-			ignored, err := hasIgnoreDirective(fset, fn)
-			if err != nil {
-				return nil, err
-			}
-			if ignored || fn.Body == nil {
-				continue
-			}
-			functions = append(functions, Function{
-				File:      file,
-				Package:   path.Join(path.Dir(file), parsed.Name.Name),
-				Name:      fn.Name.Name,
-				Receiver:  receiverType(fn),
-				StartLine: fileLine(fset, fn.Pos()),
-				EndLine:   fileLine(fset, fn.Body.Rbrace),
-				Decl:      fn,
-			})
-		}
+		functions = append(functions, Function{
+			File:      file,
+			Package:   path.Join(path.Dir(file), parsed.Name.Name),
+			Name:      fn.Name.Name,
+			Receiver:  receiverType(fn),
+			StartLine: fileLine(fset, fn.Pos()),
+			EndLine:   fileLine(fset, fn.Body.Rbrace),
+			Decl:      fn,
+		})
 	}
 	return functions, nil
 }
