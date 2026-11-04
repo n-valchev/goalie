@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -503,5 +504,141 @@ func TestJSONHasLiteralsAndAnchors(t *testing.T) {
 	unknown, stdout := run("func one() {\n\tuse(0)\n}\n", "func two() {\n\tuse(1)\n}\n")
 	if unknown.Literals != nil || !strings.Contains(stdout, `"literals": null`) {
 		t.Errorf("stdout = %q; want literals to be null", stdout)
+	}
+}
+
+func mappingTree(t *testing.T) string {
+	t.Helper()
+	return writeTree(t, map[string]string{
+		"a.go": "package a\n\n" + operationName,
+		"b.go": "package a\n\n" + outcome,
+	})
+}
+
+func TestWeakFindingsStayByDefault(t *testing.T) {
+	code, stdout, stderr := runGodry(t, mappingTree(t))
+	if code != 1 || !strings.Contains(stdout, "literals 0.20, anchors 0") || stderr != "" {
+		t.Errorf("exit code = %d, stdout = %q, stderr = %q; want the finding", code, stdout, stderr)
+	}
+}
+
+func TestAWeakFindingIsDroppedAndCounted(t *testing.T) {
+	code, stdout, stderr := runGodry(t, mappingTree(t), "--weak-anchors", "1")
+	if code != 0 || stdout != "No duplicates found.\n" {
+		t.Errorf("exit code = %d, stdout = %q; want a clean result", code, stdout)
+	}
+	if want := "godry: 1 weak finding dropped\n"; stderr != want {
+		t.Errorf("stderr = %q, want %q", stderr, want)
+	}
+}
+
+func TestDroppingKeepsStrongFindingsAndCountsTheRest(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"a.go": "package a\n\n" + operationName,
+		"b.go": "package a\n\n" + outcome,
+		"c.go": "package a\n\n" + strings.ReplaceAll(outcome, "outcome", "third"),
+		"d.go": "package a\n\n" + joinFunc("One"),
+		"e.go": "package a\n\n" + joinFunc("Two"),
+	})
+	code, stdout, stderr := runGodry(t, dir, "--weak-anchors", "1", "--weak-literals", "0.3")
+	want := "d.go:3: duplicates e.go:3 (score 1.00, literals 1.00, anchors 3)\n" +
+		"b.go:3: duplicates c.go:3 (score 1.00, literals 1.00, anchors 0)\n"
+	if code != 1 || !sameLines(stdout, want) {
+		t.Errorf("exit code = %d, stdout = %q, want these lines: %q", code, stdout, want)
+	}
+	if want := "godry: 2 weak findings dropped\n"; stderr != want {
+		t.Errorf("stderr = %q, want %q", stderr, want)
+	}
+}
+
+func sameLines(a, b string) bool {
+	left, right := strings.Split(a, "\n"), strings.Split(b, "\n")
+	sort.Strings(left)
+	sort.Strings(right)
+	return reflect.DeepEqual(left, right)
+}
+
+func TestTheDropRuleNeedsBothNumbersToBeLow(t *testing.T) {
+	sameMapping := strings.ReplaceAll(operationName, "operationName", "copied")
+	noLiterals := func(name string) string {
+		return "func " + name + "(a, b int) int {\n\ta = a + b\n\tb = a * b\n\treturn a - b\n}\n"
+	}
+	calls := func(name, first, second, third string) string {
+		return "func " + name + "() {\n\t" + first + "(\"x" + name + "\")\n\t" + second + "(\"y" + name + "\")\n\t" + third + "(\"z" + name + "\")\n}\n"
+	}
+	literals := func(name, first, second string) string {
+		return "func " + name + "() int {\n\tif a > " + first + " {\n\t\treturn " + second + "\n\t}\n\treturn a\n}\n"
+	}
+	tests := []struct {
+		name, left, right string
+		args              []string
+		dropped           bool
+	}{
+		{"shared calls keep different data", loadUser, loadOrder, []string{"--weak-anchors", "1"}, false},
+		{"same literals keep a pair with no calls", operationName, sameMapping, []string{"--weak-anchors", "1"}, false},
+		{"no literals to compare keeps the pair", noLiterals("one"), noLiterals("two"), []string{"--weak-anchors", "1"}, false},
+		{"anchors equal to the limit are not weak", calls("one", "f", "g", "h"), calls("two", "f", "g", "h"), []string{"--weak-anchors", "3"}, false},
+		{"anchors below the limit are weak", calls("one", "f", "g", "h"), calls("two", "f", "g", "h"), []string{"--weak-anchors", "4"}, true},
+		{"literals equal to the limit are not weak", literals("one", "7", "8"), literals("two", "7", "9"), []string{"--weak-anchors", "1", "--weak-literals", "0.3333333333333333"}, false},
+		{"literals below the limit are weak", literals("one", "7", "8"), literals("two", "7", "9"), []string{"--weak-anchors", "1", "--weak-literals", "0.34"}, true},
+		{"a low limit keeps the pair", operationName, outcome, []string{"--weak-anchors", "1", "--weak-literals", "0.2"}, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := writeTree(t, map[string]string{"a.go": "package a\n\n" + test.left, "b.go": "package a\n\n" + test.right})
+			args := append([]string{"--min-lines", "1", "--min-nodes", "1"}, test.args...)
+			code, stdout, stderr := runGodry(t, dir, args...)
+			if test.dropped && (code != 0 || stderr != "godry: 1 weak finding dropped\n") {
+				t.Errorf("exit code = %d, stdout = %q, stderr = %q; want the finding dropped", code, stdout, stderr)
+			}
+			if !test.dropped && (code != 1 || stderr != "") {
+				t.Errorf("exit code = %d, stdout = %q, stderr = %q; want the finding kept", code, stdout, stderr)
+			}
+		})
+	}
+}
+
+func TestDroppingWorksWithJSON(t *testing.T) {
+	code, stdout, stderr := runGodry(t, mappingTree(t), "--format", "json", "--weak-anchors", "1")
+	if findings := decodeReport(t, stdout).Findings; code != 0 || len(findings) != 0 {
+		t.Errorf("exit code = %d, findings = %v; want none", code, findings)
+	}
+	if want := "godry: 1 weak finding dropped\n"; stderr != want {
+		t.Errorf("stderr = %q, want %q", stderr, want)
+	}
+}
+
+func TestDroppingWorksInNewCodeMode(t *testing.T) {
+	dir := gitRepo(t, map[string]string{"old.go": "package a\n\n" + operationName})
+	write(t, dir, "new.go", "package a\n\n"+outcome)
+
+	wantReport(t, dir, 1, "new.go:3: duplicates old.go:3 (score 1.00, literals 0.20, anchors 0)\n", "--base", "main")
+	wantReport(t, dir, 0, "No duplicates found.\n", "--base", "main", "--weak-anchors", "1")
+}
+
+func TestInvalidWeakLimitsAreErrors(t *testing.T) {
+	tests := [][]string{
+		{"--weak-anchors", "-1"},
+		{"--weak-anchors", "many"},
+		{"--weak-literals", "-0.1"},
+		{"--weak-literals", "1.1"},
+		{"--weak-literals", "NaN"},
+	}
+	for _, args := range tests {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			code, stdout, stderr := runGodry(t, mappingTree(t), append(args, "--warn-only")...)
+			if code != 2 || stdout != "" || !strings.Contains(stderr, strings.TrimPrefix(args[0], "--")) {
+				t.Errorf("exit code = %d, stdout = %q, stderr = %q; want exit 2 naming the flag", code, stdout, stderr)
+			}
+		})
+	}
+}
+
+func TestHelpListsTheWeakLimits(t *testing.T) {
+	_, stdout, _ := runGodry(t, t.TempDir(), "--help")
+	for _, flag := range []string{"--weak-anchors", "--weak-literals"} {
+		if !strings.Contains(stdout, flag) {
+			t.Errorf("stdout = %q; want %s listed", stdout, flag)
+		}
 	}
 }

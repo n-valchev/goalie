@@ -20,7 +20,6 @@ type Side struct {
 }
 
 // Pair describes one finding. Literals is nil when neither function has a literal to compare.
-// Literals and Anchors never decide whether a pair is reported.
 type Pair struct {
 	Left, Right Side
 	Score       float64
@@ -90,6 +89,30 @@ func Find(all []Candidate, newFunctions NewFunctions, threshold float64) []Pair 
 		return before(a.Right, b.Right)
 	})
 	return pairs
+}
+
+// WeakLimits marks a pair as weak when it is below both limits.
+type WeakLimits struct {
+	Anchors  int
+	Literals float64
+}
+
+// weak needs both numbers to be low, because either one alone shows real copying: a copy with new
+// data has low literals, and a pasted table has no calls. Nil literals are no evidence that the
+// data differs, so they keep the pair.
+func (l WeakLimits) weak(pair Pair) bool {
+	return pair.Anchors < l.Anchors && pair.Literals != nil && *pair.Literals < l.Literals
+}
+
+// DropWeak returns the pairs that aren't weak, and the number it dropped.
+func DropWeak(pairs []Pair, limits WeakLimits) ([]Pair, int) {
+	kept := make([]Pair, 0, len(pairs))
+	for _, pair := range pairs {
+		if !limits.weak(pair) {
+			kept = append(kept, pair)
+		}
+	}
+	return kept, len(pairs) - len(kept)
 }
 
 func literalScore(a, b fingerprint.Set) *float64 {

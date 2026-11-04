@@ -59,7 +59,7 @@ godry prints one line for each pair:
 internal/a.go:12: duplicates internal/b.go:40 (score 0.91, literals 0.20, anchors 3)
 ```
 
-The score runs from `0` to `1`, and `1.00` means the two functions have the same structure. The other two numbers describe the match. They never decide whether godry reports a pair:
+The score runs from `0` to `1`, and `1.00` means the two functions have the same structure. The other two numbers describe the match. They don't decide whether godry reports a pair, unless you set `--weak-anchors`:
 
 | Number | Meaning | How to read it |
 | --- | --- | --- |
@@ -88,6 +88,8 @@ Errors include an invalid flag, a Go file that doesn't parse, a `//go:build` lin
 | `--threshold N` | `0.82` | Minimum similarity score |
 | `--min-lines N` | `9` | Minimum lines in a function |
 | `--min-nodes N` | `20` | Minimum nodes in the normalized function |
+| `--weak-anchors N` | `0` | Drop findings with fewer than N anchors and low literals. `0` drops nothing |
+| `--weak-literals X` | `0.5` | Literal score below which a finding counts as low |
 | `--format F` | `text` | Output format: `text` or `json` |
 | `--warn-only` | off | Exit with `0` when duplicates exist |
 | `--include-tests` | off | Scan `*_test.go` files |
@@ -96,6 +98,28 @@ Errors include an invalid flag, a Go file that doesn't parse, a `//go:build` lin
 | `--help` | | Print usage |
 
 godry has no baseline file, and no settings file other than `.godryignore`. It writes no files.
+
+### Dropping weak findings
+
+Two functions can match on shape alone, such as two `switch` statements that map values to strings. To drop these findings, run:
+
+```
+godry --weak-anchors 1 --weak-literals 0.5
+```
+
+godry drops a finding only when both numbers are low:
+
+| Anchors | Literals | Result | Why |
+| --- | --- | --- | --- |
+| Below `--weak-anchors` | Below `--weak-literals` | Dropped | Only the shape matches |
+| At or above the limit | Any | Kept | The functions call the same code |
+| Any | At or above the limit | Kept | The functions hold the same data |
+| Any | `-` | Kept | Nothing shows that the data differs |
+
+- A dropped finding doesn't count, so a run that drops every finding exits with `0`.
+- godry prints the count on stderr, for example `godry: 12 weak findings dropped`.
+- The rule applies to both modes. It runs after comparison, so it doesn't change which pairs match.
+- Dropping is off by default.
 
 ### What godry skips
 

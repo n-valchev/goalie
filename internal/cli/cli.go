@@ -62,9 +62,19 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 			return nothingToCompare("No new functions found.", opts, stdout, stderr)
 		}
 	}
-	pairs := compare.Find(all, newFunctions, opts.threshold)
+	pairs, dropped := compare.DropWeak(
+		compare.Find(all, newFunctions, opts.threshold),
+		compare.WeakLimits{Anchors: opts.weakAnchors, Literals: opts.weakLiterals},
+	)
 	if err := opts.format.write(stdout, pairs); err != nil {
 		return fail(stderr, err)
+	}
+	// On stderr, so that stdout stays the same shape for anything that reads it.
+	switch {
+	case dropped == 1:
+		fmt.Fprintln(stderr, "godry: 1 weak finding dropped")
+	case dropped > 1:
+		fmt.Fprintf(stderr, "godry: %d weak findings dropped\n", dropped)
 	}
 	if len(pairs) > 0 && !opts.warnOnly {
 		return exitDuplicates

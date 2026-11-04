@@ -31,6 +31,11 @@ Flags:
   --threshold N    Minimum similarity score (default 0.82).
   --min-lines N    Minimum lines in a function (default 9).
   --min-nodes N    Minimum nodes in the normalized function (default 20).
+  --weak-anchors N Drop findings with fewer than N anchors and low literals
+                   (default 0, which drops nothing).
+  --weak-literals X
+                   Literal score below which a finding counts as low (default
+                   0.5). A finding with - for literals is never dropped.
   --format F       Output format: text or json (default text).
   --warn-only      Exit with 0 when duplicates exist.
   --include-tests  Scan *_test.go files.
@@ -89,6 +94,8 @@ type options struct {
 	includeTests bool
 	skipTags     []string
 	skipFiles    []string
+	weakAnchors  int
+	weakLiterals float64
 	help         bool
 	paths        []string
 }
@@ -109,6 +116,8 @@ func parseOptions(args []string) (options, error) {
 	flags.Float64Var(&opts.threshold, "threshold", 0.82, "")
 	flags.IntVar(&opts.minLines, "min-lines", 9, "")
 	flags.IntVar(&opts.minNodes, "min-nodes", 20, "")
+	flags.IntVar(&opts.weakAnchors, "weak-anchors", 0, "")
+	flags.Float64Var(&opts.weakLiterals, "weak-literals", 0.5, "")
 	flags.StringVar((*string)(&opts.format), "format", string(formatText), "")
 	flags.BoolVar(&opts.warnOnly, "warn-only", false, "")
 	flags.BoolVar(&opts.includeTests, "include-tests", false, "")
@@ -162,6 +171,12 @@ func (o options) validate() error {
 	}
 	if o.minNodes < 0 {
 		return fmt.Errorf("invalid --min-nodes %d: must not be negative", o.minNodes)
+	}
+	if o.weakAnchors < 0 {
+		return fmt.Errorf("invalid --weak-anchors %d: must not be negative", o.weakAnchors)
+	}
+	if !(o.weakLiterals >= 0 && o.weakLiterals <= 1) {
+		return fmt.Errorf("invalid --weak-literals %v: must be between 0 and 1", o.weakLiterals)
 	}
 	if o.format != formatText && o.format != formatJSON {
 		return fmt.Errorf("invalid --format %q: must be text or json", o.format)
