@@ -2,12 +2,16 @@
 package extract
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
+	"strings"
 )
+
+const ignoreDirective = "//godry:ignore"
 
 // Function is a function or method with a body.
 type Function struct {
@@ -24,6 +28,7 @@ func (f Function) Lines() int {
 }
 
 // Parse reads files, given relative to dir, and returns their functions in file order.
+// A function under a //godry:ignore comment is left out.
 func Parse(dir string, files []string) ([]Function, error) {
 	var functions []Function
 	fset := token.NewFileSet()
@@ -38,7 +43,15 @@ func Parse(dir string, files []string) ([]Function, error) {
 		}
 		for _, decl := range parsed.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Body == nil {
+			if !ok {
+				continue
+			}
+			// Before the body check, because a directive with no reason fails on any function.
+			ignored, err := hasIgnoreDirective(fset, fn)
+			if err != nil {
+				return nil, err
+			}
+			if ignored || fn.Body == nil {
 				continue
 			}
 			functions = append(functions, Function{
@@ -51,4 +64,23 @@ func Parse(dir string, files []string) ([]Function, error) {
 		}
 	}
 	return functions, nil
+}
+
+func hasIgnoreDirective(fset *token.FileSet, fn *ast.FuncDecl) (bool, error) {
+	if fn.Doc == nil {
+		return false, nil
+	}
+	ignored := false
+	for _, comment := range fn.Doc.List {
+		words := strings.Fields(comment.Text)
+		if words[0] != ignoreDirective {
+			continue
+		}
+		if len(words) == 1 {
+			position := fset.Position(comment.Pos())
+			return false, fmt.Errorf("%s:%d: %s needs a reason", position.Filename, position.Line, ignoreDirective)
+		}
+		ignored = true
+	}
+	return ignored, nil
 }
