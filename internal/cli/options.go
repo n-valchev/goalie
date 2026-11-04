@@ -67,7 +67,14 @@ func parseOptions(args []string) (options, error) {
 	flags := flag.NewFlagSet("godry", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.Usage = func() {}
-	flags.StringVar(&opts.base, "base", "", "")
+	flags.Func("base", "", func(value string) error {
+		// Empty would otherwise mean whole-repo mode, so an unset CI variable would pass silently.
+		if value == "" {
+			return errors.New("must name a revision")
+		}
+		opts.base = value
+		return nil
+	})
 	flags.Float64Var(&opts.threshold, "threshold", 0.82, "")
 	flags.IntVar(&opts.minLines, "min-lines", 9, "")
 	flags.IntVar(&opts.minNodes, "min-nodes", 20, "")
