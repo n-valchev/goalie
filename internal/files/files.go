@@ -2,6 +2,8 @@
 package files
 
 import (
+	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path"
@@ -9,6 +11,8 @@ import (
 	"sort"
 	"strings"
 )
+
+const ignoreFile = ".godryignore"
 
 // Rules holds the user's choices for the file-level skip rules.
 type Rules struct {
@@ -78,6 +82,44 @@ func Find(dir string, paths []string, rules Rules) ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+// CleanPattern rejects the gitignore forms that the pattern rules don't support. Accepted, each
+// would match nothing, so the user would believe a file was skipped.
+func CleanPattern(pattern string) (string, error) {
+	if _, err := path.Match(pattern, ""); err != nil {
+		return "", fmt.Errorf("bad pattern %q", pattern)
+	}
+	if strings.HasPrefix(pattern, "!") || strings.HasSuffix(pattern, "/") || strings.Contains(pattern, "**") {
+		return "", fmt.Errorf("unsupported pattern %q: !, **, and a trailing / are not supported", pattern)
+	}
+	// Scanned paths never start with ./, so that spelling would otherwise match nothing.
+	return path.Clean(pattern), nil
+}
+
+// ReadIgnoreFile returns the patterns in dir's .godryignore. It looks in no other folder, because
+// whole-repo mode has no repo root to stop at, and a search upward could find an unrelated file.
+func ReadIgnoreFile(dir string) ([]string, error) {
+	content, err := os.ReadFile(filepath.Join(dir, ignoreFile))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var patterns []string
+	for number, line := range strings.Split(string(content), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		pattern, err := CleanPattern(line)
+		if err != nil {
+			return nil, fmt.Errorf("%s:%d: %w", ignoreFile, number+1, err)
+		}
+		patterns = append(patterns, pattern)
+	}
+	return patterns, nil
 }
 
 // matchesAny tests a pattern with no slash against the file name alone, so that one pattern covers

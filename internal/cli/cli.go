@@ -34,7 +34,15 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 			return fail(stderr, err)
 		}
 	}
-	rules := files.Rules{IncludeTests: opts.includeTests, SkipTags: opts.skipTags, SkipFiles: opts.skipFiles}
+	ignored, err := files.ReadIgnoreFile(dir)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	rules := files.Rules{
+		IncludeTests: opts.includeTests,
+		SkipTags:     opts.skipTags,
+		SkipFiles:    append(ignored, opts.skipFiles...),
+	}
 	paths, err := files.Find(dir, opts.paths, rules)
 	if err != nil {
 		return fail(stderr, err)

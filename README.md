@@ -88,7 +88,7 @@ Errors include an invalid flag, a Go file that doesn't parse, a `//go:build` lin
 | `--skip-files a,b` | none | Skip files that match these patterns |
 | `--help` | | Print usage |
 
-godry has no config file and no baseline file. It writes no files.
+godry has no baseline file, and no settings file other than `.godryignore`. It writes no files.
 
 ### What godry skips
 
@@ -99,7 +99,7 @@ These rules apply to both modes, and to paths that you name:
 - Files with the header `Code generated ... DO NOT EDIT.`
 - Files with an `ignore` build constraint.
 - Files that can only build with a tag in `--skip-tags`.
-- Files that match a pattern in `--skip-files`.
+- Files that match a pattern in `--skip-files` or in `.godryignore`.
 - Pairs in one package with the same function name and the same receiver type. These are usually platform variants.
 
 Other build constraints and `GOOS` or `GOARCH` file suffixes have no effect. The same commit gives the same result on every machine.
@@ -116,6 +116,21 @@ Use `--skip-files` for files that repeat on purpose, such as dependency wiring i
 | `internal/*/packages.go` | `packages.go` one folder below `internal`, because `*` does not cross folders |
 
 A skipped file is not read, so it can't cause a parse error. Its functions are not compared on either side of a pair. You can repeat the flag or use a comma-separated list. A bad pattern exits with `2`.
+
+To keep the patterns in the repo, write them in a `.godryignore` file:
+
+```
+# Dependency wiring repeats on purpose.
+packages.go
+wire_*.go
+internal/legacy/client.go
+```
+
+- godry reads `.godryignore` from the directory it runs in, and from no other folder. Run it from the repo root in CI.
+- Write one pattern per line. The patterns follow the table above. Blank lines and lines that start with `#` are ignored.
+- `.godryignore` and `--skip-files` both apply.
+- A missing file is not an error. A bad pattern exits with `2` and names the line.
+- This is not full `.gitignore` syntax. `!`, `**`, and a trailing `/` exit with `2`, in the file and in the flag.
 
 ### Exclude one function
 

@@ -5,10 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"path"
 	"strings"
 
 	"github.com/n-valchev/godry/internal/compare"
+	"github.com/n-valchev/godry/internal/files"
 	"github.com/n-valchev/godry/internal/report"
 )
 
@@ -47,10 +47,15 @@ Skip rules, for both modes and for paths you name:
   - Files with the header "Code generated ... DO NOT EDIT."
   - Files with an ignore build constraint.
   - Files that can only build with a tag in --skip-tags.
-  - Files that match a pattern in --skip-files.
+  - Files that match a pattern in --skip-files or in .godryignore.
   - Pairs in one package with the same function name and the same receiver type.
   - Functions with //godry:ignore <reason> in the comment directly above them.
 Other build constraints and GOOS or GOARCH file suffixes have no effect.
+
+Ignore file:
+  godry reads .godryignore from the current directory only. Write one
+  --skip-files pattern per line. Lines that start with # are comments.
+  Both the file and the flag apply. !, **, and a trailing / are errors.
 
 Exit codes:
   0  No duplicates, or duplicates with --warn-only.
@@ -111,11 +116,11 @@ func parseOptions(args []string) (options, error) {
 	})
 	flags.Func("skip-files", "", func(value string) error {
 		for _, pattern := range strings.Split(value, ",") {
-			if _, err := path.Match(pattern, ""); err != nil {
-				return fmt.Errorf("bad pattern %q", pattern)
+			cleaned, err := files.CleanPattern(pattern)
+			if err != nil {
+				return err
 			}
-			// Scanned paths never start with ./, so that spelling would otherwise match nothing.
-			opts.skipFiles = append(opts.skipFiles, path.Clean(pattern))
+			opts.skipFiles = append(opts.skipFiles, cleaned)
 		}
 		return nil
 	})
