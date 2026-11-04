@@ -37,6 +37,9 @@ func Find(all []Candidate, newFunctions map[int]bool, threshold float64) []Pair 
 			if newFunctions != nil && !newFunctions[i] && !newFunctions[j] {
 				continue
 			}
+			if variants(all[i], all[j]) {
+				continue
+			}
 			score := similarity(all[i].Fingerprints, all[j].Fingerprints)
 			if score >= threshold {
 				left := Side{all[i], newFunctions[i]}
@@ -56,6 +59,11 @@ func Find(all []Candidate, newFunctions map[int]bool, threshold float64) []Pair 
 		return before(a.Right, b.Right)
 	})
 	return pairs
+}
+
+// variants reports whether two functions are one function built for different platforms.
+func variants(a, b Candidate) bool {
+	return a.Package == b.Package && a.Name == b.Name && a.Receiver == b.Receiver
 }
 
 func similarity(a, b fingerprint.Set) float64 {

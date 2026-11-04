@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -16,9 +17,11 @@ const ignoreDirective = "//godry:ignore"
 // Function is a function or method with a body.
 type Function struct {
 	File      string // Slash-separated path, as passed to Parse.
+	Package   string // The folder and package clause. Each alone can repeat: `main`, or `a` and `a_test`.
 	Name      string
-	StartLine int // The line of the func keyword, so the doc comment doesn't count.
-	EndLine   int // The line of the closing brace.
+	Receiver  string // The type name alone, or empty for a function.
+	StartLine int    // The line of the func keyword, so the doc comment doesn't count.
+	EndLine   int    // The line of the closing brace.
 	Decl      *ast.FuncDecl
 }
 
@@ -56,7 +59,9 @@ func Parse(dir string, files []string) ([]Function, error) {
 			}
 			functions = append(functions, Function{
 				File:      file,
+				Package:   path.Join(path.Dir(file), parsed.Name.Name),
 				Name:      fn.Name.Name,
+				Receiver:  receiverType(fn),
 				StartLine: fset.Position(fn.Pos()).Line,
 				EndLine:   fset.Position(fn.Body.Rbrace).Line,
 				Decl:      fn,
@@ -64,6 +69,31 @@ func Parse(dir string, files []string) ([]Function, error) {
 		}
 	}
 	return functions, nil
+}
+
+// receiverType drops the pointer and type parameters, because platform variants of one method
+// need not agree on them: `(s *Set[T])` in one file and `(s Set[K])` in another name the same type.
+func receiverType(fn *ast.FuncDecl) string {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+		return ""
+	}
+	expr := fn.Recv.List[0].Type
+	for {
+		switch typ := expr.(type) {
+		case *ast.StarExpr:
+			expr = typ.X
+		case *ast.ParenExpr:
+			expr = typ.X
+		case *ast.IndexExpr:
+			expr = typ.X
+		case *ast.IndexListExpr:
+			expr = typ.X
+		case *ast.Ident:
+			return typ.Name
+		default:
+			return ""
+		}
+	}
 }
 
 func hasIgnoreDirective(fset *token.FileSet, fn *ast.FuncDecl) (bool, error) {

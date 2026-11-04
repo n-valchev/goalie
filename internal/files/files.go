@@ -3,6 +3,8 @@ package files
 
 import (
 	"io/fs"
+	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,24 +22,42 @@ func Find(dir string, paths []string, rules Rules) ([]string, error) {
 	if len(paths) == 0 {
 		paths = []string{"."}
 	}
+	tags := append([]string{"ignore"}, rules.SkipTags...)
 	// A set, because overlapping paths must not make a function its own duplicate.
 	found := map[string]bool{}
-	for _, path := range paths {
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(dir, path)
+	for _, root := range paths {
+		if !filepath.IsAbs(root) {
+			root = filepath.Join(dir, root)
 		}
-		err := filepath.WalkDir(path, func(file string, entry fs.DirEntry, err error) error {
+		err := filepath.WalkDir(root, func(file string, entry fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if entry.IsDir() || !strings.HasSuffix(file, ".go") {
-				return nil
-			}
+			// Relative to dir, because the folders that hold the repo itself must not count.
 			rel, err := filepath.Rel(dir, file)
 			if err != nil {
 				return err
 			}
-			found[filepath.ToSlash(rel)] = true
+			rel = filepath.ToSlash(rel)
+			if entry.IsDir() {
+				if inSkippedDir(rel) {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(rel, ".go") || inSkippedDir(path.Dir(rel)) {
+				return nil
+			}
+			if strings.HasSuffix(rel, "_test.go") && !rules.IncludeTests {
+				return nil
+			}
+			source, err := os.ReadFile(file)
+			if err != nil {
+				return err
+			}
+			if !skippedByHeader(source, tags) {
+				found[rel] = true
+			}
 			return nil
 		})
 		if err != nil {
@@ -50,4 +70,18 @@ func Find(dir string, paths []string, rules Rules) ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+// inSkippedDir checks every folder of dir, because an explicit path can start below a skipped one.
+func inSkippedDir(dir string) bool {
+	for _, name := range strings.Split(dir, "/") {
+		switch {
+		case name == "." || name == "..":
+		case name == "vendor" || name == "testdata" || name == "node_modules":
+			return true
+		case strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_"):
+			return true
+		}
+	}
+	return false
 }
