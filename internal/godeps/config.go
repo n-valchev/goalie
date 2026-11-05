@@ -33,6 +33,8 @@ func applyConfig(dir string, opts *options) error {
 		return fmt.Errorf("%s: %w", config.Name, err)
 	}
 	opts.limits = crap.Limits{Limit: crap.DefaultLimit, SharedLimit: file.Gocrap.SharedLimit, Shared: opts.Shared}
-	cliflags.Fill(set, "limit", &opts.limits.Limit, file.Gocrap.Limit)
+	if file.Gocrap.Limit != nil {
+		opts.limits.Limit = *file.Gocrap.Limit
+	}
 	return nil
 }
