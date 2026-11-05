@@ -155,7 +155,7 @@ func TestEveryGodepsSettingIsAccepted(t *testing.T) {
 func TestEveryFlagIsAccepted(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod, "a/a.go": "package a\n",
-		"arch.json": "{}\n", "crap.json": "{\"findings\": []}\n", "dry.json": "{\"findings\": []}\n",
+		"arch.json": "{\"compliance\": {}}\n", "crap.json": "{\"findings\": []}\n", "dry.json": "{\"findings\": []}\n",
 	})
 	run(t, dir, 0, "--format", "json", "--arch-go-report", "arch.json", "--crap-report", "crap.json",
 		"--dry-report", "dry.json", "--editor-url", "file://{file}", "--title", "Shop",

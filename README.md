@@ -526,7 +526,8 @@ These errors exit with `2`:
 - A path outside the run directory.
 - A report path that is set but missing, or a report that isn't valid JSON.
 - A gocrap report with no `findings` array, or a row with no file or line.
-- A godry report with no `findings` array, or a finding with no `left` or `right` file. arch-go has no such rule, so `{}` is a valid arch-go report with no breaks.
+- A godry report with no `findings` array, or a finding with no `left` or `right` file.
+- An arch-go report with no `compliance` object.
 
 These warnings go to stderr and don't change the exit code:
 

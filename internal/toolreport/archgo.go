@@ -1,6 +1,9 @@
 package toolreport
 
-import "regexp"
+import (
+	"fmt"
+	"regexp"
+)
 
 // importedPackage covers both message forms of arch-go: "contains imported package" and "doesn't
 // contains imported package". The report holds the imported path nowhere else.
@@ -20,7 +23,7 @@ type ArchGo struct {
 }
 
 type archGoFile struct {
-	Compliance struct {
+	Compliance *struct {
 		Details struct {
 			DependenciesRules struct {
 				Details []struct {
@@ -40,6 +43,10 @@ func ReadArchGo(dir, file string) (ArchGo, error) {
 	var report archGoFile
 	if err := readJSON(dir, file, &report); err != nil {
 		return ArchGo{}, err
+	}
+	// Any JSON decodes into archGoFile, so a gocrap or godry report would pass as one with no breaks.
+	if report.Compliance == nil {
+		return ArchGo{}, fmt.Errorf("%s: not an arch-go report: no compliance", file)
 	}
 	var result ArchGo
 	for _, rule := range report.Compliance.Details.DependenciesRules.Details {

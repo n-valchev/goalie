@@ -240,6 +240,10 @@ func TestAnArchGoReportThatCanNotBeReadFailsTheRun(t *testing.T) {
 		{"missing, setting", `{"godeps": {"archGoReport": "none.json"}}`, "", nil},
 		{"not JSON", "{}", "not json", []string{"--arch-go-report", "report.json"}},
 		{"not JSON, setting", `{"godeps": {"archGoReport": "report.json"}}`, "not json", nil},
+		{"no compliance", "{}", "{}", []string{"--arch-go-report", "report.json"}},
+		{"null compliance", "{}", `{"compliance": null}`, []string{"--arch-go-report", "report.json"}},
+		{"a gocrap report", "{}", `{"findings": [{"file": "a.go", "line": 3, "score": 2}]}`, []string{"--arch-go-report", "report.json"}},
+		{"a godry report", "{}", `{"findings": []}`, []string{"--arch-go-report", "report.json"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -254,5 +258,15 @@ func TestAnArchGoReportThatCanNotBeReadFailsTheRun(t *testing.T) {
 				t.Errorf("stderr = %q, want the report's name", stderr)
 			}
 		})
+	}
+}
+
+func TestAnArchGoReportWithNoRulesHasNoBreaks(t *testing.T) {
+	dir := shopTree(t)
+	write(t, dir, "report.json", `{"compliance": {}}`)
+	stdout, stderr := run(t, dir, 0, "--format", "json", "--arch-go-report", "report.json")
+	wantNoViolations(t, stdout)
+	if stderr != "" {
+		t.Errorf("stderr = %q, want nothing", stderr)
 	}
 }

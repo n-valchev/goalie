@@ -73,7 +73,7 @@ Exit codes:
   0  The output was written.
   2  Any error: a bad flag or setting, a Go file that doesn't parse, a missing
      go.mod, a report path that is set but missing, or a report that isn't valid
-     JSON or lacks its findings.
+     JSON or lacks its findings or compliance object.
 
 godeps has no exit code 1, because it checks nothing. Warnings go to stderr and
 do not change the exit code. The README documents the JSON model.
