@@ -39,9 +39,8 @@ func applyConfig(dir string, opts *options) error {
 	if err := opts.validate(); err != nil {
 		return fmt.Errorf("%s: %w", config.Name, err)
 	}
-	// Otherwise the stricter limit would quietly apply to nothing.
-	if opts.limits.SharedLimit != nil && len(opts.Shared) == 0 {
-		return fmt.Errorf("%s: sharedLimit needs shared patterns", config.Name)
+	if err := opts.limits.Check(); err != nil {
+		return fmt.Errorf("%s: %w", config.Name, err)
 	}
 	return nil
 }

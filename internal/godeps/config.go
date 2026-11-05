@@ -36,5 +36,8 @@ func applyConfig(dir string, opts *options) error {
 	if file.Gocrap.Limit != nil {
 		opts.limits.Limit = *file.Gocrap.Limit
 	}
+	if err := opts.limits.Check(); err != nil {
+		return fmt.Errorf("%s: %w", config.Name, err)
+	}
 	return nil
 }

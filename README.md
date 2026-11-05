@@ -459,7 +459,7 @@ godeps --arch-go-report .arch-go/report.json --crap-report crap.json --dry-repor
 
 **Don't set `base` in `.goalierc` for a map.** A `base` setting in the `gocrap` or `godry` object limits that report to new code, and no flag turns it off. With gocrap, every other function then shows as red. With godry, duplicates in old code show no mark. To check new code, pass `--base` on the command line instead.
 
-godeps takes the limits from `limit` and `sharedLimit` in the `gocrap` object of `.goalierc`, or `30` if you set no `limit`. It ignores the limit in the report, which is `0` in this run. godeps does not check these two values, but gocrap does. A negative `limit` makes every function red, and a `sharedLimit` with no `shared` patterns has no effect. gocrap exits with `2` on both.
+godeps takes the limits from `limit` and `sharedLimit` in the `gocrap` object of `.goalierc`, or `30` if you set no `limit`. It ignores the limit in the report, which is `0` in this run. godeps checks these two values as gocrap does. It exits with `2` on a negative `limit` or `sharedLimit`, and on a `sharedLimit` with no `shared` patterns.
 
 To read `.arch-go/report.json`, godeps takes the imported package from the quoted text after `imported package` in each line. This depends on the message text of arch-go v2.
 

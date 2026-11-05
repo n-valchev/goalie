@@ -223,3 +223,24 @@ func TestHelpPrintsTheFlagsAndExitsCleanly(t *testing.T) {
 func TestHelpWorksWithABadConfig(t *testing.T) {
 	run(t, smallTree(t, "oops"), 0, "--help")
 }
+
+func TestLimitsThatGocrapRejectsAreErrors(t *testing.T) {
+	tests := []struct{ name, config, want string }{
+		{"negative limit", `{"gocrap": {"limit": -1}}`, "limit"},
+		{"negative shared limit", `{"shared": ["a/**"], "gocrap": {"sharedLimit": -1}}`, "limit"},
+		{"shared limit with no patterns", `{"gocrap": {"sharedLimit": 5}}`, "shared patterns"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			wantError(t, smallTree(t, test.config), test.want, "--format", "json")
+		})
+	}
+}
+
+func TestASharedLimitCanTakeItsPatternsFromTheFlag(t *testing.T) {
+	run(t, smallTree(t, `{"gocrap": {"sharedLimit": 5}}`), 0, "--format", "json", "--shared", "a/**")
+}
+
+func TestALimitOfZeroIsAccepted(t *testing.T) {
+	run(t, smallTree(t, `{"shared": ["a/**"], "gocrap": {"limit": 0, "sharedLimit": 0}}`), 0, "--format", "json")
+}

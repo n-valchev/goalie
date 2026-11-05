@@ -128,12 +128,8 @@ func parseOptions(args []string) (options, error) {
 }
 
 func (o options) validate() error {
-	// Written so that NaN, which fails every comparison, is rejected too.
-	if !(o.limits.Limit >= 0) {
-		return fmt.Errorf("invalid --limit %v: must not be negative", o.limits.Limit)
-	}
-	if o.limits.SharedLimit != nil && !(*o.limits.SharedLimit >= 0) {
-		return fmt.Errorf("invalid --shared-limit %v: must not be negative", *o.limits.SharedLimit)
+	if err := o.limits.CheckValues(); err != nil {
+		return err
 	}
 	if o.format != formatText && o.format != formatJSON {
 		return fmt.Errorf("invalid --format %q: must be text or json", o.format)
