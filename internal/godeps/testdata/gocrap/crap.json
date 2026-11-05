@@ -1,0 +1,76 @@
+{
+  "findings": [
+    {
+      "file": "billing/billing.go",
+      "line": 39,
+      "function": "Untested",
+      "score": 6,
+      "complexity": 2,
+      "coverage": 0,
+      "limit": 0
+    },
+    {
+      "file": "billing/billing.go",
+      "line": 26,
+      "function": "Size",
+      "score": 4,
+      "complexity": 4,
+      "coverage": 1,
+      "limit": 0
+    },
+    {
+      "file": "billing/billing.go",
+      "line": 16,
+      "function": "Band",
+      "score": 3,
+      "complexity": 3,
+      "coverage": 1,
+      "limit": 0
+    },
+    {
+      "file": "lib/text/text.go",
+      "line": 14,
+      "function": "Bounded",
+      "score": 3,
+      "complexity": 3,
+      "coverage": 1,
+      "limit": 0
+    },
+    {
+      "file": "billing/billing.go",
+      "line": 9,
+      "function": "Sign",
+      "score": 2,
+      "complexity": 2,
+      "coverage": 1,
+      "limit": 0
+    },
+    {
+      "file": "lib/text/text.go",
+      "line": 7,
+      "function": "OrDash",
+      "score": 2,
+      "complexity": 2,
+      "coverage": 1,
+      "limit": 0
+    },
+    {
+      "file": "billing/billing.go",
+      "line": 5,
+      "function": "Invoice.Paid",
+      "score": 1,
+      "complexity": 1,
+      "coverage": 1,
+      "limit": 0
+    },
+    {
+      "file": "lib/text/text.go",
+      "line": 3,
+      "function": "Plain",
+      "score": 1,
+      "complexity": 1,
+      "coverage": 1,
+      "limit": 0
+    }
+  ]
+}

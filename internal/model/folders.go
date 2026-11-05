@@ -18,6 +18,7 @@ type Package struct {
 	Shared         bool   `json:"shared,omitempty"`
 	PackageCount   int    `json:"packageCount"`
 	DuplicateCount *int   `json:"duplicateCount,omitempty"`
+	Grade          string `json:"grade,omitempty"`
 }
 
 // placeClasses sets the box of each class and returns the boxes.

@@ -5,7 +5,26 @@ import (
 	"go/ast"
 	"go/token"
 	"math"
+
+	"github.com/n-valchev/goalie/internal/files"
 )
+
+// DefaultLimit is the score above which gocrap reports a function, when nothing sets a limit.
+const DefaultLimit = 30.0
+
+// Limits is the rule that decides each function's limit, so that godeps grades with what gocrap fails on.
+type Limits struct {
+	Limit       float64
+	SharedLimit *float64
+	Shared      []string // Patterns for files.MatchesAny.
+}
+
+func (l Limits) For(file string) float64 {
+	if l.SharedLimit != nil && files.MatchesAny(l.Shared, file) {
+		return *l.SharedLimit
+	}
+	return l.Limit
+}
 
 // Complexity counts a default clause as no branch, because it adds no path that a switch without
 // one lacks. It includes closures, because their branches run as part of the function.

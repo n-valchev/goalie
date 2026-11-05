@@ -10,6 +10,7 @@ import (
 
 	"github.com/n-valchev/goalie/internal/cliflags"
 	"github.com/n-valchev/goalie/internal/config"
+	"github.com/n-valchev/goalie/internal/crap"
 )
 
 const usage = `gocrap finds Go functions that are complex and poorly tested.
@@ -102,7 +103,7 @@ func parseOptions(args []string) (options, error) {
 		opts.base = value
 		return nil
 	})
-	flags.Float64Var(&opts.limit, "limit", 30, "")
+	flags.Float64Var(&opts.limit, "limit", crap.DefaultLimit, "")
 	flags.Func("shared-limit", "", func(value string) error {
 		limit, err := strconv.ParseFloat(value, 64)
 		opts.sharedLimit = &limit

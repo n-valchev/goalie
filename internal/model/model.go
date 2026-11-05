@@ -40,6 +40,7 @@ type Class struct {
 	Package        string `json:"package,omitempty"`
 	Foreign        bool   `json:"foreign,omitempty"`
 	DuplicateCount *int   `json:"duplicateCount,omitempty"`
+	Grade          string `json:"grade,omitempty"`
 	Types          []Type `json:"types"`
 	Ops            []Op   `json:"ops"`
 }

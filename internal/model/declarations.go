@@ -37,13 +37,17 @@ type Method struct {
 }
 
 type Op struct {
-	Name       string      `json:"name"`
-	File       string      `json:"file"`
-	Line       int         `json:"line"`
-	EndLine    int         `json:"endLine"`
-	Exported   bool        `json:"exported"`
-	URL        string      `json:"url"`
+	Name     string `json:"name"`
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+	EndLine  int    `json:"endLine"`
+	Exported bool   `json:"exported"`
+	URL      string `json:"url"`
+	*Score
+	Grade      string      `json:"grade,omitempty"`
 	Duplicates []Duplicate `json:"duplicates,omitempty"`
+	// NoBody marks an assembly stub, which gocrap can never score, so it must not show as missing.
+	NoBody bool `json:"-"`
 }
 
 // fileReader turns one parsed file into model entries.
@@ -80,6 +84,7 @@ func (r fileReader) ops(parsed *ast.File) []Op {
 				EndLine:  r.line(fn.End() - 1),
 				Exported: fn.Name.IsExported(),
 				URL:      r.link(r.file, line),
+				NoBody:   fn.Body == nil,
 			})
 		}
 	}

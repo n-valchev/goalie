@@ -7,6 +7,7 @@ import (
 
 	"github.com/n-valchev/goalie/internal/cliflags"
 	"github.com/n-valchev/goalie/internal/config"
+	"github.com/n-valchev/goalie/internal/crap"
 )
 
 const usage = `godeps maps the packages of a Go module and the imports between them.
@@ -22,7 +23,12 @@ Flags:
   --format F               Output format: html or json (default html).
   --arch-go-report <file>  Mark the edges that this arch-go report flags. Run
                            arch-go --json || true to write .arch-go/report.json.
-  --crap-report <file>     Read this gocrap report.
+  --crap-report <file>     Grade each function, class, and box from this gocrap
+                           report, with the limits in .goalierc. A function that
+                           the report leaves out is red. To score every
+                           function, run gocrap --limit 0 --shared-limit 0
+                           --warn-only --format json. Leave out --shared-limit
+                           if you set no shared patterns.
   --dry-report <file>      Read this godry report.
   --editor-url <template>  Link to source with {file} and {line}
                            (default file://{file}).
@@ -72,6 +78,7 @@ type options struct {
 	foreign      []string
 	omit         []string
 	order        []string
+	limits       crap.Limits
 	help         bool
 	fromFlags    map[string]bool
 }

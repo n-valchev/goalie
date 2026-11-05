@@ -11,7 +11,6 @@ import (
 	"github.com/n-valchev/goalie/internal/coverage"
 	"github.com/n-valchev/goalie/internal/crap"
 	"github.com/n-valchev/goalie/internal/extract"
-	"github.com/n-valchev/goalie/internal/files"
 	"github.com/n-valchev/goalie/internal/gitchange"
 )
 
@@ -104,10 +103,7 @@ func score(functions []extract.Function, profile coverage.Profile, opts options)
 }
 
 func (o options) limitFor(file string) float64 {
-	if o.sharedLimit != nil && files.MatchesAny(o.Shared, file) {
-		return *o.sharedLimit
-	}
-	return o.limit
+	return crap.Limits{Limit: o.limit, SharedLimit: o.sharedLimit, Shared: o.Shared}.For(file)
 }
 
 func name(fn extract.Function) string {

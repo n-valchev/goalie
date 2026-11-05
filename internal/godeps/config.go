@@ -5,6 +5,7 @@ import (
 
 	"github.com/n-valchev/goalie/internal/cliflags"
 	"github.com/n-valchev/goalie/internal/config"
+	"github.com/n-valchev/goalie/internal/crap"
 	"github.com/n-valchev/goalie/internal/files"
 )
 
@@ -31,5 +32,7 @@ func applyConfig(dir string, opts *options) error {
 	if err := opts.validate(); err != nil {
 		return fmt.Errorf("%s: %w", config.Name, err)
 	}
+	opts.limits = crap.Limits{Limit: crap.DefaultLimit, SharedLimit: file.Gocrap.SharedLimit, Shared: opts.Shared}
+	cliflags.Fill(set, "limit", &opts.limits.Limit, file.Gocrap.Limit)
 	return nil
 }

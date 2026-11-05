@@ -63,6 +63,9 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 	if err := joinDry(dir, opts.dryReport, &result, source, stderr); err != nil {
 		return fail(stderr, err)
 	}
+	if err := joinGocrap(dir, opts.crapReport, opts.limits, &result, stderr); err != nil {
+		return fail(stderr, err)
+	}
 	warnUnmatchedOrder(stderr, result)
 	if err := writeOutput(stdout, result, opts.format); err != nil {
 		return fail(stderr, err)
