@@ -91,7 +91,7 @@ func score(functions []extract.Function, profile coverage.Profile, opts options)
 	for _, fn := range functions {
 		complexity := crap.Complexity(fn.Decl)
 		covered := profile.Of(fn.File, fn.StartLine, fn.EndLine)
-		result, limit := crap.Score(complexity, covered), opts.limitFor(fn.File)
+		result, limit := crap.Score(complexity, covered), opts.limits.For(fn.File)
 		if result > limit {
 			findings = append(findings, finding{fn.File, fn.StartLine, name(fn), result, complexity, covered, limit})
 		}
@@ -100,10 +100,6 @@ func score(functions []extract.Function, profile coverage.Profile, opts options)
 		return cmp.Or(cmp.Compare(b.Score, a.Score), cmp.Compare(a.File, b.File), cmp.Compare(a.Line, b.Line))
 	})
 	return findings
-}
-
-func (o options) limitFor(file string) float64 {
-	return crap.Limits{Limit: o.limit, SharedLimit: o.sharedLimit, Shared: o.Shared}.For(file)
 }
 
 func name(fn extract.Function) string {

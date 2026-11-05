@@ -80,8 +80,7 @@ const (
 type options struct {
 	config.Repo
 	base          string
-	limit         float64
-	sharedLimit   *float64
+	limits        crap.Limits
 	coverCommand  string
 	coverProfiles []string
 	format        string
@@ -103,10 +102,10 @@ func parseOptions(args []string) (options, error) {
 		opts.base = value
 		return nil
 	})
-	flags.Float64Var(&opts.limit, "limit", crap.DefaultLimit, "")
+	flags.Float64Var(&opts.limits.Limit, "limit", crap.DefaultLimit, "")
 	flags.Func("shared-limit", "", func(value string) error {
 		limit, err := strconv.ParseFloat(value, 64)
-		opts.sharedLimit = &limit
+		opts.limits.SharedLimit = &limit
 		return err
 	})
 	flags.Func("cover-profiles", "", func(value string) error {
@@ -130,11 +129,11 @@ func parseOptions(args []string) (options, error) {
 
 func (o options) validate() error {
 	// Written so that NaN, which fails every comparison, is rejected too.
-	if !(o.limit >= 0) {
-		return fmt.Errorf("invalid --limit %v: must not be negative", o.limit)
+	if !(o.limits.Limit >= 0) {
+		return fmt.Errorf("invalid --limit %v: must not be negative", o.limits.Limit)
 	}
-	if o.sharedLimit != nil && !(*o.sharedLimit >= 0) {
-		return fmt.Errorf("invalid --shared-limit %v: must not be negative", *o.sharedLimit)
+	if o.limits.SharedLimit != nil && !(*o.limits.SharedLimit >= 0) {
+		return fmt.Errorf("invalid --shared-limit %v: must not be negative", *o.limits.SharedLimit)
 	}
 	if o.format != formatText && o.format != formatJSON {
 		return fmt.Errorf("invalid --format %q: must be text or json", o.format)

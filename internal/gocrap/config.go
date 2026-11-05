@@ -20,14 +20,14 @@ func applyConfig(dir string, opts *options) error {
 		return fmt.Errorf("%s: %w", config.Name, err)
 	}
 	cliflags.Fill(set, "base", &opts.base, tool.Base)
-	cliflags.Fill(set, "limit", &opts.limit, tool.Limit)
+	cliflags.Fill(set, "limit", &opts.limits.Limit, tool.Limit)
 	cliflags.Fill(set, "format", &opts.format, tool.Format)
 	cliflags.Fill(set, "warn-only", &opts.warnOnly, tool.WarnOnly)
 	if tool.CoverCommand != nil {
 		opts.coverCommand = *tool.CoverCommand
 	}
 	if !set["shared-limit"] {
-		opts.sharedLimit = tool.SharedLimit
+		opts.limits.SharedLimit = tool.SharedLimit
 	}
 	if !set["cover-profiles"] {
 		opts.coverProfiles = tool.CoverProfiles
@@ -35,11 +35,12 @@ func applyConfig(dir string, opts *options) error {
 	if err := opts.Apply(file, set); err != nil {
 		return err
 	}
+	opts.limits.Shared = opts.Shared
 	if err := opts.validate(); err != nil {
 		return fmt.Errorf("%s: %w", config.Name, err)
 	}
 	// Otherwise the stricter limit would quietly apply to nothing.
-	if opts.sharedLimit != nil && len(opts.Shared) == 0 {
+	if opts.limits.SharedLimit != nil && len(opts.Shared) == 0 {
 		return fmt.Errorf("%s: sharedLimit needs shared patterns", config.Name)
 	}
 	return nil
