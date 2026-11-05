@@ -14,6 +14,8 @@ import (
 
 const coverDirVariable = "GOCRAP_COVER_DIR"
 
+var globEscaper = strings.NewReplacer(`\`, `\\`, `*`, `\*`, `?`, `\?`, `[`, `\[`)
+
 // -coverpkg, because without it Go counts coverage only in the package that holds the test.
 const defaultCoverCommand = `go test -coverpkg=./... -coverprofile="$` + coverDirVariable + `/coverage.out" ./...`
 
@@ -21,10 +23,7 @@ func gather(dir string, opts options, stderr io.Writer) (coverage.Profile, error
 	profile := coverage.Profile{}
 	if len(opts.coverProfiles) > 0 {
 		for _, entry := range opts.coverProfiles {
-			if !filepath.IsAbs(entry) {
-				entry = filepath.Join(dir, entry)
-			}
-			files, err := expand(entry)
+			files, err := expand(dir, entry)
 			if err != nil {
 				return nil, err
 			}
@@ -60,11 +59,20 @@ func gather(dir string, opts options, stderr io.Writer) (coverage.Profile, error
 
 // expand keeps a plain path as it is, so that a missing file fails when it is read. A glob that
 // matches nothing is an error, because a mistyped pattern would otherwise give false low coverage.
-func expand(entry string) ([]string, error) {
+func expand(dir, entry string) ([]string, error) {
+	absolute := filepath.IsAbs(entry)
 	if !strings.ContainsAny(entry, `*?[\`) {
+		if !absolute {
+			entry = filepath.Join(dir, entry)
+		}
 		return []string{entry}, nil
 	}
-	matches, err := filepath.Glob(entry)
+	pattern := entry
+	if !absolute {
+		// Only what the user typed is a pattern: a repo can live in a folder named `[work]`.
+		pattern = filepath.Join(globEscaper.Replace(dir), entry)
+	}
+	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("cover profile pattern %q: %w", entry, err)
 	}

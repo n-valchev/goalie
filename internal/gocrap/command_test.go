@@ -160,3 +160,14 @@ func TestAGlobWithNoMatchIsAnErrorThatNamesThePattern(t *testing.T) {
 func TestAMalformedCoverProfilesGlobIsAnError(t *testing.T) {
 	run(t, globTree(t), 2, "--cover-profiles", "cov/[")
 }
+
+func TestGlobCharactersInTheRunDirectoryAreNotAPattern(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "a[b")
+	for name, content := range map[string]string{"go.mod": goMod, "a.go": decideFile, "cov/p.out": halfCovered} {
+		write(t, dir, name, content)
+	}
+	for _, entry := range []string{"cov/p.out", "cov/*.out"} {
+		stdout, _ := run(t, dir, 1, "--cover-profiles", entry, "--limit", "10")
+		wantStdout(t, stdout, "a.go:3: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n")
+	}
+}
