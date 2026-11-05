@@ -117,18 +117,10 @@ func TestAPathOutsideTheRunDirectoryIsAnError(t *testing.T) {
 	wantError(t, dir+"/repo", "../other", "--format", "json", "../other")
 }
 
-func TestHTMLIsNotReadyAndIsTheDefault(t *testing.T) {
-	tests := []struct {
-		name string
-		args []string
-	}{
-		{"default", nil},
-		{"named", []string{"--format", "html"}},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			wantError(t, smallTree(t, "{}"), "html", test.args...)
-		})
+func TestHTMLIsTheDefault(t *testing.T) {
+	stdout, _ := run(t, smallTree(t, "{}"), 0)
+	if !strings.HasPrefix(stdout, "<!doctype html>") {
+		t.Errorf("stdout = %q; want a page", stdout)
 	}
 }
 
@@ -140,7 +132,10 @@ func TestTheFormatSettingApplies(t *testing.T) {
 }
 
 func TestAFormatFlagReplacesTheSetting(t *testing.T) {
-	wantError(t, smallTree(t, `{"godeps": {"format": "json"}}`), "html", "--format", "html")
+	stdout, _ := run(t, smallTree(t, `{"godeps": {"format": "json"}}`), 0, "--format", "html")
+	if !strings.HasPrefix(stdout, "<!doctype html>") {
+		t.Errorf("stdout = %q; want a page", stdout)
+	}
 }
 
 func TestEveryGodepsSettingIsAccepted(t *testing.T) {

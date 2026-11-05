@@ -19,8 +19,7 @@ directory tree. It reads go.mod from the current directory only, and leaves out
 test files, the standard library, and imports of code it didn't scan.
 
 Flags:
-  --format F               Output format: html or json (default html). html is
-                           not available yet, so use json.
+  --format F               Output format: html or json (default html).
   --arch-go-report <file>  Mark the edges that this arch-go report flags. Run
                            arch-go --json || true to write .arch-go/report.json.
   --crap-report <file>     Read this gocrap report.

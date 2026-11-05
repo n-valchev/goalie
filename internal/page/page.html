@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<style>{{.Style}}</style>
+</head>
+<body>
+<header>
+  <h1>{{.Title}}</h1>
+  <nav id="crumbs" aria-label="Current level"></nav>
+  <ul id="legend">
+    <li><span class="key key-box"></span> Double-click a box to open it. Press Esc to go up.</li>
+    <li><span class="key key-arrow"></span> The box at the tail imports the box at the head.</li>
+    <li><span class="key key-loop"></span> Dotted and marked "loop": this arrow closes an import loop.</li>
+    <li><span class="key key-foreign"></span> Oval: a module outside this repository.</li>
+    <li><span class="key key-green"></span> Low risk</li>
+    <li><span class="key key-yellow"></span> Medium risk</li>
+    <li><span class="key key-red">!</span> Dashed and marked "!": high risk</li>
+    <li><span class="key key-box"></span> Grey: no risk data</li>
+  </ul>
+</header>
+<main id="map">
+  <noscript>This page needs JavaScript to draw the map.</noscript>
+  <div id="canvas">
+    <svg id="arrows" aria-hidden="true">
+      <defs>
+        <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">
+          <path class="head" d="M0 0 L10 5 L0 10 Z"/>
+        </marker>
+        <marker id="head-loop" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">
+          <path class="head-loop" d="M0 0 L10 5 L0 10 Z"/>
+        </marker>
+      </defs>
+      <g id="lines"></g>
+    </svg>
+    <div id="nodes"></div>
+  </div>
+  <aside id="card" hidden></aside>
+</main>
+<script type="application/json" id="model">{{.Model}}</script>
+<script>{{.Script}}</script>
+</body>
+</html>

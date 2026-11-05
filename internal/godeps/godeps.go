@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/n-valchev/goalie/internal/model"
+	"github.com/n-valchev/goalie/internal/page"
 )
 
 const (
@@ -81,7 +82,7 @@ func warnUnmatchedOrder(stderr io.Writer, result model.Model) {
 
 func writeOutput(w io.Writer, result model.Model, format string) error {
 	if format == formatHTML {
-		return errors.New("--format html is not available yet; use --format json")
+		return page.Write(w, result)
 	}
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
