@@ -25,6 +25,7 @@ type Pair struct {
 	Score       float64
 	Literals    *float64
 	Anchors     int
+	Case        Case
 }
 
 // NewFunctions decides which pairs a comparison reports. Build one with WholeRepo or Only.

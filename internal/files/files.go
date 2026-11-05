@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -56,7 +57,7 @@ func Find(dir string, paths []string, rules Rules) ([]string, error) {
 			if strings.HasSuffix(rel, "_test.go") && !rules.IncludeTests {
 				return nil
 			}
-			if matchesAny(rules.SkipFiles, rel) {
+			if MatchesAny(rules.SkipFiles, rel) {
 				return nil
 			}
 			source, err := os.ReadFile(file)
@@ -106,6 +107,30 @@ func CleanPattern(pattern string) (string, error) {
 	return path.Clean(pattern), nil
 }
 
+// CleanPatterns applies CleanPattern to each pattern.
+func CleanPatterns(patterns []string) ([]string, error) {
+	cleaned := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		result, err := CleanPattern(pattern)
+		if err != nil {
+			return nil, err
+		}
+		cleaned = append(cleaned, result)
+	}
+	return cleaned, nil
+}
+
+// Unmatched returns the patterns that match none of the given files.
+func Unmatched(patterns, paths []string) []string {
+	var unmatched []string
+	for _, pattern := range patterns {
+		if !slices.ContainsFunc(paths, func(rel string) bool { return MatchesAny([]string{pattern}, rel) }) {
+			unmatched = append(unmatched, pattern)
+		}
+	}
+	return unmatched
+}
+
 // ReadIgnoreFile returns the patterns in dir's .godryignore. It looks in no other folder, because
 // whole-repo mode has no repo root to stop at, and a search upward could find an unrelated file.
 func ReadIgnoreFile(dir string) ([]string, error) {
@@ -131,9 +156,9 @@ func ReadIgnoreFile(dir string) ([]string, error) {
 	return patterns, nil
 }
 
-// matchesAny tests a pattern with no slash against the file name alone, so that one pattern covers
+// MatchesAny tests a pattern with no slash against the file name alone, so that one pattern covers
 // a file that every package repeats.
-func matchesAny(patterns []string, rel string) bool {
+func MatchesAny(patterns []string, rel string) bool {
 	for _, pattern := range patterns {
 		target := rel
 		if !strings.Contains(pattern, "/") && pattern != "**" {

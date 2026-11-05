@@ -68,7 +68,7 @@ The score runs from `0` to `1`, and `1.00` means the two functions have the same
 
 In new-code mode, the new function comes first. A clean scan prints `No duplicates found.`
 
-Use `--format json` to get an object with a `findings` array. Each finding has `score`, `literals` (a number, or `null` for `-`), `anchors`, `left`, and `right`.
+Use `--format json` to get an object with a `findings` array. Each finding has `score`, `literals` (a number, or `null` for `-`), `anchors`, `left`, and `right`. With `--shared`, a finding can also have `case`.
 
 ### Use the exit code
 
@@ -95,6 +95,7 @@ Errors include an invalid flag, a Go file that doesn't parse, a `//go:build` lin
 | `--include-tests` | off | Scan `*_test.go` files |
 | `--skip-tags a,b` | none | Skip files that can only build with these tags |
 | `--skip-files a,b` | none | Skip files that match these patterns |
+| `--shared a,b` | none | Add a case to each finding. These patterns name your shared code |
 | `--help` | | Print usage |
 
 godry has no baseline file, and its only settings files are `.godryrc` and `.godryignore`. It writes no files.
@@ -130,6 +131,7 @@ Each setting is optional, and each one matches a flag. The same settings apply t
 | `includeTests` | `--include-tests` | `true` or `false` |
 | `skipTags` | `--skip-tags` | List of strings |
 | `skipFiles` | `--skip-files` | List of strings |
+| `shared` | `--shared` | List of strings |
 
 - godry reads `.godryrc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run godry from the repo root in CI.
 - A flag replaces the same setting in the file. Paths on the command line replace `paths`. To turn off `warnOnly` for one run, use `--warn-only=false`.
@@ -139,6 +141,32 @@ Each setting is optional, and each one matches a flag. The same settings apply t
 - If you set `base` in the file, every run uses new-code mode, and no flag turns it off. To keep whole-repo scans available, pass `--base` on the command line instead.
 
 If agents work in your repo, require human approval for changes to `.godryrc` and `.godryignore`, for example with `CODEOWNERS`. Otherwise, an agent can lower the limits to pass the check.
+
+### Name the case of each finding
+
+In a monorepo, the right fix for a duplicate depends on where the two functions are. To add this to each finding, name your shared code:
+
+```sh
+godry --shared 'pkg/**'
+```
+
+```text
+billing/a.go:12: duplicates pkg/b.go:40 (score 0.91, literals 0.20, anchors 3, case copies-shared)
+```
+
+| Case | Where the functions are | Usual fix |
+| --- | --- | --- |
+| `copies-shared` | One in shared code, one in a product | Delete the copy and use the shared function |
+| `across-products` | In two different products | Decide whether to move the code to shared code |
+| `same-product` | Both in one product | Fix it inside that product |
+| `within-shared` | Both in shared code | Merge the two functions |
+
+- `--shared` uses the same patterns as `--skip-files`. To match a folder, write `pkg/**`, because `pkg` alone matches a file name.
+- A product is the first folder in the path from the directory godry runs in, unless a shared pattern matches the file. godry has no list of products, so every other first folder counts as one, including folders such as `tools`. To leave a folder out, don't list it in `paths`, or skip it.
+- A file directly in the run directory, or above it, belongs to no product. A finding with such a file has no case, unless both functions are in shared code.
+- Without `--shared`, findings have no case, and the output doesn't change.
+- `--shared` doesn't change which pairs godry reports, or the exit code.
+- If a pattern matches no scanned file, godry prints a warning on stderr. The run continues.
 
 ### Dropping weak findings
 

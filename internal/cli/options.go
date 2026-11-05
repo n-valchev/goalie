@@ -47,6 +47,13 @@ Flags:
                    not cross folders. ** matches any number of folders.
                    Quote patterns so that the shell doesn't expand them.
                    Example: --skip-files 'packages.go,internal/generated/**'
+  --shared a,b     Add a case to each finding. These patterns name your shared
+                   code, with the rules of --skip-files. Every other first
+                   folder counts as a product. Example: --shared 'pkg/**'
+                   copies-shared    One function is shared, one is in a product.
+                   across-products  The functions are in two products.
+                   same-product     Both functions are in one product.
+                   within-shared    Both functions are shared.
   --help           Print this help.
 
 Skip rules, for both modes and for paths you name:
@@ -69,7 +76,7 @@ Settings file:
   godry reads .godryrc from the current directory only. It holds one JSON
   object with any of these settings: paths, base, threshold, minLines,
   minNodes, weakAnchors, weakLiterals, format, warnOnly, includeTests,
-  skipTags, skipFiles. A flag or a path on the command line replaces the same
+  skipTags, skipFiles, shared. A flag or a path on the command line replaces the same
   setting. Patterns in skipFiles, --skip-files, and .godryignore all apply.
 
 Exit codes:
@@ -102,6 +109,7 @@ type options struct {
 	includeTests bool
 	skipTags     []string
 	skipFiles    []string
+	shared       []string
 	weakAnchors  int
 	weakLiterals float64
 	help         bool
@@ -135,14 +143,14 @@ func parseOptions(args []string) (options, error) {
 		return nil
 	})
 	flags.Func("skip-files", "", func(value string) error {
-		for _, pattern := range strings.Split(value, ",") {
-			cleaned, err := files.CleanPattern(pattern)
-			if err != nil {
-				return err
-			}
-			opts.skipFiles = append(opts.skipFiles, cleaned)
-		}
-		return nil
+		cleaned, err := files.CleanPatterns(strings.Split(value, ","))
+		opts.skipFiles = append(opts.skipFiles, cleaned...)
+		return err
+	})
+	flags.Func("shared", "", func(value string) error {
+		cleaned, err := files.CleanPatterns(strings.Split(value, ","))
+		opts.shared = append(opts.shared, cleaned...)
+		return err
 	})
 
 	// The flag package stops at the first path, which would silently turn a later flag into a path.

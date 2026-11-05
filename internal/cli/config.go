@@ -30,6 +30,7 @@ type config struct {
 	IncludeTests *bool    `json:"includeTests"`
 	SkipTags     []string `json:"skipTags"`
 	SkipFiles    []string `json:"skipFiles"`
+	Shared       []string `json:"shared"`
 }
 
 // readConfig looks only in dir, for the same reason as files.ReadIgnoreFile. A misspelled setting
@@ -98,12 +99,15 @@ func applyConfig(dir string, opts *options) error {
 	if len(opts.paths) == 0 {
 		opts.paths = file.Paths
 	}
-	for _, pattern := range file.SkipFiles {
-		cleaned, err := files.CleanPattern(pattern)
-		if err != nil {
+	skipFiles, err := files.CleanPatterns(file.SkipFiles)
+	if err != nil {
+		return fmt.Errorf("%s: %w", configFile, err)
+	}
+	opts.skipFiles = append(opts.skipFiles, skipFiles...)
+	if !opts.fromFlags["shared"] {
+		if opts.shared, err = files.CleanPatterns(file.Shared); err != nil {
 			return fmt.Errorf("%s: %w", configFile, err)
 		}
-		opts.skipFiles = append(opts.skipFiles, cleaned)
 	}
 	if err := opts.validate(); err != nil {
 		return fmt.Errorf("%s: %w", configFile, err)

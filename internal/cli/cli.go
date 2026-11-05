@@ -53,6 +53,11 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 	if len(paths) == 0 {
 		return nothingToCompare("No Go files found.", opts, stdout, stderr)
 	}
+	// A warning, not an error, because paths can limit a run to code with no shared folder. Without
+	// it, a mistyped pattern would quietly label shared code as a product.
+	for _, pattern := range files.Unmatched(opts.shared, paths) {
+		fmt.Fprintf(stderr, "godry: shared pattern %q matches no file; to match a folder, write folder/**\n", pattern)
+	}
 	functions, err := extract.Parse(dir, paths)
 	if err != nil {
 		return fail(stderr, err)
@@ -69,6 +74,7 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 		compare.Find(all, newFunctions, opts.threshold),
 		compare.WeakLimits{Anchors: opts.weakAnchors, Literals: opts.weakLiterals},
 	)
+	compare.Classify(pairs, opts.shared)
 	if err := opts.format.write(stdout, pairs); err != nil {
 		return fail(stderr, err)
 	}
