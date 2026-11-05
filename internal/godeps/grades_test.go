@@ -48,7 +48,7 @@ func TestARealGocrapReportGradesEveryOp(t *testing.T) {
 		"Band":         "yellow", // Score 3.
 		"Size":         "yellow", // Score 4: exactly the limit.
 		"Untested":     "red",    // Score 6.
-		"Ignored":      "red",    // gocrap:ignore keeps it out of the report.
+		"Ignored":      "",       // gocrap:ignore keeps it out of the report and excuses it.
 		"Plain":        "green",  // Score 1: exactly half the shared limit of 2.
 		"OrDash":       "yellow", // Score 2: exactly the shared limit.
 		"Bounded":      "red",    // Score 3, which `limit` alone would make yellow.
@@ -148,14 +148,30 @@ func TestAnOpMissingFromTheReportIsRedAndHasNoScores(t *testing.T) {
 	}
 }
 
-func TestAnIgnoredFunctionIsMissingFromTheReportSoItIsRed(t *testing.T) {
+func TestAnIgnoredFunctionHasNoGradeAndDoesNotCountAsMissing(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod":    goMod,
-		"a/a.go":    "package a\n\n//gocrap:ignore generated\nfunc F() {}\n",
+		"a/a.go":    "package a\n\n//gocrap:ignore generated\nfunc F() {}\n\n// Other words.\n//gocrap:ignore\nfunc NoReason() {}\n",
+		"b/b.go":    "package b\n\n//godry:ignore copied\nfunc G() {}\n",
 		"crap.json": crapReport(),
 	})
-	if got := readModel[gradedModel](t, dir, "--crap-report", "crap.json").op(t, "F").Grade; got != "red" {
-		t.Errorf("grade = %q, want red", got)
+	got := readModel[gradedModel](t, dir, "--crap-report", "crap.json")
+	for _, name := range []string{"F", "NoReason"} {
+		if op := got.op(t, name); op.Grade != "" || !op.Ignored {
+			t.Errorf("%s = %+v, want ignored with no grade", name, op)
+		}
+	}
+	if op := got.op(t, "G"); op.Grade != "red" || op.Ignored {
+		t.Errorf("G = %+v, want red: only gocrap's own directive excuses a function", op)
+	}
+	wantClassGrades(t, got, map[string]string{"a": "", "b": "red"})
+	wantBoxGrades(t, got, map[string]string{"a": "", "b": "red"})
+}
+
+func TestAnIgnoredFunctionIsMarkedWithNoReport(t *testing.T) {
+	dir := writeTree(t, map[string]string{"go.mod": goMod, "a/a.go": "package a\n\n//gocrap:ignore generated\nfunc F() {}\n"})
+	if op := readModel[gradedModel](t, dir).op(t, "F"); !op.Ignored {
+		t.Errorf("F = %+v, want ignored", op)
 	}
 }
 

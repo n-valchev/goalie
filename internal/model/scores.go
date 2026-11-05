@@ -33,7 +33,10 @@ func JoinCrap(result *Model, rows []toolreport.CrapRow, limits crap.Limits) int 
 	ops := placeOps(result)
 	for _, candidates := range ops {
 		for _, placed := range candidates {
-			placed.op.Grade = gradeRed
+			// The author excused it in the code, so it is not the unmeasured code that red warns of.
+			if !placed.op.Ignored {
+				placed.op.Grade = gradeRed
+			}
 		}
 	}
 	unmatched := 0

@@ -516,13 +516,14 @@
     );
   }
 
-  // An op with a grade and no numbers is missing from the report. An op with neither is an assembly
-  // stub or a run with no report, so there is no risk to state.
+  // An op with a grade and no numbers is missing from the report. An op with neither is ignored, an
+  // assembly stub, or a run with no report, so there is no risk to state.
   function scoreText(op) {
     if (op.crap !== undefined) {
       const coverage = (op.coverage * 100).toFixed(1);
       return `CRAP ${op.crap.toFixed(1)}, complexity ${op.complexity}, coverage ${coverage}%`;
     }
+    if (op.ignored) return "Ignored by gocrap";
     return op.grade ? "No gocrap score, so this counts as high risk" : "";
   }
 

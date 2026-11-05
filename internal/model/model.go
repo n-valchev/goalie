@@ -177,7 +177,7 @@ func parseFile(fset *token.FileSet, source Source, file string) (*ast.File, file
 	if err != nil {
 		return nil, fileReader{}, err
 	}
-	parsed, err := parser.ParseFile(fset, file, content, parser.SkipObjectResolution)
+	parsed, err := parser.ParseFile(fset, file, content, parser.ParseComments|parser.SkipObjectResolution)
 	return parsed, fileReader{fset, file, content, source.URL}, err
 }
 

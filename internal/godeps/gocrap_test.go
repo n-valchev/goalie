@@ -13,6 +13,7 @@ type scoredOp struct {
 	Complexity *int     `json:"complexity"`
 	Coverage   *float64 `json:"coverage"`
 	Grade      string   `json:"grade"`
+	Ignored    bool     `json:"ignored"`
 }
 
 type gradedClass struct {

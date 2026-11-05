@@ -437,7 +437,7 @@ The first screen shows one box for each product and one box for the shared code.
 | Grey box | You gave no gocrap report |
 | `2 duplicated functions` | Two functions in the box have a duplicate. With a godry report, `0` prints too. Boxes at the edge of an opened box show this count only in their tooltip |
 
-A function that the gocrap report leaves out is red, so that unmeasured code does not look safe. This includes a function with `//gocrap:ignore`, because godeps doesn't read comments. An assembly stub has no grade, because gocrap can't score it.
+A function that the gocrap report leaves out is red, so that unmeasured code does not look safe. A function with `//gocrap:ignore` has no grade, because its author excused it, and its card shows `Ignored by gocrap`. An assembly stub has no grade, because gocrap can't score it.
 
 ### Add the reports
 
@@ -636,6 +636,15 @@ In the model, a **class** is one Go package, and a **package** is a folder box t
               "score": 1
             }
           ]
+        },
+        {
+          "name": "generated",
+          "file": "web/cart/cart.go",
+          "line": 36,
+          "endLine": 38,
+          "exported": false,
+          "url": "file:///repo/web/cart/cart.go",
+          "ignored": true
         }
       ]
     }
@@ -696,7 +705,8 @@ In the model, a **class** is one Go package, and a **package** is a folder box t
 | `classes[].ops[].crap` | Number | gocrap score. Left out if the report has no row for this function |
 | `classes[].ops[].complexity` | Number | Cyclomatic complexity. Left out with `crap` |
 | `classes[].ops[].coverage` | Number | A fraction from `0` to `1`. Left out with `crap` |
-| `classes[].ops[].grade` | String | `green`, `yellow`, or `red`. `red` if the gocrap report has no row for it. Left out with no report, and for an assembly stub |
+| `classes[].ops[].grade` | String | `green`, `yellow`, or `red`. `red` if the gocrap report has no row for it. Left out with no report, for an assembly stub, and for a function with `//gocrap:ignore` that the report has no row for |
+| `classes[].ops[].ignored` | Boolean | `true` for a function with `//gocrap:ignore`. Left out otherwise |
 | `classes[].ops[].duplicates[].id` | String | Class of the other function. Left out when it is not on the map, as with an omitted package or a test file |
 | `classes[].ops[].duplicates[].name` | String | Name of the other function |
 | `classes[].ops[].duplicates[].file` | String | File of the other function |
@@ -748,7 +758,7 @@ Open `/tmp/map.html` and follow these steps:
 3. Click the same arrow and move the pointer away. The panel stays and the arrow is marked. Press Esc. The panel closes, and the level doesn't change.
 4. Double-click `billing`. The box opens, `infra` stays at the edge, and the arrow between `invoice` and `tax` is marked `loop`. Hover over the `infra` box at the edge. Its tooltip says `0 duplicated functions`.
 5. Reload the page. The same level shows. Press Esc. The first screen shows again.
-6. Double-click `web`, and then `cart`. The card lists the types, and the functions with their scores. `Sum` shows `CRAP 6.6`, `Skipped` shows `No gocrap score`, and `Stub` shows no score. The duplicate mark of `Sum` names `Add` with its score, and `Gen` as not on the map.
+6. Double-click `web`, and then `cart`. The card lists the types, and the functions with their scores. `Sum` shows `CRAP 6.6`, `Skipped` shows `Ignored by gocrap`, and `Stub` shows no score. The duplicate mark of `Sum` names `Add` with its score, and `Gen` as not on the map.
 7. Click the link of `Sum`. The file opens. Click its `web/cart/cart.go:17` text. The whole text is selected.
 8. Click a link under Imports on the card. That card opens. Click a level in the breadcrumb. The card closes and that level shows.
 9. Turn off the network and reload the page. Nothing changes.

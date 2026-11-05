@@ -14,8 +14,6 @@ import (
 	"github.com/n-valchev/goalie/internal/gitchange"
 )
 
-const ignoreDirective = "//gocrap:ignore"
-
 const (
 	exitClean = 0
 	exitOver  = 1
@@ -48,7 +46,7 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 		return nothingToScore("No Go files found.", opts, stdout, stderr)
 	}
 	opts.WarnUnmatched(stderr, "gocrap", paths)
-	functions, err := extract.Parse(dir, paths, ignoreDirective)
+	functions, err := extract.Parse(dir, paths, crap.IgnoreDirective)
 	if err != nil {
 		return fail(stderr, err)
 	}

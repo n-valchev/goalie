@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -130,6 +131,17 @@ func ReceiverType(fn *ast.FuncDecl) string {
 			return ""
 		}
 	}
+}
+
+// HasDirective accepts a directive with no reason, because that error belongs to the tool that owns
+// the directive, and a reader of it has no check to fail.
+func HasDirective(fn *ast.FuncDecl, directive string) bool {
+	if fn.Doc == nil {
+		return false
+	}
+	return slices.ContainsFunc(fn.Doc.List, func(comment *ast.Comment) bool {
+		return strings.Fields(comment.Text)[0] == directive
+	})
 }
 
 func hasIgnoreDirective(fset *token.FileSet, fn *ast.FuncDecl, directive string) (bool, error) {

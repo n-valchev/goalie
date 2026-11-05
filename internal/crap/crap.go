@@ -13,6 +13,8 @@ import (
 
 const DefaultLimit = 30.0
 
+const IgnoreDirective = "//gocrap:ignore"
+
 // Limits is the rule that decides each function's limit, so that godeps grades with what gocrap fails on.
 type Limits struct {
 	Limit       float64

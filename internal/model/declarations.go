@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 
+	"github.com/n-valchev/goalie/internal/crap"
 	"github.com/n-valchev/goalie/internal/extract"
 )
 
@@ -46,6 +47,7 @@ type Op struct {
 	*Score
 	Grade      Grade       `json:"grade,omitempty"`
 	Duplicates []Duplicate `json:"duplicates,omitempty"`
+	Ignored    bool        `json:"ignored,omitempty"`
 	// NoBody marks an assembly stub, which gocrap can never score, so it must not show as missing.
 	NoBody bool `json:"-"`
 }
@@ -84,6 +86,7 @@ func (r fileReader) ops(parsed *ast.File) []Op {
 				Exported: fn.Name.IsExported(),
 				URL:      r.link(r.file, line),
 				NoBody:   fn.Body == nil,
+				Ignored:  extract.HasDirective(fn, crap.IgnoreDirective),
 			})
 		}
 	}
