@@ -24,7 +24,8 @@ Modes:
       New code: compare each new or changed function with every scanned
       function. Report only pairs with at least one new or changed function.
 
-Paths limit both modes. With no paths, godry scans the current directory tree.
+Paths limit both modes. With no paths, godry uses the paths in .godryrc, or
+else scans the current directory tree.
 
 Flags:
   --base <rev>     Turn on new-code mode against this revision.
@@ -64,6 +65,13 @@ Ignore file:
   --skip-files pattern per line. Lines that start with # are comments.
   Both the file and the flag apply. ! and a trailing / are errors.
 
+Settings file:
+  godry reads .godryrc from the current directory only. It holds one JSON
+  object with any of these settings: paths, base, threshold, minLines,
+  minNodes, weakAnchors, weakLiterals, format, warnOnly, includeTests,
+  skipTags, skipFiles. A flag or a path on the command line replaces the same
+  setting. Patterns in skipFiles, --skip-files, and .godryignore all apply.
+
 Exit codes:
   0  No duplicates, or duplicates with --warn-only.
   1  Duplicates exist.
@@ -98,6 +106,7 @@ type options struct {
 	weakLiterals float64
 	help         bool
 	paths        []string
+	fromFlags    map[string]bool
 }
 
 func parseOptions(args []string) (options, error) {
@@ -158,6 +167,9 @@ func parseOptions(args []string) (options, error) {
 		opts.paths = append(opts.paths, remaining[0])
 		rest = remaining[1:]
 	}
+	// A flag's value alone can't show this, because a flag set to its default must still win.
+	opts.fromFlags = map[string]bool{}
+	flags.Visit(func(set *flag.Flag) { opts.fromFlags[set.Name] = true })
 	return opts, opts.validate()
 }
 

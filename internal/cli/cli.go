@@ -28,6 +28,9 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, usage)
 		return exitClean
 	}
+	if err := applyConfig(dir, &opts); err != nil {
+		return fail(stderr, err)
+	}
 	var changes gitchange.Changes
 	if opts.base != "" {
 		if changes, err = gitchange.Since(dir, opts.base); err != nil {

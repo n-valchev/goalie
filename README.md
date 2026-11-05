@@ -49,7 +49,7 @@ godry --base main
 
 New-code mode includes commits since the merge base, uncommitted changes, and untracked files. It marks a function as new when a changed line falls inside it. A function that you moved counts as new.
 
-With no paths, godry scans the current directory tree. Paths limit both modes: godry never compares a function outside them.
+With no paths, godry uses the `paths` setting in `.godryrc`. If there is none, it scans the current directory tree. Paths limit both modes: godry never compares a function outside them.
 
 ### Read the output
 
@@ -97,7 +97,48 @@ Errors include an invalid flag, a Go file that doesn't parse, a `//go:build` lin
 | `--skip-files a,b` | none | Skip files that match these patterns |
 | `--help` | | Print usage |
 
-godry has no baseline file, and no settings file other than `.godryignore`. It writes no files.
+godry has no baseline file, and its only settings files are `.godryrc` and `.godryignore`. It writes no files.
+
+### Keep settings in a file
+
+To keep your directories and settings in the repo, write them in a `.godryrc` file. The file holds one JSON object:
+
+```json
+{
+  "paths": ["products/billing", "products/search", "pkg"],
+  "threshold": 0.82,
+  "weakAnchors": 1,
+  "weakLiterals": 0.5,
+  "skipFiles": ["packages.go", "internal/generated/**"],
+  "skipTags": ["integration"]
+}
+```
+
+Each setting is optional, and each one matches a flag. The same settings apply to all directories.
+
+| Setting | Flag | Type |
+| --- | --- | --- |
+| `paths` | Paths on the command line | List of strings |
+| `base` | `--base` | String |
+| `threshold` | `--threshold` | Number |
+| `minLines` | `--min-lines` | Whole number |
+| `minNodes` | `--min-nodes` | Whole number |
+| `weakAnchors` | `--weak-anchors` | Whole number |
+| `weakLiterals` | `--weak-literals` | Number |
+| `format` | `--format` | `"text"` or `"json"` |
+| `warnOnly` | `--warn-only` | `true` or `false` |
+| `includeTests` | `--include-tests` | `true` or `false` |
+| `skipTags` | `--skip-tags` | List of strings |
+| `skipFiles` | `--skip-files` | List of strings |
+
+- godry reads `.godryrc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run godry from the repo root in CI.
+- A flag replaces the same setting in the file. Paths on the command line replace `paths`. To turn off `warnOnly` for one run, use `--warn-only=false`.
+- Patterns in `skipFiles`, `--skip-files`, and `.godryignore` all apply.
+- A missing file is not an error. Invalid JSON, an unknown setting, or a bad value exits with `2`.
+- JSON has no comments. To record why a file is skipped, put the pattern in `.godryignore`.
+- If you set `base` in the file, every run uses new-code mode, and no flag turns it off. To keep whole-repo scans available, pass `--base` on the command line instead.
+
+If agents work in your repo, require human approval for changes to `.godryrc` and `.godryignore`, for example with `CODEOWNERS`. Otherwise, an agent can lower the limits to pass the check.
 
 ### Dropping weak findings
 
