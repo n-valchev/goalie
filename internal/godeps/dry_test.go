@@ -280,3 +280,52 @@ func TestTheFixtureIsWhatGodryPrints(t *testing.T) {
 		t.Errorf("godry prints %s\nfixture holds %s", stdout.String(), want)
 	}
 }
+
+func TestADuplicateOnALineWithTwoFunctionsGoesToTheNamedOne(t *testing.T) {
+	tests := []struct{ left, right, leftOp, rightOp, leftOther, rightOther string }{
+		{"F", "H", "F", "T.H", "G", "T.M"},
+		{"G", "M", "G", "T.M", "F", "T.H"},
+	}
+	for _, test := range tests {
+		t.Run(test.left+" and "+test.right, func(t *testing.T) {
+			dir := writeTree(t, map[string]string{
+				"go.mod": goMod,
+				"a/a.go": "package a\n\nfunc F() {}; func G() {}\n",
+				"b/b.go": "package b\n\ntype T struct{}\n\nfunc (T) H() {}; func (T) M() {}\n",
+				"dry.json": `{"findings": [{"score": 0.9,
+					"left": {"file": "a/a.go", "function": "` + test.left + `", "startLine": 3},
+					"right": {"file": "b/b.go", "function": "` + test.right + `", "startLine": 5}}]}`,
+			})
+			got := readDryModel(t, dir, "--dry-report", "dry.json")
+			left := got.op(t, "example.com/shop/a", test.leftOp).Duplicates
+			if len(left) != 1 || left[0].Name != test.rightOp || left[0].ID != "example.com/shop/b" {
+				t.Errorf("%s duplicates = %+v, want %s in b", test.leftOp, left, test.rightOp)
+			}
+			right := got.op(t, "example.com/shop/b", test.rightOp).Duplicates
+			if len(right) != 1 || right[0].Name != test.leftOp || right[0].ID != "example.com/shop/a" {
+				t.Errorf("%s duplicates = %+v, want %s in a", test.rightOp, right, test.leftOp)
+			}
+			if other := got.op(t, "example.com/shop/a", test.leftOther).Duplicates; len(other) != 0 {
+				t.Errorf("%s duplicates = %+v, want none", test.leftOther, other)
+			}
+			if other := got.op(t, "example.com/shop/b", test.rightOther).Duplicates; len(other) != 0 {
+				t.Errorf("%s duplicates = %+v, want none", test.rightOther, other)
+			}
+		})
+	}
+}
+
+func TestOneFunctionKeepsEveryPairOnItsLine(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"go.mod": goMod,
+		"a/a.go": "package a\n\nfunc F() {}; func G() {}\n",
+		"b/b.go": "package b\n\nfunc H() {}\n\nfunc M() {}\n",
+		"dry.json": `{"findings": [
+			{"score": 0.9, "left": {"file": "a/a.go", "function": "F", "startLine": 3}, "right": {"file": "b/b.go", "function": "H", "startLine": 3}},
+			{"score": 0.8, "left": {"file": "a/a.go", "function": "F", "startLine": 3}, "right": {"file": "b/b.go", "function": "M", "startLine": 5}}]}`,
+	})
+	got := readDryModel(t, dir, "--dry-report", "dry.json")
+	if duplicates := got.op(t, "example.com/shop/a", "F").Duplicates; len(duplicates) != 2 {
+		t.Errorf("F duplicates = %+v, want two", duplicates)
+	}
+}

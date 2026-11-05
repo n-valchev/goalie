@@ -3,6 +3,7 @@ package model
 import (
 	"cmp"
 	"slices"
+	"strings"
 
 	"github.com/n-valchev/goalie/internal/toolreport"
 )
@@ -31,24 +32,25 @@ type placedOp struct {
 // JoinDuplicates sets the duplicates of the ops and the counts of the classes and boxes. It returns
 // how many sides of the pairs match no op.
 func JoinDuplicates(result *Model, source Source, pairs []toolreport.DryPair) int {
-	ops := map[opPosition]placedOp{}
+	ops := map[opPosition][]placedOp{}
 	for i := range result.Classes {
 		class := &result.Classes[i]
 		for j := range class.Ops {
 			op := &class.Ops[j]
-			ops[opPosition{op.File, op.Line}] = placedOp{class.ID, op}
+			key := opPosition{op.File, op.Line}
+			ops[key] = append(ops[key], placedOp{class.ID, op})
 		}
 	}
 	unmatched := 0
 	join := func(side, other toolreport.DrySide, score float64) {
-		found, ok := ops[positionOf(side)]
+		found, ok := sideOp(ops, side)
 		if !ok {
 			unmatched++
 			return
 		}
 		// The op keeps its mark when the other side is off the map, because the copy still exists.
 		entry := Duplicate{"", other.Function, other.File, other.StartLine, source.URL(other.File, other.StartLine), score}
-		if target, ok := ops[positionOf(other)]; ok {
+		if target, ok := sideOp(ops, other); ok {
 			entry.ID, entry.Name = target.class, target.op.Name
 		}
 		found.op.Duplicates = append(found.op.Duplicates, entry)
@@ -57,8 +59,10 @@ func JoinDuplicates(result *Model, source Source, pairs []toolreport.DryPair) in
 		join(pair.Left, pair.Right, pair.Score)
 		join(pair.Right, pair.Left, pair.Score)
 	}
-	for _, placed := range ops {
-		slices.SortFunc(placed.op.Duplicates, compareDuplicates)
+	for _, candidates := range ops {
+		for _, placed := range candidates {
+			slices.SortFunc(placed.op.Duplicates, compareDuplicates)
+		}
 	}
 	countDuplicates(result)
 	return unmatched
@@ -91,8 +95,24 @@ func countDuplicates(result *Model) {
 	}
 }
 
-func positionOf(side toolreport.DrySide) opPosition {
-	return opPosition{side.File, side.StartLine}
+// sideOp leaves the op in place, because one function can be a side of many pairs. A side holds
+// the bare name, and an op's name starts with its receiver.
+func sideOp(ops map[opPosition][]placedOp, side toolreport.DrySide) (placedOp, bool) {
+	candidates := ops[opPosition{side.File, side.StartLine}]
+	i := pickOp(candidates, func(name string) bool { return name[strings.LastIndex(name, ".")+1:] == side.Function })
+	if i < 0 {
+		return placedOp{}, false
+	}
+	return candidates[i], true
+}
+
+// pickOp matches on position, which avoids differences in naming. The name only tells apart two
+// functions on one line. It returns -1 for an empty list.
+func pickOp(candidates []placedOp, named func(name string) bool) int {
+	if len(candidates) == 0 {
+		return -1
+	}
+	return max(slices.IndexFunc(candidates, func(placed placedOp) bool { return named(placed.op.Name) }), 0)
 }
 
 func compareDuplicates(a, b Duplicate) int {

@@ -48,17 +48,15 @@ func JoinCrap(result *Model, rows []toolreport.CrapRow, limits crap.Limits) int 
 	return unmatched
 }
 
-// takeOp matches on position, which avoids differences in naming. The name only tells apart two
-// functions on one line, which is why a position holds a list here and not one op as in
-// JoinDuplicates: there a pair is a mark, and here the wrong row would give a wrong score.
+// takeOp removes the op, because a row scores one function and the next row on the line needs the
+// other one.
 func takeOp(ops map[opPosition][]placedOp, row toolreport.CrapRow) *Op {
 	key := opPosition{row.File, row.Line}
 	candidates := ops[key]
-	if len(candidates) == 0 {
+	i := pickOp(candidates, func(name string) bool { return name == row.Function })
+	if i < 0 {
 		return nil
 	}
-	named := func(placed placedOp) bool { return placed.op.Name == row.Function }
-	i := max(slices.IndexFunc(candidates, named), 0)
 	op := candidates[i].op
 	ops[key] = slices.Delete(candidates, i, i+1)
 	return op
