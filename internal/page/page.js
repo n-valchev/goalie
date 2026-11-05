@@ -168,8 +168,13 @@
     const importing = new Set(list.map((arrow) => arrow.from));
     const byLabel = (a, b) => compareText(nodes.get(a).label, nodes.get(b).label);
     const stubs = [...outside].sort(byLabel);
+    const rows = rowsOf(childrenOf(level), list.filter((arrow) => arrow.inside));
+    // A second walk, so that an edge box changes neither the rows nor which inside arrow is marked.
+    // The edge boxes go first, so that a loop through one is marked on the arrow back to it.
+    const everyKey = [...stubs, ...childrenOf(level)];
+    markLoops(everyKey, outgoingOf(everyKey, list.filter((arrow) => !arrow.loop)));
     const result = {
-      rows: rowsOf(childrenOf(level), list.filter((arrow) => arrow.inside)),
+      rows,
       importers: stubs.filter((key) => importing.has(key)),
       imported: stubs.filter((key) => !importing.has(key)),
       arrows: list,
@@ -178,12 +183,15 @@
     return result;
   }
 
-  // rowsOf puts each key one row below the deepest key that imports it. An arrow that reaches back
-  // to a key on the current walk closes a loop, so it is marked and left out of the row count.
-  function rowsOf(keys, arrows) {
+  function outgoingOf(keys, arrows) {
     const outgoing = new Map(keys.map((key) => [key, []]));
     for (const arrow of arrows) outgoing.get(arrow.from).push(arrow);
+    return outgoing;
+  }
 
+  // An arrow that reaches back to a key on the current walk closes a loop, so it is marked. The
+  // result lists each key after the keys it imports.
+  function markLoops(keys, outgoing) {
     const walking = new Set();
     const finished = new Set();
     const order = [];
@@ -198,6 +206,14 @@
       order.push(key);
     };
     for (const key of keys) if (!finished.has(key)) walk(key);
+    return order;
+  }
+
+  // rowsOf puts each key one row below the deepest key that imports it. A marked arrow is left out
+  // of the row count, because a loop has no deepest key.
+  function rowsOf(keys, arrows) {
+    const outgoing = outgoingOf(keys, arrows);
+    const order = markLoops(keys, outgoing);
 
     const depth = new Map(keys.map((key) => [key, 0]));
     for (const key of order.reverse()) {
