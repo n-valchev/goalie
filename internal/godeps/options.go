@@ -55,7 +55,8 @@ Settings file:
            gen alone covers any folder named gen, and nothing below it. Use .
            for a class at the repo root.
   order    Names of the top-level boxes, in the order to show them. The box of
-           the shared code is named shared.
+           the shared code is named shared. A package at the repo root goes by
+           its package clause, and a foreign module by its path.
 
   A flag replaces the setting of the same name. Report paths start from the
   current directory, so run godeps and the tools that write the reports from the

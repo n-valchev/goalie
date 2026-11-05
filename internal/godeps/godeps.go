@@ -74,10 +74,12 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 }
 
 // warnUnmatchedOrder warns and does not fail, because paths can limit a run to some of the boxes.
+// It looks at what the page orders: the top level also holds root and foreign classes.
 func warnUnmatchedOrder(stderr io.Writer, result model.Model) {
 	for _, name := range result.Order {
-		isNamed := func(box model.Package) bool { return box.Parent == "" && box.Name == name }
-		if !slices.ContainsFunc(result.Packages, isNamed) {
+		isBox := func(box model.Package) bool { return box.Parent == "" && box.Name == name }
+		isClass := func(class model.Class) bool { return class.Package == "" && class.Name == name }
+		if !slices.ContainsFunc(result.Packages, isBox) && !slices.ContainsFunc(result.Classes, isClass) {
 			fmt.Fprintf(stderr, "godeps: order name %q matches no top-level box\n", name)
 		}
 	}

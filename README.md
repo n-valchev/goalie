@@ -504,7 +504,7 @@ This example shows a map with two outside modules and a fixed order:
 - A flag replaces the setting of the same name. An empty report path means that the report is not set.
 - `foreign`: an import at or below an entry draws an arrow to that entry. If entries overlap, the nearest one wins. An entry that nothing imports doesn't show. An entry never takes imports of the module that godeps scans.
 - `omit`: each pattern is matched against the folder of a package, with the rules of [`--skip-files`](#skipping-files-by-name). `gen/**` covers the folder `gen` and every folder below it. `gen` alone covers any folder named `gen`, and nothing below it. `.` covers the package in the root folder. godeps doesn't read the files of an omitted package, so they can't cause a parse error.
-- `order`: names match the top-level boxes. The box of the shared code is named `shared`.
+- `order`: names match the top-level boxes. The box of the shared code is named `shared`. A package at the repo root goes by its package clause, and a foreign module by its path.
 - `shared`: a package is shared when any of its files matches. To match a folder, write `pkg/**`.
 
 godeps reads `go.mod` from the directory it runs in, and from no other folder. It supports one module. It scans the same files as gocrap, so it follows [the skip rules of godry](#what-godry-skips) and leaves out test files. It leaves out imports of the standard library, imports of outside modules that are not in `foreign`, and imports of code that it didn't scan.

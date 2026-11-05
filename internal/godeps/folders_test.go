@@ -353,6 +353,26 @@ func TestAnOrderNameThatMatchesNoTopLevelBoxWarnsAndExitsCleanly(t *testing.T) {
 	}
 }
 
+func TestAnOrderNameCanNameAnyTopLevelNodeOfThePage(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"go.mod": goMod, "main.go": "package app\n", "web/a.go": "package web\n\nimport _ \"example.com/lib/x\"\n",
+		".goalierc": `{"godeps": {"foreign": ["example.com/lib"], "order": ["app", "example.com/lib", "web"]}}`,
+	})
+	if _, stderr := run(t, dir, 0, "--format", "json"); stderr != "" {
+		t.Errorf("stderr = %q, want nothing", stderr)
+	}
+}
+
+func TestAnOrderNameOfAClassInsideABoxWarns(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"go.mod": goMod, "web/a.go": "package inner\n", ".goalierc": `{"godeps": {"order": ["inner"]}}`,
+	})
+	_, stderr := run(t, dir, 0, "--format", "json")
+	if want := "godeps: order name \"inner\" matches no top-level box\n"; stderr != want {
+		t.Errorf("stderr = %q, want %q", stderr, want)
+	}
+}
+
 func TestFileSelectionDecidesTheBoxes(t *testing.T) {
 	tests := []struct {
 		name, config, ignore string
