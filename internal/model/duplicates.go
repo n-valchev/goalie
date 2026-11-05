@@ -29,17 +29,24 @@ type placedOp struct {
 	op    *Op
 }
 
-// JoinDuplicates returns how many sides of the pairs match no op.
-func JoinDuplicates(result *Model, source Source, pairs []toolreport.DryPair) int {
+// placeOps leaves out assembly stubs, because neither gocrap nor godry can report one.
+func placeOps(result *Model) map[opPosition][]placedOp {
 	ops := map[opPosition][]placedOp{}
 	for i := range result.Classes {
 		class := &result.Classes[i]
 		for j := range class.Ops {
-			op := &class.Ops[j]
-			key := opPosition{op.File, op.Line}
-			ops[key] = append(ops[key], placedOp{class.ID, op})
+			if op := &class.Ops[j]; !op.NoBody {
+				key := opPosition{op.File, op.Line}
+				ops[key] = append(ops[key], placedOp{class.ID, op})
+			}
 		}
 	}
+	return ops
+}
+
+// JoinDuplicates returns how many sides of the pairs match no op.
+func JoinDuplicates(result *Model, source Source, pairs []toolreport.DryPair) int {
+	ops := placeOps(result)
 	unmatched := 0
 	join := func(side, other toolreport.DrySide, score float64) {
 		found, ok := sideOp(ops, side)
@@ -70,11 +77,9 @@ func JoinDuplicates(result *Model, source Source, pairs []toolreport.DryPair) in
 // countDuplicates writes a count of zero too, so that a reader can tell a clean box from a run with
 // no report. A foreign class has no ops to count.
 func countDuplicates(result *Model) {
-	boxes := map[string]*Package{}
-	for i := range result.Packages {
-		box := &result.Packages[i]
+	boxes := boxesByID(result)
+	for _, box := range boxes {
 		box.DuplicateCount = new(int)
-		boxes[box.ID] = box
 	}
 	for i := range result.Classes {
 		class := &result.Classes[i]

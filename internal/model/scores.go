@@ -7,11 +7,19 @@ import (
 	"github.com/n-valchev/goalie/internal/toolreport"
 )
 
+// Grade is a rank, so the worse of two grades is the larger. Zero is no grade, which the model
+// leaves out.
+type Grade int
+
 const (
-	gradeGreen  = "green"
-	gradeYellow = "yellow"
-	gradeRed    = "red"
+	gradeGreen Grade = iota + 1
+	gradeYellow
+	gradeRed
 )
+
+func (g Grade) MarshalText() ([]byte, error) {
+	return []byte([...]string{"", "green", "yellow", "red"}[g]), nil
+}
 
 // Score is a pointer on Op, so that an unscored op prints no fields and a real coverage of 0 stays.
 type Score struct {
@@ -22,15 +30,10 @@ type Score struct {
 
 // JoinCrap returns how many rows match no op.
 func JoinCrap(result *Model, rows []toolreport.CrapRow, limits crap.Limits) int {
-	ops := map[opPosition][]placedOp{}
-	for i := range result.Classes {
-		class := &result.Classes[i]
-		for j := range class.Ops {
-			if op := &class.Ops[j]; !op.NoBody {
-				op.Grade = gradeRed
-				key := opPosition{op.File, op.Line}
-				ops[key] = append(ops[key], placedOp{class.ID, op})
-			}
+	ops := placeOps(result)
+	for _, candidates := range ops {
+		for _, placed := range candidates {
+			placed.op.Grade = gradeRed
 		}
 	}
 	unmatched := 0
@@ -66,32 +69,21 @@ func gradeClasses(result *Model) {
 	for i := range result.Classes {
 		class := &result.Classes[i]
 		for _, op := range class.Ops {
-			class.Grade = worse(class.Grade, op.Grade)
+			class.Grade = max(class.Grade, op.Grade)
 		}
 	}
 }
 
 func gradeBoxes(result *Model) {
-	boxes := map[string]*Package{}
-	for i := range result.Packages {
-		boxes[result.Packages[i].ID] = &result.Packages[i]
-	}
+	boxes := boxesByID(result)
 	for _, class := range result.Classes {
 		for box := boxes[class.Package]; box != nil; box = boxes[box.Parent] {
-			box.Grade = worse(box.Grade, class.Grade)
+			box.Grade = max(box.Grade, class.Grade)
 		}
 	}
 }
 
-func worse(a, b string) string {
-	order := []string{"", gradeGreen, gradeYellow, gradeRed}
-	if slices.Index(order, a) > slices.Index(order, b) {
-		return a
-	}
-	return b
-}
-
-func grade(score, limit float64) string {
+func grade(score, limit float64) Grade {
 	switch {
 	case score <= limit/2:
 		return gradeGreen

@@ -44,7 +44,7 @@ type Op struct {
 	Exported bool   `json:"exported"`
 	URL      string `json:"url"`
 	*Score
-	Grade      string      `json:"grade,omitempty"`
+	Grade      Grade       `json:"grade,omitempty"`
 	Duplicates []Duplicate `json:"duplicates,omitempty"`
 	// NoBody marks an assembly stub, which gocrap can never score, so it must not show as missing.
 	NoBody bool `json:"-"`

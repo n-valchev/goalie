@@ -18,7 +18,15 @@ type Package struct {
 	Shared         bool   `json:"shared,omitempty"`
 	PackageCount   int    `json:"packageCount"`
 	DuplicateCount *int   `json:"duplicateCount,omitempty"`
-	Grade          string `json:"grade,omitempty"`
+	Grade          Grade  `json:"grade,omitempty"`
+}
+
+func boxesByID(result *Model) map[string]*Package {
+	boxes := map[string]*Package{}
+	for i := range result.Packages {
+		boxes[result.Packages[i].ID] = &result.Packages[i]
+	}
+	return boxes
 }
 
 func placeClasses(classes []Class, shared map[string]bool) []Package {

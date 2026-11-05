@@ -9,12 +9,14 @@ type Violation struct {
 	Details []string `json:"details"`
 }
 
+type edgeKey struct{ from, to string }
+
 // MarkBreaks returns how many breaks have no edge.
 func MarkBreaks(result *Model, source Source, breaks []toolreport.Break) int {
-	edges := map[[2]string]*Edge{}
+	edges := map[edgeKey]*Edge{}
 	for i := range result.Edges {
 		if edge := &result.Edges[i]; edge.Kind == kindDependency {
-			edges[[2]string{edge.From, edge.To}] = edge
+			edges[edgeKey{edge.From, edge.To}] = edge
 		}
 	}
 	unplaced := 0
@@ -23,7 +25,7 @@ func MarkBreaks(result *Model, source Source, breaks []toolreport.Break) int {
 		if module := foreignModule(found.Import, source); module != "" {
 			target = module
 		}
-		if edge := edges[[2]string{found.Package, target}]; edge != nil {
+		if edge := edges[edgeKey{found.Package, target}]; edge != nil {
 			edge.addBreak(found)
 		} else {
 			unplaced++
