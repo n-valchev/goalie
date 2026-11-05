@@ -1,0 +1,70 @@
+{
+  "findings": [
+    {
+      "score": 1,
+      "literals": 1,
+      "anchors": 0,
+      "case": "across-products",
+      "left": {
+        "file": "billing/invoice/invoice.go",
+        "function": "Add",
+        "startLine": 7,
+        "endLine": 22,
+        "nodes": 54,
+        "new": false
+      },
+      "right": {
+        "file": "gen/gen.go",
+        "function": "Gen",
+        "startLine": 3,
+        "endLine": 18,
+        "nodes": 54,
+        "new": false
+      }
+    },
+    {
+      "score": 1,
+      "literals": 1,
+      "anchors": 0,
+      "case": "across-products",
+      "left": {
+        "file": "billing/invoice/invoice.go",
+        "function": "Add",
+        "startLine": 7,
+        "endLine": 22,
+        "nodes": 54,
+        "new": false
+      },
+      "right": {
+        "file": "web/cart/cart.go",
+        "function": "Sum",
+        "startLine": 17,
+        "endLine": 32,
+        "nodes": 54,
+        "new": false
+      }
+    },
+    {
+      "score": 1,
+      "literals": 1,
+      "anchors": 0,
+      "case": "across-products",
+      "left": {
+        "file": "gen/gen.go",
+        "function": "Gen",
+        "startLine": 3,
+        "endLine": 18,
+        "nodes": 54,
+        "new": false
+      },
+      "right": {
+        "file": "web/cart/cart.go",
+        "function": "Sum",
+        "startLine": 17,
+        "endLine": 32,
+        "nodes": 54,
+        "new": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>godeps fixture page</title>
+<style>:root {
+  color-scheme: light dark;
+  --page: #f7f7f5;
+  --text: #1f2328;
+  --muted: #5c636b;
+  --line: #6b7280;
+  --loop: #7c3aed;
+  --frame: #c9ccd1;
+  --box: #e7e8ea;
+  --box-edge: #8b9098;
+  --green: #cdeccf;
+  --green-edge: #2f7d3b;
+  --yellow: #fbeeb0;
+  --yellow-edge: #93700b;
+  --red: #f9cdc9;
+  --red-edge: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #16181c;
+    --text: #e6e7e9;
+    --muted: #a3a9b1;
+    --line: #9aa1aa;
+    --loop: #b794f6;
+    --frame: #454a52;
+    --box: #2a2d33;
+    --box-edge: #6e747d;
+    --green: #1e4426;
+    --green-edge: #5fc26f;
+    --yellow: #4d3f0b;
+    --yellow-edge: #e0b93a;
+    --red: #5a1f1b;
+    --red-edge: #f08a82;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text);
+  font: 14px/1.4 system-ui, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header { padding: 12px 16px 8px; border-bottom: 1px solid var(--frame); }
+h1 { margin: 0 0 4px; font-size: 18px; overflow-wrap: anywhere; }
+
+#crumbs { display: flex; flex-wrap: wrap; gap: 4px; }
+#crumbs a { color: inherit; }
+#crumbs .separator { color: var(--muted); }
+
+#legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.key {
+  display: inline-block;
+  width: 18px;
+  height: 12px;
+  vertical-align: -1px;
+  border: 1px solid var(--box-edge);
+  background: var(--box);
+  font-size: 10px;
+  line-height: 9px;
+  text-align: center;
+}
+.key-arrow, .key-loop, .key-break { height: 0; border-width: 2px 0 0; background: none; vertical-align: 3px; border-color: var(--line); }
+.key-loop { border-top-style: dotted; border-color: var(--loop); }
+.key-break { border-top-style: dashed; border-color: var(--red-edge); }
+.key-foreign { border-radius: 50%; }
+.key-green { background: var(--green); border-color: var(--green-edge); }
+.key-yellow { background: var(--yellow); border-color: var(--yellow-edge); }
+.key-red { background: var(--red); border: 1px dashed var(--red-edge); color: var(--text); }
+
+#stage { position: relative; flex: 1; min-height: 0; }
+#map { position: relative; height: 100%; overflow: auto; }
+#canvas { position: relative; }
+#arrows { position: absolute; inset: 0; }
+#nodes { position: absolute; inset: 0; pointer-events: none; }
+
+.frame {
+  position: absolute;
+  border: 1px solid var(--frame);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 2px 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.node {
+  position: absolute;
+  padding: 4px 8px;
+  border: 2px solid var(--box-edge);
+  border-radius: 6px;
+  background: var(--box);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  pointer-events: auto;
+}
+.node:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+.node .name, .node .size { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.node .name { font-weight: 600; }
+.node .size { color: var(--muted); font-size: 12px; }
+.node .cue { position: absolute; top: 0; right: 6px; font-weight: 700; color: var(--red-edge); }
+
+.node.foreign { border-radius: 50%; padding: 4px 20px; }
+.node.stub { border-width: 1px; border-style: dotted; opacity: 0.85; }
+.node.stub .name { font-weight: 400; }
+.score { display: inline-block; margin-top: 2px; padding: 0 6px; border: 1px solid var(--frame); border-radius: 4px; font-size: 12px; }
+.grade-green { background: var(--green); border-color: var(--green-edge); }
+.grade-yellow { background: var(--yellow); border-color: var(--yellow-edge); }
+.node.grade-red, .grade-red { background: var(--red); border-color: var(--red-edge); border-style: dashed; }
+
+.arrow { stroke: var(--line); stroke-width: 1.5; }
+.arrow.loop { stroke: var(--loop); stroke-dasharray: 2 4; stroke-width: 2; }
+.arrow.break { stroke: var(--red-edge); stroke-dasharray: 8 5; stroke-width: 2; }
+.arrow.selected { stroke-width: 4; }
+/* A 2px line is too thin to hover over, so a wider clear line takes the mouse for it. */
+.arrow-hit { stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; outline: none; }
+.arrow-hit:focus-visible { stroke: var(--frame); }
+.head { fill: var(--line); }
+.head-loop { fill: var(--loop); }
+.head-break { fill: var(--red-edge); }
+.loop-label { fill: var(--loop); font-size: 11px; text-anchor: middle; paint-order: stroke; stroke: var(--page); stroke-width: 3px; }
+
+#empty { padding: 24px; color: var(--muted); }
+
+#card, #breaks {
+  position: absolute;
+  overflow: auto;
+  padding: 12px 16px;
+  border: 1px solid var(--frame);
+  border-radius: 8px;
+  background: var(--page);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
+}
+#card { top: 12px; right: 16px; width: min(460px, calc(100% - 32px)); max-height: calc(100% - 24px); }
+/* Only a selected panel takes the mouse. A panel that opens under the pointer on hover would end the hover and close itself. */
+#breaks { bottom: 12px; left: 16px; width: min(560px, calc(100% - 32px)); max-height: 45%; pointer-events: none; }
+#breaks.selected { pointer-events: auto; }
+#card h2, #breaks h2 { margin: 0 0 4px; font-size: 16px; overflow-wrap: anywhere; }
+#card p, #breaks p { margin: 0 0 8px; color: var(--muted); overflow-wrap: anywhere; }
+#card button, #breaks button { font: inherit; }
+#card h3, #breaks h3 { margin: 12px 0 4px; font-size: 14px; overflow-wrap: anywhere; }
+#card a, #breaks a { color: inherit; font-weight: 600; }
+.entries, .members { margin: 0; padding: 0; list-style: none; }
+.entries > li { padding: 3px 0; overflow-wrap: anywhere; }
+.members { padding-left: 12px; }
+.where { color: var(--muted); font-size: 12px; user-select: all; }
+.break-mark { color: var(--red-edge); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>godeps fixture page</h1>
+  <nav id="crumbs" aria-label="Current level"></nav>
+  <ul id="legend">
+    <li><span class="key key-box"></span> Double-click a box to open it. Press Esc to go up.</li>
+    <li><span class="key key-arrow"></span> The box at the tail imports the box at the head.</li>
+    <li><span class="key key-loop"></span> Dotted and marked "loop": this arrow closes an import loop.</li>
+    <li><span class="key key-break"></span> Red and dashed: this arrow holds an import that breaks an arch-go rule. Hover over it or click it to read the rule.</li>
+    <li><span class="key key-foreign"></span> Oval: a module outside this repository.</li>
+    <li><span class="key key-green"></span> Low risk</li>
+    <li><span class="key key-yellow"></span> Medium risk</li>
+    <li><span class="key key-red">!</span> Dashed and marked "!": high risk</li>
+    <li><span class="key key-box"></span> Grey: no risk data</li>
+  </ul>
+</header>
+<main id="stage">
+<div id="map">
+  <noscript>This page needs JavaScript to draw the map.</noscript>
+  <div id="canvas">
+    <svg id="arrows">
+      <defs>
+        <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">
+          <path class="head" d="M0 0 L10 5 L0 10 Z"/>
+        </marker>
+        <marker id="head-loop" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">
+          <path class="head-loop" d="M0 0 L10 5 L0 10 Z"/>
+        </marker>
+        <marker id="head-break" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">
+          <path class="head-break" d="M0 0 L10 5 L0 10 Z"/>
+        </marker>
+      </defs>
+      <g id="lines"></g>
+    </svg>
+    <div id="nodes"></div>
+  </div>
+</div>
+<aside id="card" hidden></aside>
+<aside id="breaks" hidden aria-live="polite"></aside>
+</main>
+<script type="application/json" id="model">{"version":1,"title":"godeps fixture page","module":"example.com/shop","order":["shared"],"packages":[{"id":":shared","name":"shared","shared":true,"packageCount":1,"duplicateCount":0,"grade":"green"},{"id":":shared/lib","name":"lib","parent":":shared","shared":true,"packageCount":1,"duplicateCount":0,"grade":"green"},{"id":":shared/lib/text","name":"text","parent":":shared/lib","shared":true,"packageCount":1,"duplicateCount":0,"grade":"green"},{"id":"billing","name":"billing","packageCount":2,"duplicateCount":1,"grade":"red"},{"id":"billing/invoice","name":"invoice","parent":"billing","packageCount":1,"duplicateCount":1,"grade":"red"},{"id":"billing/tax","name":"tax","parent":"billing","packageCount":1,"duplicateCount":0,"grade":"green"},{"id":"domain","name":"domain","packageCount":1,"duplicateCount":0,"grade":"green"},{"id":"infra","name":"infra","packageCount":1,"duplicateCount":0,"grade":"green"},{"id":"infra/db","name":"db","parent":"infra","packageCount":1,"duplicateCount":0,"grade":"green"},{"id":"web","name":"web","packageCount":3,"duplicateCount":1,"grade":"red"},{"id":"web/api","name":"api","parent":"web","packageCount":1,"duplicateCount":0,"grade":"green"},{"id":"web/cart","name":"cart","parent":"web","packageCount":1,"duplicateCount":1,"grade":"red"}],"classes":[{"id":"example.com/lib","name":"example.com/lib","foreign":true,"types":[],"ops":[]},{"id":"example.com/shop","name":"main","path":".","duplicateCount":0,"grade":"green","types":[],"ops":[{"name":"main","file":"main.go","line":5,"endLine":5,"exported":false,"url":"file:///goalie/testdata/page/main.go","crap":2,"complexity":1,"coverage":0,"grade":"green"}]},{"id":"example.com/shop/billing/invoice","name":"invoice","path":"billing/invoice","package":"billing/invoice","duplicateCount":1,"grade":"red","types":[{"name":"Maker","kind":"interface","file":"billing/invoice/invoice.go","line":5,"url":"file:///goalie/testdata/page/billing/invoice/invoice.go","methods":[{"name":"Make","signature":"()"}]}],"ops":[{"name":"Add","file":"billing/invoice/invoice.go","line":7,"endLine":22,"exported":true,"url":"file:///goalie/testdata/page/billing/invoice/invoice.go","crap":30,"complexity":5,"coverage":0,"grade":"red","duplicates":[{"name":"Gen","file":"gen/gen.go","line":3,"url":"file:///goalie/testdata/page/gen/gen.go","score":1},{"id":"example.com/shop/web/cart","name":"Sum","file":"web/cart/cart.go","line":17,"url":"file:///goalie/testdata/page/web/cart/cart.go","score":1}]}]},{"id":"example.com/shop/billing/tax","name":"tax","path":"billing/tax","package":"billing/tax","duplicateCount":0,"grade":"green","types":[],"ops":[{"name":"Rate","file":"billing/tax/tax.go","line":8,"endLine":8,"exported":true,"url":"file:///goalie/testdata/page/billing/tax/tax.go","crap":2,"complexity":1,"coverage":0,"grade":"green"}]},{"id":"example.com/shop/domain","name":"domain","path":"domain","package":"domain","duplicateCount":0,"grade":"green","types":[{"name":"Order","kind":"struct","file":"domain/order.go","line":5,"url":"file:///goalie/testdata/page/domain/order.go","fields":[{"name":"ID","type":"string"}]}],"ops":[{"name":"Order.Total","file":"domain/order.go","line":9,"endLine":9,"exported":true,"url":"file:///goalie/testdata/page/domain/order.go","crap":2,"complexity":1,"coverage":0,"grade":"green"}]},{"id":"example.com/shop/infra/db","name":"db","path":"infra/db","package":"infra/db","duplicateCount":0,"grade":"green","types":[],"ops":[{"name":"Open","file":"infra/db/db.go","line":3,"endLine":3,"exported":true,"url":"file:///goalie/testdata/page/infra/db/db.go","crap":2,"complexity":1,"coverage":0,"grade":"green"}]},{"id":"example.com/shop/lib/text","name":"text","path":"lib/text","package":":shared/lib/text","duplicateCount":0,"grade":"green","types":[],"ops":[{"name":"Trim","file":"lib/text/text.go","line":3,"endLine":3,"exported":true,"url":"file:///goalie/testdata/page/lib/text/text.go","crap":2,"complexity":1,"coverage":0,"grade":"green"}]},{"id":"example.com/shop/web","name":"web","path":"web","package":"web","duplicateCount":0,"grade":"green","types":[{"name":"Page","kind":"struct","file":"web/web.go","line":5,"url":"file:///goalie/testdata/page/web/web.go","fields":[{"name":"Order","type":"domain.Order"},{"name":"Title","type":"string"}]}],"ops":[{"name":"Open","file":"web/web.go","line":10,"endLine":10,"exported":true,"url":"file:///goalie/testdata/page/web/web.go","crap":2,"complexity":1,"coverage":0,"grade":"green"}]},{"id":"example.com/shop/web/api","name":"api","path":"web/api","package":"web/api","duplicateCount":0,"grade":"green","types":[],"ops":[{"name":"Serve","file":"web/api/api.go","line":5,"endLine":5,"exported":true,"url":"file:///goalie/testdata/page/web/api/api.go","crap":2,"complexity":1,"coverage":0,"grade":"green"}]},{"id":"example.com/shop/web/cart","name":"cart","path":"web/cart","package":"web/cart","duplicateCount":1,"grade":"red","types":[{"name":"Store","kind":"interface","file":"web/cart/cart.go","line":10,"url":"file:///goalie/testdata/page/web/cart/cart.go","methods":[{"name":"Save","signature":"(id string, n int) error"},{"name":"invoice.Maker"}]},{"name":"Size","kind":"other","file":"web/cart/cart.go","line":15,"url":"file:///goalie/testdata/page/web/cart/cart.go"}],"ops":[{"name":"Sum","file":"web/cart/cart.go","line":17,"endLine":32,"exported":true,"url":"file:///goalie/testdata/page/web/cart/cart.go","crap":6.6000000000000005,"complexity":5,"coverage":0.6,"grade":"yellow","duplicates":[{"name":"Gen","file":"gen/gen.go","line":3,"url":"file:///goalie/testdata/page/gen/gen.go","score":1},{"id":"example.com/shop/billing/invoice","name":"Add","file":"billing/invoice/invoice.go","line":7,"url":"file:///goalie/testdata/page/billing/invoice/invoice.go","score":1}]},{"name":"Skipped","file":"web/cart/cart.go","line":35,"endLine":35,"exported":true,"url":"file:///goalie/testdata/page/web/cart/cart.go","grade":"red"},{"name":"Stub","file":"web/cart/cart.go","line":37,"endLine":37,"exported":true,"url":"file:///goalie/testdata/page/web/cart/cart.go"}]}],"edges":[{"from":"example.com/shop","to":"example.com/shop/web/cart","kind":"dependency"},{"from":"example.com/shop/billing/invoice","to":"example.com/shop/billing/tax","kind":"dependency"},{"from":"example.com/shop/billing/tax","to":"example.com/shop/billing/invoice","kind":"dependency","violations":[{"rule":"Packages matching pattern 'example.com/shop/billing/tax' should ['not depend on internal packages that matches [[example.com/shop/infra example.com/shop/billing/invoice]]']","details":["ShouldNotDependsOn.Internal rule contains imported package 'example.com/shop/billing/invoice'"]}]},{"from":"example.com/shop/billing/tax","to":"example.com/shop/infra/db","kind":"dependency","violations":[{"rule":"Packages matching pattern 'example.com/shop/billing/tax' should ['not depend on internal packages that matches [[example.com/shop/infra example.com/shop/billing/invoice]]']","details":["ShouldNotDependsOn.Internal rule contains imported package 'example.com/shop/infra/db'"]}]},{"from":"example.com/shop/domain","to":"example.com/shop/infra/db","kind":"dependency","violations":[{"rule":"Packages matching pattern 'example.com/shop/domain' should ['not depend on internal packages that matches [[example.com/shop/infra]]']","details":["ShouldNotDependsOn.Internal rule contains imported package 'example.com/shop/infra/db'"]}]},{"from":"example.com/shop/web","to":"example.com/shop/domain","kind":"composition"},{"from":"example.com/shop/web","to":"example.com/shop/domain","kind":"dependency"},{"from":"example.com/shop/web/api","to":"example.com/shop/billing/tax","kind":"dependency","violations":[{"rule":"Packages matching pattern 'example.com/shop/web/api' should ['not depend on internal packages that matches [[example.com/shop/billing]]']","details":["ShouldNotDependsOn.Internal rule contains imported package 'example.com/shop/billing/tax'"]}]},{"from":"example.com/shop/web/cart","to":"example.com/lib","kind":"dependency","violations":[{"rule":"Packages matching pattern 'example.com/shop/web/cart' should ['not depend on external packages that matches [[example.com/lib]]']","details":["ShouldNotDependsOn.External rule contains imported package 'example.com/lib/sub'"]}]},{"from":"example.com/shop/web/cart","to":"example.com/shop/billing/invoice","kind":"dependency"},{"from":"example.com/shop/web/cart","to":"example.com/shop/lib/text","kind":"dependency"}]}</script>
+<script>"use strict";
+
+(function () {
+  const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+  const SIZE = { width: 176, height: 72, stubHeight: 40, gapX: 40, gapY: 72, margin: 32, frame: 24 };
+  const ARROW_OFFSET = 4;
+  const TOP = "";
+
+  const model = JSON.parse(document.getElementById("model").textContent);
+  const elements = {};
+  for (const id of ["crumbs", "map", "canvas", "arrows", "lines", "nodes", "card", "breaks"]) {
+    elements[id] = document.getElementById(id);
+  }
+
+  // A key is also the URL fragment of its node. The prefix keeps a box and a class apart, because
+  // a one-word module path can give them the same id.
+  const boxKey = (id) => "box=" + id;
+  const classKey = (id) => "class=" + id;
+
+  const { nodes, children } = buildTree();
+  const neighbours = buildNeighbours();
+  const chains = new Map();
+  const levels = new Map();
+  let view = { level: null, card: null };
+  let hovered = null;
+  let selected = null;
+  let drawnBreaks = {};
+
+  function buildTree() {
+    const nodes = new Map();
+    for (const box of model.packages) {
+      nodes.set(boxKey(box.id), {
+        key: boxKey(box.id),
+        kind: "box",
+        name: box.name,
+        label: box.id.replace(/^:/, ""),
+        parent: box.parent ? boxKey(box.parent) : TOP,
+        count: box.packageCount,
+        duplicates: box.duplicateCount,
+        grade: box.grade,
+      });
+    }
+    for (const item of model.classes) {
+      nodes.set(classKey(item.id), {
+        key: classKey(item.id),
+        kind: item.foreign ? "foreign" : "class",
+        name: item.name,
+        label: item.foreign ? item.id : item.path === "." ? item.name : item.path,
+        parent: item.package ? boxKey(item.package) : TOP,
+        duplicates: item.duplicateCount,
+        grade: item.grade,
+        item,
+      });
+    }
+    const children = new Map([[TOP, []]]);
+    for (const node of nodes.values()) {
+      if (!children.has(node.parent)) children.set(node.parent, []);
+      children.get(node.parent).push(node);
+    }
+    const placeInOrder = (node) => {
+      const place = (model.order ?? []).indexOf(node.name);
+      return place < 0 ? Infinity : place;
+    };
+    for (const [parent, list] of children) {
+      list.sort((a, b) => {
+        if (parent === TOP && placeInOrder(a) !== placeInOrder(b)) {
+          return placeInOrder(a) < placeInOrder(b) ? -1 : 1;
+        }
+        return compareText(a.name, b.name) || compareText(a.key, b.key);
+      });
+    }
+    const keys = new Map();
+    for (const [parent, list] of children) keys.set(parent, list.map((node) => node.key));
+    return { nodes, children: keys };
+  }
+
+  // Only dependency edges, because a composition edge repeats an import that is already listed.
+  function buildNeighbours() {
+    const neighbours = new Map();
+    const of = (id) => {
+      const key = classKey(id);
+      if (!neighbours.has(key)) neighbours.set(key, { imports: [], importers: [] });
+      return neighbours.get(key);
+    };
+    for (const edge of model.edges) {
+      if (edge.kind !== "dependency") continue;
+      of(edge.from).imports.push(edge);
+      of(edge.to).importers.push(edge);
+    }
+    return neighbours;
+  }
+
+  // Not localeCompare: two readers of one shared link must see the same order.
+  function compareText(a, b) {
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
+  function childrenOf(key) {
+    return children.get(key) ?? [];
+  }
+
+  function isBox(key) {
+    return key === TOP || nodes.get(key).kind === "box";
+  }
+
+  // A box with one child has nothing to choose from, so no level ever stops on it.
+  function opensThrough(key) {
+    return key !== TOP && isBox(key) && childrenOf(key).length === 1;
+  }
+
+  function openTarget(key) {
+    while (opensThrough(key)) key = childrenOf(key)[0];
+    return key;
+  }
+
+  function nearestLevel(key) {
+    while (opensThrough(key)) key = nodes.get(key).parent;
+    return key;
+  }
+
+  function viewOf(key) {
+    if (key !== TOP && !nodes.has(key)) return { level: TOP, card: null };
+    const target = openTarget(key);
+    if (isBox(target)) return { level: target, card: null };
+    return { level: nearestLevel(nodes.get(target).parent), card: target };
+  }
+
+  function chainOf(key) {
+    if (key === TOP) return [TOP];
+    let chain = chains.get(key);
+    if (!chain) {
+      chain = [...chainOf(nodes.get(key).parent), key];
+      chains.set(key, chain);
+    }
+    return chain;
+  }
+
+  // visibleEnd finds what stands for a class at a level: a child of the level, or else the box
+  // outside the level that is the nearest to it.
+  function visibleEnd(classId, levelChain) {
+    const chain = chainOf(classKey(classId));
+    let depth = 0;
+    while (depth < levelChain.length && chain[depth] === levelChain[depth]) depth++;
+    return { key: chain[depth], outside: depth < levelChain.length };
+  }
+
+  // levelOf is the only code that walks the class edges. It runs once per level, because a
+  // monorepo has too many edges to walk on each draw.
+  function levelOf(level) {
+    if (levels.has(level)) return levels.get(level);
+    const levelChain = chainOf(level);
+    const arrows = new Map();
+    const outside = new Set();
+    for (const edge of model.edges) {
+      const from = visibleEnd(edge.from, levelChain);
+      const to = visibleEnd(edge.to, levelChain);
+      if ((from.outside && to.outside) || from.key === to.key) continue;
+      if (from.outside) outside.add(from.key);
+      if (to.outside) outside.add(to.key);
+      const id = from.key + "\0" + to.key;
+      if (!arrows.has(id)) {
+        arrows.set(id, { from: from.key, to: to.key, inside: !from.outside && !to.outside, edges: [], breaks: [], loop: false });
+      }
+      arrows.get(id).edges.push(edge);
+      if (edge.violations) arrows.get(id).breaks.push(edge);
+    }
+    const list = [...arrows.values()];
+    const importing = new Set(list.map((arrow) => arrow.from));
+    const byLabel = (a, b) => compareText(nodes.get(a).label, nodes.get(b).label);
+    const stubs = [...outside].sort(byLabel);
+    const result = {
+      rows: rowsOf(childrenOf(level), list.filter((arrow) => arrow.inside)),
+      importers: stubs.filter((key) => importing.has(key)),
+      imported: stubs.filter((key) => !importing.has(key)),
+      arrows: list,
+    };
+    levels.set(level, result);
+    return result;
+  }
+
+  // rowsOf puts each key one row below the deepest key that imports it. An arrow that reaches back
+  // to a key on the current walk closes a loop, so it is marked and left out of the row count.
+  function rowsOf(keys, arrows) {
+    const outgoing = new Map(keys.map((key) => [key, []]));
+    for (const arrow of arrows) outgoing.get(arrow.from).push(arrow);
+
+    const walking = new Set();
+    const finished = new Set();
+    const order = [];
+    const walk = (key) => {
+      walking.add(key);
+      for (const arrow of outgoing.get(key)) {
+        if (walking.has(arrow.to)) arrow.loop = true;
+        else if (!finished.has(arrow.to)) walk(arrow.to);
+      }
+      walking.delete(key);
+      finished.add(key);
+      order.push(key);
+    };
+    for (const key of keys) if (!finished.has(key)) walk(key);
+
+    const depth = new Map(keys.map((key) => [key, 0]));
+    for (const key of order.reverse()) {
+      for (const arrow of outgoing.get(key)) {
+        if (!arrow.loop) depth.set(arrow.to, Math.max(depth.get(arrow.to), depth.get(key) + 1));
+      }
+    }
+    const rows = [];
+    for (const key of keys) (rows[depth.get(key)] ??= []).push(key);
+    return rows;
+  }
+
+  function arrange(level, content) {
+    const free = elements.map.clientWidth - 2 * (SIZE.margin + SIZE.frame) + SIZE.gapX;
+    const perLine = Math.max(3, Math.floor(free / (SIZE.width + SIZE.gapX)));
+    const lines = [];
+    const places = new Map();
+    let y = SIZE.margin;
+
+    const placeBand = (keys, height) => {
+      for (let start = 0; start < keys.length; start += perLine) {
+        const line = keys.slice(start, start + perLine).map((key, index) => {
+          const place = { x: index * (SIZE.width + SIZE.gapX), y, width: SIZE.width, height };
+          place.oval = nodes.get(key).kind === "foreign";
+          places.set(key, place);
+          return place;
+        });
+        lines.push(line);
+        y += height + SIZE.gapY;
+      }
+    };
+
+    const inset = level === TOP ? 0 : SIZE.frame;
+    placeBand(content.importers, SIZE.stubHeight);
+    const frameTop = y;
+    y += inset;
+    for (const row of content.rows) placeBand(row, SIZE.height);
+    const frameBottom = y - SIZE.gapY + inset;
+    y = frameBottom + SIZE.gapY;
+    placeBand(content.imported, SIZE.stubHeight);
+
+    const lineWidth = (line) => line.length * (SIZE.width + SIZE.gapX) - SIZE.gapX;
+    const widest = Math.max(0, ...lines.map(lineWidth));
+    for (const line of lines) {
+      const shift = SIZE.margin + SIZE.frame + (widest - lineWidth(line)) / 2;
+      for (const place of line) place.x += shift;
+    }
+    return {
+      places,
+      width: widest + 2 * (SIZE.margin + SIZE.frame),
+      height: y - SIZE.gapY + SIZE.margin,
+      frame: inset && { x: SIZE.margin, y: frameTop, width: widest + 2 * SIZE.frame, height: frameBottom - frameTop },
+    };
+  }
+
+  function borderPoint(place, shift, dx, dy) {
+    const [halfWidth, halfHeight] = [place.width / 2, place.height / 2];
+    const scale = place.oval
+      ? 1 / Math.hypot(dx / halfWidth, dy / halfHeight)
+      : Math.min(
+          (halfWidth - Math.sign(dx) * shift.x) / Math.abs(dx),
+          (halfHeight - Math.sign(dy) * shift.y) / Math.abs(dy),
+        );
+    return { x: place.x + halfWidth + shift.x + dx * scale, y: place.y + halfHeight + shift.y + dy * scale };
+  }
+
+  function drawLine(start, end, className) {
+    const line = document.createElementNS(SVG_NAMESPACE, "line");
+    line.setAttribute("x1", start.x);
+    line.setAttribute("y1", start.y);
+    line.setAttribute("x2", end.x);
+    line.setAttribute("y2", end.y);
+    line.setAttribute("class", className);
+    elements.lines.append(line);
+    return line;
+  }
+
+  function drawBreakTarget(arrow, start, end) {
+    const target = drawLine(start, end, "arrow-hit");
+    target.setAttribute("tabindex", "0");
+    target.setAttribute("role", "button");
+    const show = () => hoverArrow(arrow);
+    const hide = () => hoverArrow(null);
+    target.addEventListener("mouseenter", show);
+    target.addEventListener("mouseleave", hide);
+    target.addEventListener("focus", show);
+    target.addEventListener("blur", hide);
+    target.addEventListener("click", () => selectArrow(arrow));
+    target.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") selectArrow(arrow);
+    });
+    return target;
+  }
+
+  function drawArrow(arrow, places) {
+    const [from, to] = [places.get(arrow.from), places.get(arrow.to)];
+    const dx = to.x + to.width / 2 - (from.x + from.width / 2);
+    const dy = to.y + to.height / 2 - (from.y + from.height / 2);
+    // Each arrow moves to its own right, so that two arrows between one pair of boxes don't overlap.
+    const length = Math.hypot(dx, dy);
+    const shift = { x: (-dy / length) * ARROW_OFFSET, y: (dx / length) * ARROW_OFFSET };
+    const start = borderPoint(from, shift, dx, dy);
+    const end = borderPoint(to, shift, -dx, -dy);
+
+    const isBreak = arrow.breaks.length > 0;
+    const line = drawLine(start, end, "arrow" + (arrow.loop ? " loop" : "") + (isBreak ? " break" : ""));
+    line.setAttribute("marker-end", isBreak ? "url(#head-break)" : arrow.loop ? "url(#head-loop)" : "url(#head)");
+    arrow.line = line;
+    const title = document.createElementNS(SVG_NAMESPACE, "title");
+    title.textContent = describeArrow(arrow);
+    (isBreak ? drawBreakTarget(arrow, start, end) : line).append(title);
+
+    if (arrow.loop) {
+      const label = document.createElementNS(SVG_NAMESPACE, "text");
+      label.setAttribute("x", (start.x + end.x) / 2);
+      label.setAttribute("y", (start.y + end.y) / 2);
+      label.setAttribute("class", "loop-label");
+      label.textContent = "loop";
+      elements.lines.append(label);
+    }
+  }
+
+  function describeArrow(arrow) {
+    const imports = arrow.edges.filter((edge) => edge.kind === "dependency").length;
+    const text = `${nodes.get(arrow.from).label} imports ${nodes.get(arrow.to).label}`;
+    const count = `${imports} ${imports === 1 ? "import" : "imports"}`;
+    const breaks = arrow.breaks.length;
+    const parts = [`${text} (${count}).`];
+    if (arrow.loop) parts.push("This arrow closes a loop.");
+    if (breaks > 0) parts.push(`${breaks} ${breaks === 1 ? "import breaks" : "imports break"} an arch-go rule.`);
+    return parts.join(" ");
+  }
+
+  function sizeText(node) {
+    if (node.kind === "box") return `${node.count} ${node.count === 1 ? "package" : "packages"}`;
+    return node.kind === "foreign" ? "outside module" : "package";
+  }
+
+  // A count of 0 still prints: it tells a clean box from a run with no godry report.
+  function duplicatesText(node) {
+    if (node.duplicates === undefined) return "";
+    return `${node.duplicates} duplicated ${node.duplicates === 1 ? "function" : "functions"}`;
+  }
+
+  function drawNode(node, place, isStub) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.key = node.key;
+    button.className = "node";
+    if (node.kind === "foreign") button.classList.add("foreign");
+    if (isStub) button.classList.add("stub");
+    if (node.grade) button.classList.add("grade-" + node.grade);
+    button.style.left = place.x + "px";
+    button.style.top = place.y + "px";
+    button.style.width = place.width + "px";
+    button.style.height = place.height + "px";
+    const duplicates = duplicatesText(node);
+    button.title = `${node.label}: ${sizeText(node)}` + (node.grade ? `, ${node.grade} risk` : "") + (duplicates ? `, ${duplicates}` : "");
+
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = isStub ? node.label : node.name;
+    button.append(name);
+    if (!isStub) {
+      const size = document.createElement("span");
+      size.className = "size";
+      size.textContent = sizeText(node);
+      button.append(size);
+      if (duplicates) {
+        const count = document.createElement("span");
+        count.className = "size";
+        count.textContent = duplicates;
+        button.append(count);
+      }
+    }
+    if (node.grade === "red") {
+      const cue = document.createElement("span");
+      cue.className = "cue";
+      cue.textContent = "!";
+      button.append(cue);
+    }
+    elements.nodes.append(button);
+  }
+
+  function drawLevel(level) {
+    const content = levelOf(level);
+    const layout = arrange(level, content);
+    elements.canvas.style.width = layout.width + "px";
+    elements.canvas.style.height = layout.height + "px";
+    elements.arrows.setAttribute("width", layout.width);
+    elements.arrows.setAttribute("height", layout.height);
+    elements.lines.replaceChildren();
+    elements.nodes.replaceChildren();
+    hovered = null;
+    selected = null;
+    drawBreaks();
+    elements.map.scrollTo(0, 0);
+
+    if (model.classes.length === 0) {
+      const empty = document.createElement("p");
+      empty.id = "empty";
+      empty.textContent = "godeps found no packages.";
+      elements.nodes.append(empty);
+      return;
+    }
+    if (layout.frame) {
+      const frame = document.createElement("div");
+      frame.className = "frame";
+      frame.textContent = nodes.get(level).label;
+      frame.style.left = layout.frame.x + "px";
+      frame.style.top = layout.frame.y + "px";
+      frame.style.width = layout.frame.width + "px";
+      frame.style.height = layout.frame.height + "px";
+      elements.nodes.append(frame);
+    }
+    for (const arrow of content.arrows) drawArrow(arrow, layout.places);
+    const stubs = new Set([...content.importers, ...content.imported]);
+    for (const [key, place] of layout.places) drawNode(nodes.get(key), place, stubs.has(key));
+  }
+
+  function crumbsOf(current) {
+    const crumbs = [{ key: TOP, label: "top" }];
+    let names = [];
+    for (const key of chainOf(current.level).slice(1)) {
+      names.push(nodes.get(key).name);
+      if (!opensThrough(key)) {
+        crumbs.push({ key, label: names.join("/") });
+        names = [];
+      }
+    }
+    if (current.card) crumbs.push({ key: current.card, label: nodes.get(current.card).name });
+    return crumbs;
+  }
+
+  function fragmentOf(key) {
+    return "#" + encodeURI(key);
+  }
+
+  function drawCrumbs() {
+    const crumbs = crumbsOf(view);
+    const parts = [];
+    crumbs.forEach((crumb, index) => {
+      if (index > 0) {
+        const separator = document.createElement("span");
+        separator.className = "separator";
+        separator.textContent = "/";
+        parts.push(separator);
+      }
+      const isLast = index === crumbs.length - 1;
+      const part = document.createElement(isLast ? "span" : "a");
+      part.textContent = crumb.label;
+      if (isLast) part.setAttribute("aria-current", "page");
+      else part.href = fragmentOf(crumb.key);
+      parts.push(part);
+    });
+    elements.crumbs.replaceChildren(...parts);
+  }
+
+  function element(tag, className, ...content) {
+    const made = document.createElement(tag);
+    if (className) made.className = className;
+    made.append(...content.filter(Boolean));
+    return made;
+  }
+
+  function editorLink(item, text) {
+    const link = element("a", "", text);
+    link.href = item.url;
+    return link;
+  }
+
+  // Neovim has no URL handler, so a terminal user copies this text instead of following the link.
+  function whereText(item) {
+    return element("code", "where", `${item.file}:${item.line}`);
+  }
+
+  function cardLink(key, text) {
+    const link = element("a", "", text);
+    link.href = fragmentOf(key);
+    return link;
+  }
+
+  function section(title, entries) {
+    if (entries.length === 0) return null;
+    return element("section", "", element("h3", "", `${title} (${entries.length})`), element("ul", "entries", ...entries));
+  }
+
+  function typeEntry(type) {
+    const members = [
+      ...(type.fields ?? []).map((field) => `${field.name} ${field.type}`),
+      ...(type.methods ?? []).map((method) => method.name + (method.signature ?? "")),
+    ];
+    return element(
+      "li",
+      "type",
+      editorLink(type, type.name),
+      type.kind === "other" ? " " : ` ${type.kind} `,
+      whereText(type),
+      members.length > 0 && element("ul", "members", ...members.map((text) => element("li", "", element("code", "", text)))),
+    );
+  }
+
+  // An op with a grade and no numbers is missing from the report. An op with neither is an assembly
+  // stub or a run with no report, so there is no risk to state.
+  function scoreText(op) {
+    if (op.crap !== undefined) {
+      const coverage = (op.coverage * 100).toFixed(1);
+      return `CRAP ${op.crap.toFixed(1)}, complexity ${op.complexity}, coverage ${coverage}%`;
+    }
+    return op.grade ? "No gocrap score, so this counts as high risk" : "";
+  }
+
+  function duplicateEntry(duplicate) {
+    return element(
+      "li",
+      "duplicate",
+      "Duplicate of ",
+      editorLink(duplicate, duplicate.name),
+      " ",
+      whereText(duplicate),
+      ` score ${duplicate.score.toFixed(2)}, `,
+      duplicate.id ? cardLink(classKey(duplicate.id), "open card") : "not on the map",
+    );
+  }
+
+  function opEntry(op) {
+    const score = scoreText(op);
+    const duplicates = op.duplicates ?? [];
+    return element(
+      "li",
+      "op",
+      editorLink(op, op.name),
+      " ",
+      whereText(op),
+      score && element("div", "", element("span", "score grade-" + op.grade, op.grade === "red" ? "! " + score : score)),
+      duplicates.length > 0 && element("ul", "members", ...duplicates.map(duplicateEntry)),
+    );
+  }
+
+  function neighbourEntry(id, edge) {
+    const key = classKey(id);
+    const mark = edge.violations && element("span", "break-mark", " ! breaks a rule");
+    if (mark) mark.title = edge.violations.map((violation) => violation.rule).join("\n");
+    return element("li", "", cardLink(key, nodes.get(key).label), mark);
+  }
+
+  function drawCard() {
+    elements.card.hidden = !view.card;
+    if (!view.card) return;
+    const node = nodes.get(view.card);
+    const { imports, importers } = neighbours.get(node.key) ?? { imports: [], importers: [] };
+    const close = element("button", "", "Close");
+    close.type = "button";
+    close.addEventListener("click", goUp);
+    elements.card.replaceChildren(
+      ...[
+        element("h2", "", node.name),
+        element("p", "", node.label),
+        close,
+        section("Types", node.item.types.map(typeEntry)),
+        section("Functions", node.item.ops.map(opEntry)),
+        section("Imports", imports.map((edge) => neighbourEntry(edge.to, edge))),
+        section("Imported by", importers.map((edge) => neighbourEntry(edge.from, edge))),
+      ].filter(Boolean),
+    );
+    elements.card.scrollTop = 0;
+  }
+
+  function breakEntry(edge, violation) {
+    const [from, to] = [classKey(edge.from), classKey(edge.to)];
+    return element(
+      "li",
+      "",
+      cardLink(from, nodes.get(from).label),
+      " imports ",
+      cardLink(to, nodes.get(to).label),
+      element("ul", "members", ...violation.details.map((detail) => element("li", "", detail))),
+    );
+  }
+
+  // One rule can flag many imports inside a folder arrow, so the rule text prints once.
+  function ruleSections(arrow) {
+    const rules = new Map();
+    for (const edge of arrow.breaks) {
+      for (const violation of edge.violations) {
+        if (!rules.has(violation.rule)) rules.set(violation.rule, []);
+        rules.get(violation.rule).push(breakEntry(edge, violation));
+      }
+    }
+    return [...rules].map(([rule, entries]) => element("section", "", element("h3", "", rule), element("ul", "entries", ...entries)));
+  }
+
+  function drawBreaks() {
+    const arrow = hovered ?? selected;
+    elements.breaks.hidden = !arrow;
+    if (selected) selected.line.classList.add("selected");
+    if (!arrow) return;
+    elements.breaks.classList.toggle("selected", arrow === selected);
+    // A press on a link blurs the arrow, which lands here. Rebuilding the panel between the press
+    // and the release would swallow the click.
+    if (drawnBreaks.arrow === arrow && drawnBreaks.selected === (arrow === selected)) return;
+    drawnBreaks = { arrow, selected: arrow === selected };
+    const heading = element("h2", "", `${nodes.get(arrow.from).label} imports ${nodes.get(arrow.to).label}`);
+    const close = element("button", "", "Close");
+    close.type = "button";
+    close.addEventListener("click", () => selectArrow(null));
+    elements.breaks.replaceChildren(heading, ...ruleSections(arrow), ...(arrow === selected ? [close] : []));
+  }
+
+  function hoverArrow(arrow) {
+    hovered = arrow;
+    drawBreaks();
+  }
+
+  // A second select of one arrow clears it. hovered clears too, or the panel would stay under the
+  // pointer and hide that the select was undone.
+  function selectArrow(arrow) {
+    if (selected) selected.line.classList.remove("selected");
+    selected = arrow === selected ? null : arrow;
+    hovered = null;
+    drawBreaks();
+  }
+
+  function go(key) {
+    location.hash = encodeURI(key);
+  }
+
+  function goUp() {
+    if (view.card) go(view.level);
+    else if (view.level !== TOP) go(nearestLevel(nodes.get(view.level).parent));
+  }
+
+  function readFragment() {
+    try {
+      return decodeURIComponent(location.hash.slice(1));
+    } catch {
+      return TOP;
+    }
+  }
+
+  function render() {
+    const next = viewOf(readFragment());
+    const levelChanged = next.level !== view.level;
+    view = next;
+    if (levelChanged) drawLevel(view.level);
+    drawCrumbs();
+    drawCard();
+  }
+
+  function openFrom(event) {
+    const button = event.target.closest(".node");
+    if (button) go(openTarget(button.dataset.key));
+  }
+
+  elements.nodes.addEventListener("dblclick", openFrom);
+  elements.nodes.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") openFrom(event);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (selected) selectArrow(null);
+    else goUp();
+  });
+  window.addEventListener("hashchange", render);
+  render();
+})();
+</script>
+</body>
+</html>

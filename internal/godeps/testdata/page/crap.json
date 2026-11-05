@@ -1,0 +1,94 @@
+{
+  "findings": [
+    {
+      "file": "billing/invoice/invoice.go",
+      "line": 7,
+      "function": "Add",
+      "score": 30,
+      "complexity": 5,
+      "coverage": 0,
+      "limit": 0
+    },
+    {
+      "file": "gen/gen.go",
+      "line": 3,
+      "function": "Gen",
+      "score": 30,
+      "complexity": 5,
+      "coverage": 0,
+      "limit": 0
+    },
+    {
+      "file": "web/cart/cart.go",
+      "line": 17,
+      "function": "Sum",
+      "score": 6.6000000000000005,
+      "complexity": 5,
+      "coverage": 0.6,
+      "limit": 0
+    },
+    {
+      "file": "billing/tax/tax.go",
+      "line": 8,
+      "function": "Rate",
+      "score": 2,
+      "complexity": 1,
+      "coverage": 0,
+      "limit": 0
+    },
+    {
+      "file": "domain/order.go",
+      "line": 9,
+      "function": "Order.Total",
+      "score": 2,
+      "complexity": 1,
+      "coverage": 0,
+      "limit": 0
+    },
+    {
+      "file": "infra/db/db.go",
+      "line": 3,
+      "function": "Open",
+      "score": 2,
+      "complexity": 1,
+      "coverage": 0,
+      "limit": 0
+    },
+    {
+      "file": "lib/text/text.go",
+      "line": 3,
+      "function": "Trim",
+      "score": 2,
+      "complexity": 1,
+      "coverage": 0,
+      "limit": 0
+    },
+    {
+      "file": "main.go",
+      "line": 5,
+      "function": "main",
+      "score": 2,
+      "complexity": 1,
+      "coverage": 0,
+      "limit": 0
+    },
+    {
+      "file": "web/api/api.go",
+      "line": 5,
+      "function": "Serve",
+      "score": 2,
+      "complexity": 1,
+      "coverage": 0,
+      "limit": 0
+    },
+    {
+      "file": "web/web.go",
+      "line": 10,
+      "function": "Open",
+      "score": 2,
+      "complexity": 1,
+      "coverage": 0,
+      "limit": 0
+    }
+  ]
+}

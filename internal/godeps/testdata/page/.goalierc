@@ -1,0 +1,16 @@
+{
+  "shared": ["lib/**"],
+  "gocrap": {
+    "limit": 8,
+    "sharedLimit": 4
+  },
+  "godeps": {
+    "title": "godeps fixture page",
+    "archGoReport": ".arch-go/report.json",
+    "crapReport": "crap.json",
+    "dryReport": "dry.json",
+    "foreign": ["example.com/lib"],
+    "omit": ["gen"],
+    "order": ["shared"]
+  }
+}

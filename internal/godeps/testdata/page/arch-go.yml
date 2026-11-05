@@ -1,0 +1,22 @@
+version: 1
+threshold:
+  compliance: 100
+  coverage: 0
+dependenciesRules:
+  - package: "example.com/shop/domain"
+    shouldNotDependsOn:
+      internal:
+        - "example.com/shop/infra"
+  - package: "example.com/shop/billing/tax"
+    shouldNotDependsOn:
+      internal:
+        - "example.com/shop/infra"
+        - "example.com/shop/billing/invoice"
+  - package: "example.com/shop/web/cart"
+    shouldNotDependsOn:
+      external:
+        - "example.com/lib"
+  - package: "example.com/shop/web/api"
+    shouldNotDependsOn:
+      internal:
+        - "example.com/shop/billing"

@@ -21,6 +21,7 @@
         apps = {
           godry = { type = "app"; program = "${goalie}/bin/godry"; };
           gocrap = { type = "app"; program = "${goalie}/bin/gocrap"; };
+          godeps = { type = "app"; program = "${goalie}/bin/godeps"; };
         };
 
         devShells.default = pkgs.mkShell {

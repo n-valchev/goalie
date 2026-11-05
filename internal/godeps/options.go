@@ -29,7 +29,9 @@ Flags:
                            function, run gocrap --limit 0 --shared-limit 0
                            --warn-only --format json. Leave out --shared-limit
                            if you set no shared patterns.
-  --dry-report <file>      Read this godry report.
+  --dry-report <file>      Mark each function that this godry report pairs with
+                           another. To make the report, run godry --format json
+                           --warn-only.
   --editor-url <template>  Link to source with {file} and {line}
                            (default file://{file}).
   --title <text>           Title of the map (default: the module path).
@@ -55,9 +57,26 @@ Settings file:
   order    Names of the top-level boxes, in the order to show them. The box of
            the shared code is named shared.
 
+  A flag replaces the setting of the same name. Report paths start from the
+  current directory, so run godeps and the tools that write the reports from the
+  repo root.
+
+  limit and sharedLimit in the "gocrap" object set the grades: green at or below
+  half the limit, yellow at or below it, and red above it. godeps ignores the
+  limit in the report.
+
+  A base setting in the "gocrap" or "godry" object limits that report to new code.
+  With gocrap, every other function then shows as red. With godry, duplicates in
+  old code show no mark. Pass --base on the command line instead.
+
 Exit codes:
   0  The output was written.
-  2  Any error.
+  2  Any error: a bad flag or setting, a Go file that doesn't parse, a missing
+     go.mod, a report path that is set but missing, or a report that isn't valid
+     JSON or lacks its findings.
+
+godeps has no exit code 1, because it checks nothing. Warnings go to stderr and
+do not change the exit code. The README documents the JSON model.
 `
 
 const (
