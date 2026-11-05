@@ -18,6 +18,7 @@ type Type struct {
 	Kind    string   `json:"kind"`
 	File    string   `json:"file"`
 	Line    int      `json:"line"`
+	URL     string   `json:"url"`
 	Fields  []Field  `json:"fields,omitempty"`
 	Methods []Method `json:"methods,omitempty"`
 }
@@ -41,6 +42,7 @@ type Op struct {
 	Line     int    `json:"line"`
 	EndLine  int    `json:"endLine"`
 	Exported bool   `json:"exported"`
+	URL      string `json:"url"`
 }
 
 // fileReader turns one parsed file into model entries.
@@ -48,6 +50,7 @@ type fileReader struct {
 	fset   *token.FileSet
 	file   string
 	source []byte
+	link   func(file string, line int) string
 }
 
 // line ignores //line directives, because gocrap and godry rows match on the line in the file.
@@ -68,12 +71,14 @@ func (r fileReader) ops(parsed *ast.File) []Op {
 	var ops []Op
 	for _, decl := range parsed.Decls {
 		if fn, ok := decl.(*ast.FuncDecl); ok {
+			line := r.line(fn.Pos())
 			ops = append(ops, Op{
 				Name:     opName(fn),
 				File:     r.file,
-				Line:     r.line(fn.Pos()),
+				Line:     line,
 				EndLine:  r.line(fn.End() - 1),
 				Exported: fn.Name.IsExported(),
+				URL:      r.link(r.file, line),
 			})
 		}
 	}
@@ -90,7 +95,8 @@ func opName(fn *ast.FuncDecl) string {
 func (r fileReader) types(parsed *ast.File) []Type {
 	var types []Type
 	for _, spec := range typeSpecs(parsed) {
-		entry := Type{Name: spec.Name.Name, Kind: kindOther, File: r.file, Line: r.line(spec.Pos())}
+		line := r.line(spec.Pos())
+		entry := Type{Name: spec.Name.Name, Kind: kindOther, File: r.file, Line: line, URL: r.link(r.file, line)}
 		switch typ := ast.Unparen(spec.Type).(type) {
 		case *ast.StructType:
 			entry.Kind, entry.Fields = kindStruct, r.fields(typ)

@@ -51,14 +51,15 @@ type Edge struct {
 }
 
 type Source struct {
-	Dir     string
-	Files   []string // Sorted slash-separated paths relative to Dir, as files.Find returns them.
-	Module  string
-	Title   string
-	Shared  []string // Patterns for files.MatchesAny.
-	Foreign []string // Module paths.
-	Omit    []string // Patterns for files.MatchesAny, matched against a class's path.
-	Order   []string
+	Dir       string   // Absolute, because editor links hold absolute paths.
+	Files     []string // Sorted slash-separated paths relative to Dir, as files.Find returns them.
+	Module    string
+	Title     string
+	Shared    []string // Patterns for files.MatchesAny.
+	Foreign   []string // Module paths.
+	Omit      []string // Patterns for files.MatchesAny, matched against a class's path.
+	Order     []string
+	EditorURL string // Template with {file} and {line}.
 }
 
 func Build(source Source) (Model, error) {
@@ -76,7 +77,7 @@ func Build(source Source) (Model, error) {
 		if files.MatchesAny(source.Omit, folder) {
 			continue
 		}
-		parsed, reader, err := parseFile(fset, source.Dir, file)
+		parsed, reader, err := parseFile(fset, source, file)
 		if err != nil {
 			return Model{}, err
 		}
@@ -170,13 +171,13 @@ func isAtOrBelow(imported, root string) bool {
 	return imported == root || strings.HasPrefix(imported, root+"/")
 }
 
-func parseFile(fset *token.FileSet, dir, file string) (*ast.File, fileReader, error) {
-	source, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
+func parseFile(fset *token.FileSet, source Source, file string) (*ast.File, fileReader, error) {
+	content, err := os.ReadFile(filepath.Join(source.Dir, filepath.FromSlash(file)))
 	if err != nil {
 		return nil, fileReader{}, err
 	}
-	parsed, err := parser.ParseFile(fset, file, source, parser.SkipObjectResolution)
-	return parsed, fileReader{fset, file, source}, err
+	parsed, err := parser.ParseFile(fset, file, content, parser.SkipObjectResolution)
+	return parsed, fileReader{fset, file, content, source.URL}, err
 }
 
 func classID(module, folder string) string {

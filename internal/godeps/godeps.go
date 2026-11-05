@@ -42,14 +42,15 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 	}
 	opts.WarnUnmatched(stderr, "godeps", paths)
 	source := model.Source{
-		Dir:     dir,
-		Files:   paths,
-		Module:  module,
-		Title:   cmp.Or(opts.title, module),
-		Shared:  opts.Shared,
-		Foreign: opts.foreign,
-		Omit:    opts.omit,
-		Order:   opts.order,
+		Dir:       dir,
+		Files:     paths,
+		Module:    module,
+		Title:     cmp.Or(opts.title, module),
+		Shared:    opts.Shared,
+		Foreign:   opts.foreign,
+		Omit:      opts.omit,
+		Order:     opts.order,
+		EditorURL: cmp.Or(opts.editorURL, defaultEditorURL),
 	}
 	result, err := model.Build(source)
 	if err != nil {

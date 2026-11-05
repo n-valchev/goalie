@@ -25,7 +25,8 @@ Flags:
                            arch-go --json || true to write .arch-go/report.json.
   --crap-report <file>     Read this gocrap report.
   --dry-report <file>      Read this godry report.
-  --editor-url <template>  Link to source with {file} and {line}.
+  --editor-url <template>  Link to source with {file} and {line}
+                           (default file://{file}).
   --title <text>           Title of the map (default: the module path).
   --skip-tags a,b          Skip files that can only build with these tags.
   --skip-files a,b         Skip files that match these patterns, with the rules
@@ -57,6 +58,8 @@ Exit codes:
 const (
 	formatHTML = "html"
 	formatJSON = "json"
+
+	defaultEditorURL = "file://{file}"
 )
 
 type options struct {
