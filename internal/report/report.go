@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/n-valchev/godry/internal/compare"
+	"github.com/n-valchev/goalie/internal/compare"
 )
 
 func Text(w io.Writer, pairs []compare.Pair) error {

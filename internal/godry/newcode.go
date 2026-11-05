@@ -1,8 +1,8 @@
-package cli
+package godry
 
 import (
-	"github.com/n-valchev/godry/internal/compare"
-	"github.com/n-valchev/godry/internal/gitchange"
+	"github.com/n-valchev/goalie/internal/compare"
+	"github.com/n-valchev/goalie/internal/gitchange"
 )
 
 func findNew(all []compare.Candidate, changes gitchange.Changes) compare.NewFunctions {

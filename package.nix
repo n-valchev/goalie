@@ -1,7 +1,7 @@
 { lib, buildGoModule, git, makeWrapper }:
 
 buildGoModule {
-  pname = "godry";
+  pname = "goalie";
   version = "0.1.0";
 
   src = ./.;
@@ -15,12 +15,14 @@ buildGoModule {
 
   # --suffix, not --prefix: a git the user already has must win.
   postInstall = ''
-    wrapProgram $out/bin/godry --suffix PATH : ${lib.makeBinPath [ git ]}
+    for tool in $out/bin/*; do
+      wrapProgram "$tool" --suffix PATH : ${lib.makeBinPath [ git ]}
+    done
   '';
 
   meta = {
-    description = "Finds Go functions with the same structure";
-    homepage = "https://github.com/n-valchev/godry";
+    description = "Checks that keep coding agents from adding poor code";
+    homepage = "https://github.com/n-valchev/goalie";
     license = lib.licenses.bsd0;
     mainProgram = "godry";
     platforms = lib.platforms.unix;

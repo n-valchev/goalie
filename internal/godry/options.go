@@ -1,4 +1,4 @@
-package cli
+package godry
 
 import (
 	"errors"
@@ -7,9 +7,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/n-valchev/godry/internal/compare"
-	"github.com/n-valchev/godry/internal/files"
-	"github.com/n-valchev/godry/internal/report"
+	"github.com/n-valchev/goalie/internal/compare"
+	"github.com/n-valchev/goalie/internal/files"
+	"github.com/n-valchev/goalie/internal/report"
 )
 
 const usage = `godry finds Go functions with the same structure.

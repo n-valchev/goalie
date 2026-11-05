@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/n-valchev/godry/internal/cli"
+	"github.com/n-valchev/goalie/internal/godry"
 )
 
 func main() {
@@ -14,5 +14,5 @@ func main() {
 		fmt.Fprintf(os.Stderr, "godry: %v\n", err)
 		os.Exit(2)
 	}
-	os.Exit(cli.Run(os.Args[1:], dir, os.Stdout, os.Stderr))
+	os.Exit(godry.Run(os.Args[1:], dir, os.Stdout, os.Stderr))
 }

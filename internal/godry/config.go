@@ -1,4 +1,4 @@
-package cli
+package godry
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/n-valchev/godry/internal/files"
+	"github.com/n-valchev/goalie/internal/files"
 )
 
 const configFile = ".godryrc"

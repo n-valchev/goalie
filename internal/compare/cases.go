@@ -3,7 +3,7 @@ package compare
 import (
 	"strings"
 
-	"github.com/n-valchev/godry/internal/files"
+	"github.com/n-valchev/goalie/internal/files"
 )
 
 // Case says where the two functions of a pair are, because the right fix depends on it.

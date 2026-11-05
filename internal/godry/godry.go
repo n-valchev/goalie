@@ -1,16 +1,16 @@
-// Package cli is the command-line module and the only public seam of godry.
-package cli
+// Package godry is the command-line module and the only public seam of the godry tool.
+package godry
 
 import (
 	"fmt"
 	"io"
 
-	"github.com/n-valchev/godry/internal/compare"
-	"github.com/n-valchev/godry/internal/extract"
-	"github.com/n-valchev/godry/internal/files"
-	"github.com/n-valchev/godry/internal/fingerprint"
-	"github.com/n-valchev/godry/internal/gitchange"
-	"github.com/n-valchev/godry/internal/report"
+	"github.com/n-valchev/goalie/internal/compare"
+	"github.com/n-valchev/goalie/internal/extract"
+	"github.com/n-valchev/goalie/internal/files"
+	"github.com/n-valchev/goalie/internal/fingerprint"
+	"github.com/n-valchev/goalie/internal/gitchange"
+	"github.com/n-valchev/goalie/internal/report"
 )
 
 const (

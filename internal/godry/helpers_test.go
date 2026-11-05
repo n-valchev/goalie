@@ -1,4 +1,4 @@
-package cli_test
+package godry_test
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/n-valchev/godry/internal/cli"
+	"github.com/n-valchev/goalie/internal/godry"
 )
 
 func writeTree(t *testing.T, files map[string]string) string {
@@ -33,7 +33,7 @@ func write(t *testing.T, dir, name, content string) {
 func runGodry(t *testing.T, dir string, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code = cli.Run(args, dir, &out, &errOut)
+	code = godry.Run(args, dir, &out, &errOut)
 	return code, out.String(), errOut.String()
 }
 

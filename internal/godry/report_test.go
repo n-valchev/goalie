@@ -1,4 +1,4 @@
-package cli_test
+package godry_test
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/n-valchev/godry/internal/cli"
+	"github.com/n-valchev/goalie/internal/godry"
 )
 
 type jsonReport struct {
@@ -336,7 +336,7 @@ func TestFailedWriteOfTheReportExitsTwo(t *testing.T) {
 	for _, format := range []string{"text", "json"} {
 		t.Run(format, func(t *testing.T) {
 			var stderr bytes.Buffer
-			code := cli.Run([]string{"--format", format, "--warn-only"}, dir, failingWriter{}, &stderr)
+			code := godry.Run([]string{"--format", format, "--warn-only"}, dir, failingWriter{}, &stderr)
 			if code != 2 {
 				t.Errorf("exit code = %d, want 2", code)
 			}

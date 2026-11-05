@@ -10,9 +10,9 @@ Choose one method.
 
 | Method | Command | What you need |
 | --- | --- | --- |
-| Go | `go install github.com/n-valchev/godry@latest` | Go 1.25 or later |
-| Nix, run once | `nix run github:n-valchev/godry -- --help` | Nix with flakes |
-| Nix, keep on your `PATH` | `nix profile add github:n-valchev/godry` | Nix with flakes |
+| Go | `go install github.com/n-valchev/goalie/cmd/godry@latest` | Go 1.25 or later |
+| Nix, run once | `nix run github:n-valchev/goalie#godry -- --help` | Nix with flakes |
+| Nix, keep on your `PATH` | `nix profile add github:n-valchev/goalie` | Nix with flakes |
 
 To check the install, run `godry --help`. The command prints the modes, flags, skip rules, and exit codes.
 
@@ -22,11 +22,11 @@ To add godry to your own Nix package set, use the overlay:
 
 ```nix
 {
-  inputs.godry.url = "github:n-valchev/godry";
+  inputs.goalie.url = "github:n-valchev/goalie";
 
   # In your NixOS or nixpkgs configuration:
-  # nixpkgs.overlays = [ godry.overlays.default ];
-  # After that, the package is pkgs.godry.
+  # nixpkgs.overlays = [ goalie.overlays.default ];
+  # After that, the package is pkgs.goalie.
 }
 ```
 
@@ -268,7 +268,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
-      - run: go install github.com/n-valchev/godry@latest
+      - run: go install github.com/n-valchev/goalie/cmd/godry@latest
       - run: "$(go env GOPATH)/bin/godry --base origin/${{ github.base_ref }}"
 ```
 

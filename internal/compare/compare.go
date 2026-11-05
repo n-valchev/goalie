@@ -4,8 +4,8 @@ package compare
 import (
 	"sort"
 
-	"github.com/n-valchev/godry/internal/extract"
-	"github.com/n-valchev/godry/internal/fingerprint"
+	"github.com/n-valchev/goalie/internal/extract"
+	"github.com/n-valchev/goalie/internal/fingerprint"
 )
 
 // Candidate is a function that passed the size limits.

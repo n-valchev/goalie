@@ -1,5 +1,5 @@
 {
-  description = "godry finds Go functions with the same structure";
+  description = "goalie: checks that keep coding agents from adding poor code";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -10,11 +10,17 @@
     (flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        goalie = pkgs.callPackage ./package.nix { };
       in
       {
         packages = {
-          godry = pkgs.callPackage ./package.nix { };
-          default = self.packages.${system}.godry;
+          inherit goalie;
+          default = goalie;
+        };
+
+        apps = {
+          godry = { type = "app"; program = "${goalie}/bin/godry"; };
+          gocrap = { type = "app"; program = "${goalie}/bin/gocrap"; };
         };
 
         devShells.default = pkgs.mkShell {
@@ -23,7 +29,7 @@
       }
     )) // {
       overlays.default = final: prev: {
-        godry = final.callPackage ./package.nix { };
+        goalie = final.callPackage ./package.nix { };
       };
     };
 }
