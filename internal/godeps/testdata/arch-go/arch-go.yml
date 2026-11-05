@@ -1,0 +1,13 @@
+version: 1
+threshold:
+  compliance: 100
+  coverage: 0
+dependenciesRules:
+  - package: "example.com/shop/domain"
+    shouldNotDependsOn:
+      internal:
+        - "example.com/shop/infra"
+  - package: "example.com/shop/app"
+    shouldOnlyDependsOn:
+      internal:
+        - "example.com/shop/infra"

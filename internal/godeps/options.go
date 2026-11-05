@@ -21,7 +21,8 @@ test files, the standard library, and imports of code it didn't scan.
 Flags:
   --format F               Output format: html or json (default html). html is
                            not available yet, so use json.
-  --arch-go-report <file>  Read this arch-go report.
+  --arch-go-report <file>  Mark the edges that this arch-go report flags. Run
+                           arch-go --json || true to write .arch-go/report.json.
   --crap-report <file>     Read this gocrap report.
   --dry-report <file>      Read this godry report.
   --editor-url <template>  Link to source with {file} and {line}.

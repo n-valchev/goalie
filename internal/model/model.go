@@ -44,9 +44,10 @@ type Class struct {
 }
 
 type Edge struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-	Kind string `json:"kind"`
+	From       string      `json:"from"`
+	To         string      `json:"to"`
+	Kind       string      `json:"kind"`
+	Violations []Violation `json:"violations,omitempty"`
 }
 
 type Source struct {
@@ -115,7 +116,7 @@ func Build(source Source) (Model, error) {
 		for _, target := range importTargets(imports[class.ID], source, scanned) {
 			// A tool in the same folder can import its library, and that is no edge between classes.
 			if target != class.ID {
-				result.Edges = append(result.Edges, Edge{class.ID, target, kindDependency})
+				result.Edges = append(result.Edges, Edge{From: class.ID, To: target, Kind: kindDependency})
 			}
 		}
 	}

@@ -41,7 +41,7 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	opts.WarnUnmatched(stderr, "godeps", paths)
-	result, err := model.Build(model.Source{
+	source := model.Source{
 		Dir:     dir,
 		Files:   paths,
 		Module:  module,
@@ -50,8 +50,12 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 		Foreign: opts.foreign,
 		Omit:    opts.omit,
 		Order:   opts.order,
-	})
+	}
+	result, err := model.Build(source)
 	if err != nil {
+		return fail(stderr, err)
+	}
+	if err := joinArchGo(dir, opts.archGoReport, &result, source, stderr); err != nil {
 		return fail(stderr, err)
 	}
 	warnUnmatchedOrder(stderr, result)

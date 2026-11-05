@@ -1,0 +1,110 @@
+{
+  "version": "master",
+  "summary": {
+    "pass": false,
+    "timestamp": "2026-11-05T15:33:47.812609+02:00",
+    "duration": 577666
+  },
+  "compliance": {
+    "pass": false,
+    "rate": 0,
+    "threshold": 100,
+    "total": 2,
+    "passed": 0,
+    "failed": 2,
+    "summary": [
+      ""
+    ],
+    "details": {
+      "dependenciesRules": {
+        "total": 2,
+        "passed": 0,
+        "failed": 2,
+        "details": [
+          {
+            "rule": "Packages matching pattern 'example.com/shop/domain' should ['not depend on internal packages that matches [[example.com/shop/infra]]']",
+            "pass": false,
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "packageDetails": [
+              {
+                "package": "example.com/shop/domain",
+                "pass": false,
+                "details": [
+                  "ShouldNotDependsOn.Internal rule contains imported package 'example.com/shop/infra'",
+                  "ShouldNotDependsOn.Internal rule found a package with no quoted path"
+                ]
+              }
+            ]
+          },
+          {
+            "rule": "Packages matching pattern 'example.com/shop/app' should ['only depend on internal packages that matches [[example.com/shop/infra]]']",
+            "pass": false,
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "packageDetails": [
+              {
+                "package": "example.com/shop/app",
+                "pass": false,
+                "details": [
+                  "ShouldOnlyDependsOn.Internal rule doesn't contains imported package 'example.com/shop/domain'"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "functionsRules": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0
+      },
+      "contentsRules": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0
+      },
+      "namingRules": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0
+      }
+    }
+  },
+  "coverage": {
+    "pass": true,
+    "rate": 66,
+    "threshold": 0,
+    "uncoveredPackages": [
+      "example.com/shop/infra"
+    ],
+    "details": [
+      {
+        "package": "example.com/shop/app",
+        "contentsRules": 0,
+        "dependenciesRules": 1,
+        "functionsRules": 0,
+        "namingRules": 0,
+        "covered": true
+      },
+      {
+        "package": "example.com/shop/domain",
+        "contentsRules": 0,
+        "dependenciesRules": 1,
+        "functionsRules": 0,
+        "namingRules": 0,
+        "covered": true
+      },
+      {
+        "package": "example.com/shop/infra",
+        "contentsRules": 0,
+        "dependenciesRules": 0,
+        "functionsRules": 0,
+        "namingRules": 0,
+        "covered": false
+      }
+    ]
+  }
+}

@@ -53,7 +53,7 @@ func compositionEdges(files []fileEmbeds, classes []Class) []Edge {
 		targets := importedClasses(file.imports, clauses)
 		for _, qualifier := range file.qualifiers {
 			if target, ok := targets[qualifier]; ok && target != file.from {
-				edges = append(edges, Edge{file.from, target, kindComposition})
+				edges = append(edges, Edge{From: file.from, To: target, Kind: kindComposition})
 			}
 		}
 	}
