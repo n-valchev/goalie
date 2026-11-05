@@ -340,7 +340,7 @@ Set the limits in the `gocrap` object of `.goalierc`:
 | `limit` | `--limit` | Number | `30` |
 | `sharedLimit` | `--shared-limit` | Number | The value of `limit` |
 | `coverCommand` | None | String | See [Measure all your test suites](#measure-all-your-test-suites) |
-| `coverProfiles` | `--cover-profiles` | List of strings | None |
+| `coverProfiles` | `--cover-profiles` | List of strings, each a file or a glob | None |
 | `format` | `--format` | `"text"` or `"json"` | `"text"` |
 | `warnOnly` | `--warn-only` | `true` or `false` | `false` |
 
@@ -385,7 +385,7 @@ go tool covdata textfmt -i="$GOCRAP_COVER_DIR/raw" -o="$GOCRAP_COVER_DIR/e2e.out
 - A function in no profile has 0% coverage. This includes files that no test run builds, such as files for another platform. To leave them out, use `skipFiles` or `skipTags`.
 - gocrap runs the tests in new-code mode too, because any test can cover a changed function. If no function changed, it runs nothing.
 
-If CI has already run the tests, list the files in `coverProfiles`, or pass `--cover-profiles a.out,b.out`. gocrap then runs no command. Setting both `coverCommand` and `coverProfiles` in the file is an error, but `--cover-profiles` replaces either one for a run.
+If CI has already run the tests, list the files in `coverProfiles`, or pass `--cover-profiles a.out,b.out`. gocrap then runs no command. An entry may be a glob, such as `--cover-profiles 'coverage/*.out'`. A glob matches files only, and a glob that matches no file is an error. Setting both `coverCommand` and `coverProfiles` in the file is an error, but `--cover-profiles` replaces either one for a run.
 
 gocrap supports one Go module, and it reads `go.mod` from the directory it runs in, or above it. A profile that holds a file outside that module is an error. Limit `paths` to one module if your repo holds several.
 

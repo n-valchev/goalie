@@ -38,7 +38,8 @@ Flags:
   --shared-limit N   Use this limit for shared code, which needs --shared or
                      shared in .goalierc (default: the value of --limit).
   --cover-profiles a,b
-                     Read these coverage profiles and run no command.
+                     Read these coverage profiles and run no command. Each
+                     entry may be a glob, such as 'coverage/*.out'.
   --format F         Output format: text or json (default text).
   --warn-only        Exit with 0 when functions are over the limit.
   --skip-tags a,b    Skip files that can only build with these tags.

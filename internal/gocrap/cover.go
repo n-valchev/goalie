@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/n-valchev/goalie/internal/coverage"
 )
@@ -19,12 +20,19 @@ const defaultCoverCommand = `go test -coverpkg=./... -coverprofile="$` + coverDi
 func gather(dir string, opts options, stderr io.Writer) (coverage.Profile, error) {
 	profile := coverage.Profile{}
 	if len(opts.coverProfiles) > 0 {
-		for _, file := range opts.coverProfiles {
-			if !filepath.IsAbs(file) {
-				file = filepath.Join(dir, file)
+		for _, entry := range opts.coverProfiles {
+			if !filepath.IsAbs(entry) {
+				entry = filepath.Join(dir, entry)
 			}
-			if err := profile.Read(file); err != nil {
+			files, err := expand(entry)
+			if err != nil {
 				return nil, err
+			}
+			// Merging is idempotent, so a file that two entries match needs no de-duplication.
+			for _, file := range files {
+				if err := profile.Read(file); err != nil {
+					return nil, err
+				}
 			}
 		}
 		return profile.Local(dir)
@@ -48,6 +56,28 @@ func gather(dir string, opts options, stderr io.Writer) (coverage.Profile, error
 		return nil, err
 	}
 	return profile.Local(dir)
+}
+
+// expand keeps a plain path as it is, so that a missing file fails when it is read. A glob that
+// matches nothing is an error, because a mistyped pattern would otherwise give false low coverage.
+func expand(entry string) ([]string, error) {
+	if !strings.ContainsAny(entry, `*?[\`) {
+		return []string{entry}, nil
+	}
+	matches, err := filepath.Glob(entry)
+	if err != nil {
+		return nil, fmt.Errorf("cover profile pattern %q: %w", entry, err)
+	}
+	var files []string
+	for _, match := range matches {
+		if info, err := os.Stat(match); err == nil && info.Mode().IsRegular() {
+			files = append(files, match)
+		}
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("cover profile pattern %q matches no file", entry)
+	}
+	return files, nil
 }
 
 // readFolder skips subfolders, so that a command can keep raw GOCOVERDIR data there.

@@ -119,3 +119,44 @@ func TestSmall(t *testing.T) {
 	wantStdout(t, stdout, "other/b.go:3: Untested scores 6.0 (complexity 2, coverage 0.0%, limit 1)\n"+
 		"a.go:3: Small scores 2.0 (complexity 2, coverage 100.0%, limit 1)\n")
 }
+
+func globTree(t *testing.T) string {
+	return writeTree(t, map[string]string{
+		"go.mod":         goMod,
+		"a.go":           decideFile,
+		"cov/unit.out":   "mode: set\nexample.com/m/a.go:4.2,4.10 1 1\nexample.com/m/a.go:7.2,7.10 1 0\n",
+		"cov/e2e.out":    "mode: set\nexample.com/m/a.go:7.2,7.10 1 1\n",
+		"cov/raw/x.out":  "not a profile",
+		"other/more.out": halfCovered,
+	})
+}
+
+func TestACoverProfilesGlobReadsEveryMatchAndSkipsFolders(t *testing.T) {
+	stdout, _ := run(t, globTree(t), 0, "--cover-profiles", "cov/*", "--limit", "6")
+	wantStdout(t, stdout, "No functions over the limit.\n")
+}
+
+func TestAnAbsoluteCoverProfilesGlobWorks(t *testing.T) {
+	dir := globTree(t)
+	run(t, dir, 0, "--cover-profiles", filepath.Join(dir, "cov", "*.out"), "--limit", "6")
+}
+
+func TestAFileMatchedTwiceMergesTheSameAsOnce(t *testing.T) {
+	dir := globTree(t)
+	stdout, _ := run(t, dir, 1, "--cover-profiles", "other/more.out,other/*.out", "--limit", "0")
+	once, _ := run(t, dir, 1, "--cover-profiles", "other/more.out", "--limit", "0")
+	if stdout != once {
+		t.Errorf("stdout = %q; want %q", stdout, once)
+	}
+}
+
+func TestAGlobWithNoMatchIsAnErrorThatNamesThePattern(t *testing.T) {
+	_, stderr := run(t, globTree(t), 2, "--cover-profiles", "cov/*.xyz")
+	if !strings.Contains(stderr, "cov/*.xyz") {
+		t.Errorf("stderr = %q; want the pattern named", stderr)
+	}
+}
+
+func TestAMalformedCoverProfilesGlobIsAnError(t *testing.T) {
+	run(t, globTree(t), 2, "--cover-profiles", "cov/[")
+}
