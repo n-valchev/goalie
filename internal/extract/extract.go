@@ -93,7 +93,7 @@ func parseFile(dir, file, directive string) ([]Function, error) {
 			File:      file,
 			Package:   path.Join(path.Dir(file), parsed.Name.Name),
 			Name:      fn.Name.Name,
-			Receiver:  receiverType(fn),
+			Receiver:  ReceiverType(fn),
 			StartLine: fileLine(fset, fn.Pos()),
 			EndLine:   fileLine(fset, fn.Body.Rbrace),
 			Decl:      fn,
@@ -107,9 +107,9 @@ func fileLine(fset *token.FileSet, pos token.Pos) int {
 	return fset.PositionFor(pos, false).Line
 }
 
-// receiverType drops the pointer and type parameters, because platform variants of one method
+// ReceiverType drops the pointer and type parameters, because platform variants of one method
 // need not agree on them: `(s *Set[T])` in one file and `(s Set[K])` in another name the same type.
-func receiverType(fn *ast.FuncDecl) string {
+func ReceiverType(fn *ast.FuncDecl) string {
 	if fn.Recv == nil || len(fn.Recv.List) == 0 {
 		return ""
 	}

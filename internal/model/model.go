@@ -39,6 +39,8 @@ type Class struct {
 	Path    string `json:"path,omitempty"`
 	Package string `json:"package,omitempty"`
 	Foreign bool   `json:"foreign,omitempty"`
+	Types   []Type `json:"types"`
+	Ops     []Op   `json:"ops"`
 }
 
 type Edge struct {
@@ -61,6 +63,7 @@ type Source struct {
 func Build(source Source) (Model, error) {
 	imports := map[string][]string{}
 	classes := map[string]*Class{}
+	var embeds []fileEmbeds
 	shared := map[string]bool{}
 	fset := token.NewFileSet()
 	for _, file := range source.Files {
@@ -72,13 +75,13 @@ func Build(source Source) (Model, error) {
 		if files.MatchesAny(source.Omit, folder) {
 			continue
 		}
-		parsed, err := parseFile(fset, source.Dir, file)
+		parsed, reader, err := parseFile(fset, source.Dir, file)
 		if err != nil {
 			return Model{}, err
 		}
 		class := classes[folder]
 		if class == nil {
-			class = &Class{ID: classID(source.Module, folder), Path: folder}
+			class = &Class{ID: classID(source.Module, folder), Path: folder, Types: []Type{}, Ops: []Op{}}
 			classes[folder] = class
 		}
 		// A folder can also hold a tagged `main` tool. The other clause is the one that imports use.
@@ -86,6 +89,9 @@ func Build(source Source) (Model, error) {
 			class.Name = parsed.Name.Name
 		}
 		imports[class.ID] = append(imports[class.ID], importPaths(parsed)...)
+		class.Types = append(class.Types, reader.types(parsed)...)
+		class.Ops = append(class.Ops, reader.ops(parsed)...)
+		embeds = append(embeds, readEmbeds(class.ID, parsed))
 		if files.MatchesAny(source.Shared, file) {
 			shared[class.ID] = true
 		}
@@ -113,10 +119,14 @@ func Build(source Source) (Model, error) {
 			}
 		}
 	}
+	// Before the foreign classes join, because a composition edge only joins classes in the module.
+	result.Edges = append(result.Edges, compositionEdges(embeds, result.Classes)...)
+	slices.SortFunc(result.Edges, compareEdges)
+	result.Edges = slices.CompactFunc(result.Edges, func(a, b Edge) bool { return compareEdges(a, b) == 0 })
 	for _, edge := range result.Edges {
 		if !scanned[edge.To] {
 			scanned[edge.To] = true
-			result.Classes = append(result.Classes, Class{ID: edge.To, Name: edge.To, Foreign: true})
+			result.Classes = append(result.Classes, Class{ID: edge.To, Name: edge.To, Foreign: true, Types: []Type{}, Ops: []Op{}})
 		}
 	}
 	slices.SortFunc(result.Classes, byID)
@@ -159,12 +169,13 @@ func isAtOrBelow(imported, root string) bool {
 	return imported == root || strings.HasPrefix(imported, root+"/")
 }
 
-func parseFile(fset *token.FileSet, dir, file string) (*ast.File, error) {
+func parseFile(fset *token.FileSet, dir, file string) (*ast.File, fileReader, error) {
 	source, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
 	if err != nil {
-		return nil, err
+		return nil, fileReader{}, err
 	}
-	return parser.ParseFile(fset, file, source, parser.SkipObjectResolution)
+	parsed, err := parser.ParseFile(fset, file, source, parser.SkipObjectResolution)
+	return parsed, fileReader{fset, file, source}, err
 }
 
 func classID(module, folder string) string {
@@ -177,9 +188,13 @@ func classID(module, folder string) string {
 func importPaths(file *ast.File) []string {
 	paths := make([]string, 0, len(file.Imports))
 	for _, spec := range file.Imports {
-		// The parser has already rejected a path that doesn't unquote.
-		value, _ := strconv.Unquote(spec.Path.Value)
-		paths = append(paths, value)
+		paths = append(paths, importPath(spec))
 	}
 	return paths
+}
+
+func importPath(spec *ast.ImportSpec) string {
+	// The parser has already rejected a path that doesn't unquote.
+	value, _ := strconv.Unquote(spec.Path.Value)
+	return value
 }
