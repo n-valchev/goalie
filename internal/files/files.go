@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const ignoreFile = ".godryignore"
+const ignoreFile = ".goalieignore"
 
 // Rules holds the user's choices for the file-level skip rules.
 type Rules struct {
@@ -131,7 +131,7 @@ func Unmatched(patterns, paths []string) []string {
 	return unmatched
 }
 
-// ReadIgnoreFile returns the patterns in dir's .godryignore. It looks in no other folder, because
+// ReadIgnoreFile returns the patterns in dir's .goalieignore. It looks in no other folder, because
 // whole-repo mode has no repo root to stop at, and a search upward could find an unrelated file.
 func ReadIgnoreFile(dir string) ([]string, error) {
 	content, err := os.ReadFile(filepath.Join(dir, ignoreFile))

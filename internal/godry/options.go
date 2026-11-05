@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/n-valchev/goalie/internal/cliflags"
 	"github.com/n-valchev/goalie/internal/compare"
 	"github.com/n-valchev/goalie/internal/files"
 	"github.com/n-valchev/goalie/internal/report"
@@ -24,7 +25,7 @@ Modes:
       New code: compare each new or changed function with every scanned
       function. Report only pairs with at least one new or changed function.
 
-Paths limit both modes. With no paths, godry uses the paths in .godryrc, or
+Paths limit both modes. With no paths, godry uses the paths in .goalierc, or
 else scans the current directory tree.
 
 Flags:
@@ -62,22 +63,23 @@ Skip rules, for both modes and for paths you name:
   - Files with the header "Code generated ... DO NOT EDIT."
   - Files with an ignore build constraint.
   - Files that can only build with a tag in --skip-tags.
-  - Files that match a pattern in --skip-files or in .godryignore.
+  - Files that match a pattern in --skip-files or in .goalieignore.
   - Pairs in one package with the same function name and the same receiver type.
   - Functions with //godry:ignore <reason> in the comment directly above them.
 Other build constraints and GOOS or GOARCH file suffixes have no effect.
 
 Ignore file:
-  godry reads .godryignore from the current directory only. Write one
+  godry reads .goalieignore from the current directory only. Write one
   --skip-files pattern per line. Lines that start with # are comments.
   Both the file and the flag apply. ! and a trailing / are errors.
 
 Settings file:
-  godry reads .godryrc from the current directory only. It holds one JSON
-  object with any of these settings: paths, base, threshold, minLines,
-  minNodes, weakAnchors, weakLiterals, format, warnOnly, includeTests,
-  skipTags, skipFiles, shared. A flag or a path on the command line replaces the same
-  setting. Patterns in skipFiles, --skip-files, and .godryignore all apply.
+  godry reads .goalierc from the current directory only. It holds one JSON
+  object. These settings at the top level apply to all goalie tools: paths,
+  skipTags, skipFiles, shared. These settings go in the "godry" object: base,
+  threshold, minLines, minNodes, weakAnchors, weakLiterals, format, warnOnly,
+  includeTests. A flag or a path on the command line replaces the same
+  setting. Patterns in skipFiles, --skip-files, and .goalieignore all apply.
 
 Exit codes:
   0  No duplicates, or duplicates with --warn-only.
@@ -153,31 +155,14 @@ func parseOptions(args []string) (options, error) {
 		return err
 	})
 
-	// The flag package stops at the first path, which would silently turn a later flag into a path.
-	for rest := args; ; {
-		err := flags.Parse(rest)
-		if errors.Is(err, flag.ErrHelp) {
-			opts.help = true
-			return opts, nil
-		}
-		if err != nil {
-			return opts, err
-		}
-		remaining := flags.Args()
-		consumed := rest[:len(rest)-len(remaining)]
-		if len(consumed) > 0 && consumed[len(consumed)-1] == "--" {
-			opts.paths = append(opts.paths, remaining...)
-			break
-		}
-		if len(remaining) == 0 {
-			break
-		}
-		opts.paths = append(opts.paths, remaining[0])
-		rest = remaining[1:]
+	parsed, err := cliflags.Parse(flags, args)
+	if err != nil {
+		return opts, err
 	}
-	// A flag's value alone can't show this, because a flag set to its default must still win.
-	opts.fromFlags = map[string]bool{}
-	flags.Visit(func(set *flag.Flag) { opts.fromFlags[set.Name] = true })
+	opts.paths, opts.help, opts.fromFlags = parsed.Paths, parsed.Help, parsed.Set
+	if opts.help {
+		return opts, nil
+	}
 	return opts, opts.validate()
 }
 

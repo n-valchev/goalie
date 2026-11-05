@@ -97,7 +97,7 @@ func TestSharedCanBeRepeated(t *testing.T) {
 
 func TestConfigSetsShared(t *testing.T) {
 	dir := pairTree(t, "pkg/a.go", "billing/b.go")
-	write(t, dir, ".godryrc", `{"shared": ["pkg/**"]}`)
+	write(t, dir, ".goalierc", `{"shared": ["pkg/**"]}`)
 	stdout, _ := wantCode(t, dir, 1)
 	if !strings.Contains(stdout, "case copies-shared") {
 		t.Errorf("stdout = %q; want copies-shared", stdout)
@@ -106,7 +106,7 @@ func TestConfigSetsShared(t *testing.T) {
 
 func TestASharedFlagReplacesTheConfigSetting(t *testing.T) {
 	dir := pairTree(t, "pkg/a.go", "billing/b.go")
-	write(t, dir, ".godryrc", `{"shared": ["pkg/**"]}`)
+	write(t, dir, ".goalierc", `{"shared": ["pkg/**"]}`)
 	stdout, _ := wantCode(t, dir, 1, "--shared", "billing/**")
 	if !strings.Contains(stdout, "case copies-shared") {
 		t.Fatalf("stdout = %q; want copies-shared", stdout)
@@ -134,8 +134,8 @@ func TestABadSharedPatternIsAnError(t *testing.T) {
 	if _, stderr := wantCode(t, dir, 2, "--shared", "!pkg"); !strings.Contains(stderr, "!pkg") {
 		t.Errorf("stderr = %q; want the pattern named", stderr)
 	}
-	write(t, dir, ".godryrc", `{"shared": ["pkg/"]}`)
-	if _, stderr := wantCode(t, dir, 2, "--warn-only"); !strings.Contains(stderr, ".godryrc") {
+	write(t, dir, ".goalierc", `{"shared": ["pkg/"]}`)
+	if _, stderr := wantCode(t, dir, 2, "--warn-only"); !strings.Contains(stderr, ".goalierc") {
 		t.Errorf("stderr = %q; want the file named", stderr)
 	}
 }

@@ -49,7 +49,7 @@ godry --base main
 
 New-code mode includes commits since the merge base, uncommitted changes, and untracked files. It marks a function as new when a changed line falls inside it. A function that you moved counts as new.
 
-With no paths, godry uses the `paths` setting in `.godryrc`. If there is none, it scans the current directory tree. Paths limit both modes: godry never compares a function outside them.
+With no paths, godry uses the `paths` setting in `.goalierc`. If there is none, it scans the current directory tree. Paths limit both modes: godry never compares a function outside them.
 
 ### Read the output
 
@@ -98,49 +98,51 @@ Errors include an invalid flag, a Go file that doesn't parse, a `//go:build` lin
 | `--shared a,b` | none | Add a case to each finding. These patterns name your shared code |
 | `--help` | | Print usage |
 
-godry has no baseline file, and its only settings files are `.godryrc` and `.godryignore`. It writes no files.
+godry has no baseline file, and its only settings files are `.goalierc` and `.goalieignore`. It writes no files.
 
 ### Keep settings in a file
 
-To keep your directories and settings in the repo, write them in a `.godryrc` file. The file holds one JSON object:
+To keep your directories and settings in the repo, write them in a `.goalierc` file. The file holds one JSON object:
 
 ```json
 {
   "paths": ["products/billing", "products/search", "pkg"],
-  "threshold": 0.82,
-  "weakAnchors": 1,
-  "weakLiterals": 0.5,
   "skipFiles": ["packages.go", "internal/generated/**"],
-  "skipTags": ["integration"]
+  "skipTags": ["integration"],
+  "godry": {
+    "threshold": 0.82,
+    "weakAnchors": 1,
+    "weakLiterals": 0.5
+  }
 }
 ```
 
-Each setting is optional, and each one matches a flag. The same settings apply to all directories.
+Each setting is optional, and each one matches a flag. All goalie tools read this file. Settings at the top level describe the repo and apply to every tool. Settings in the `godry` object apply only to godry.
 
-| Setting | Flag | Type |
-| --- | --- | --- |
-| `paths` | Paths on the command line | List of strings |
-| `base` | `--base` | String |
-| `threshold` | `--threshold` | Number |
-| `minLines` | `--min-lines` | Whole number |
-| `minNodes` | `--min-nodes` | Whole number |
-| `weakAnchors` | `--weak-anchors` | Whole number |
-| `weakLiterals` | `--weak-literals` | Number |
-| `format` | `--format` | `"text"` or `"json"` |
-| `warnOnly` | `--warn-only` | `true` or `false` |
-| `includeTests` | `--include-tests` | `true` or `false` |
-| `skipTags` | `--skip-tags` | List of strings |
-| `skipFiles` | `--skip-files` | List of strings |
-| `shared` | `--shared` | List of strings |
+| Setting | Where | Flag | Type |
+| --- | --- | --- | --- |
+| `paths` | Top level | Paths on the command line | List of strings |
+| `skipTags` | Top level | `--skip-tags` | List of strings |
+| `skipFiles` | Top level | `--skip-files` | List of strings |
+| `shared` | Top level | `--shared` | List of strings |
+| `base` | `godry` | `--base` | String |
+| `threshold` | `godry` | `--threshold` | Number |
+| `minLines` | `godry` | `--min-lines` | Whole number |
+| `minNodes` | `godry` | `--min-nodes` | Whole number |
+| `weakAnchors` | `godry` | `--weak-anchors` | Whole number |
+| `weakLiterals` | `godry` | `--weak-literals` | Number |
+| `format` | `godry` | `--format` | `"text"` or `"json"` |
+| `warnOnly` | `godry` | `--warn-only` | `true` or `false` |
+| `includeTests` | `godry` | `--include-tests` | `true` or `false` |
 
-- godry reads `.godryrc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run godry from the repo root in CI.
+- godry reads `.goalierc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run godry from the repo root in CI.
 - A flag replaces the same setting in the file. Paths on the command line replace `paths`. To turn off `warnOnly` for one run, use `--warn-only=false`.
-- Patterns in `skipFiles`, `--skip-files`, and `.godryignore` all apply.
-- A missing file is not an error. Invalid JSON, an unknown setting, or a bad value exits with `2`.
-- JSON has no comments. To record why a file is skipped, put the pattern in `.godryignore`.
+- Patterns in `skipFiles`, `--skip-files`, and `.goalieignore` all apply.
+- A missing file is not an error. Invalid JSON, an unknown setting in any section, or a bad value exits with `2`.
+- JSON has no comments. To record why a file is skipped, put the pattern in `.goalieignore`.
 - If you set `base` in the file, every run uses new-code mode, and no flag turns it off. To keep whole-repo scans available, pass `--base` on the command line instead.
 
-If agents work in your repo, require human approval for changes to `.godryrc` and `.godryignore`, for example with `CODEOWNERS`. Otherwise, an agent can lower the limits to pass the check.
+If agents work in your repo, require human approval for changes to `.goalierc` and `.goalieignore`, for example with `CODEOWNERS`. Otherwise, an agent can lower the limits to pass the check.
 
 ### Name the case of each finding
 
@@ -199,7 +201,7 @@ These rules apply to both modes, and to paths that you name:
 - Files with the header `Code generated ... DO NOT EDIT.`
 - Files with an `ignore` build constraint.
 - Files that can only build with a tag in `--skip-tags`.
-- Files that match a pattern in `--skip-files` or in `.godryignore`.
+- Files that match a pattern in `--skip-files` or in `.goalieignore`.
 - Pairs in one package with the same function name and the same receiver type. These are usually platform variants.
 
 Other build constraints and `GOOS` or `GOARCH` file suffixes have no effect. The same commit gives the same result on every machine.
@@ -222,7 +224,7 @@ A skipped file is not read, so it can't cause a parse error. Its functions are n
 
 Quote patterns on the command line, so that the shell doesn't expand them: `godry --skip-files 'internal/generated/**'`.
 
-To keep the patterns in the repo, write them in a `.godryignore` file:
+To keep the patterns in the repo, write them in a `.goalieignore` file:
 
 ```
 # Dependency wiring repeats on purpose.
@@ -231,9 +233,9 @@ wire_*.go
 internal/legacy/client.go
 ```
 
-- godry reads `.godryignore` from the directory it runs in, and from no other folder. Run it from the repo root in CI.
+- godry reads `.goalieignore` from the directory it runs in, and from no other folder. Run it from the repo root in CI.
 - Write one pattern per line. The patterns follow the table above. Blank lines and lines that start with `#` are ignored.
-- `.godryignore` and `--skip-files` both apply.
+- `.goalieignore` and `--skip-files` both apply.
 - A missing file is not an error. A bad pattern exits with `2` and names the line.
 - This is not full `.gitignore` syntax. `!`, a trailing `/`, and `**` inside a longer name such as `a**b` exit with `2`, in the file and in the flag. To skip a folder, write `folder/**`.
 
