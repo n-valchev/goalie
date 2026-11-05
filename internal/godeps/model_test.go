@@ -14,21 +14,42 @@ func TestJSONPrintsClassesAndTheImportsBetweenThem(t *testing.T) {
   "version": 1,
   "title": "example.com/shop",
   "module": "example.com/shop",
+  "packages": [
+    {
+      "id": "billing",
+      "name": "billing",
+      "packageCount": 2
+    },
+    {
+      "id": "billing/invoice",
+      "name": "invoice",
+      "parent": "billing",
+      "packageCount": 1
+    },
+    {
+      "id": "web",
+      "name": "web",
+      "packageCount": 1
+    }
+  ],
   "classes": [
     {
       "id": "example.com/shop/billing",
       "name": "billing",
-      "path": "billing"
+      "path": "billing",
+      "package": "billing"
     },
     {
       "id": "example.com/shop/billing/invoice",
       "name": "invoice",
-      "path": "billing/invoice"
+      "path": "billing/invoice",
+      "package": "billing/invoice"
     },
     {
       "id": "example.com/shop/web",
       "name": "web",
-      "path": "web"
+      "path": "web",
+      "package": "web"
     }
   ],
   "edges": [

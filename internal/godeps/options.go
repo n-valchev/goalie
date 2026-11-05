@@ -38,6 +38,16 @@ Settings file:
   settings go in the "godeps" object: format, archGoReport, crapReport,
   dryReport, editorURL, title, foreign, omit, order.
 
+  foreign  Module paths outside this module. Each one that is imported shows as
+           one class, which takes every import at or below that path.
+  omit     Patterns that remove a class and its edges from the map. Each one is
+           matched against the folder of the class, with the rules of
+           --skip-files. gen/** covers the folder gen and all folders below it.
+           gen alone covers any folder named gen, and nothing below it. Use .
+           for a class at the repo root.
+  order    Names of the top-level boxes, in the order to show them. The box of
+           the shared code is named shared.
+
 Exit codes:
   0  The output was written.
   2  Any error.

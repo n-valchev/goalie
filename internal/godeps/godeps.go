@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/n-valchev/goalie/internal/model"
@@ -39,14 +40,35 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stderr, err)
 	}
-	result, err := model.Build(model.Source{Dir: dir, Files: paths, Module: module, Title: cmp.Or(opts.title, module)})
+	opts.WarnUnmatched(stderr, "godeps", paths)
+	result, err := model.Build(model.Source{
+		Dir:     dir,
+		Files:   paths,
+		Module:  module,
+		Title:   cmp.Or(opts.title, module),
+		Shared:  opts.Shared,
+		Foreign: opts.foreign,
+		Omit:    opts.omit,
+		Order:   opts.order,
+	})
 	if err != nil {
 		return fail(stderr, err)
 	}
+	warnUnmatchedOrder(stderr, result)
 	if err := writeOutput(stdout, result, opts.format); err != nil {
 		return fail(stderr, err)
 	}
 	return exitClean
+}
+
+// warnUnmatchedOrder warns and does not fail, because paths can limit a run to some of the boxes.
+func warnUnmatchedOrder(stderr io.Writer, result model.Model) {
+	for _, name := range result.Order {
+		isNamed := func(box model.Package) bool { return box.Parent == "" && box.Name == name }
+		if !slices.ContainsFunc(result.Packages, isNamed) {
+			fmt.Fprintf(stderr, "godeps: order name %q matches no top-level box\n", name)
+		}
+	}
 }
 
 func writeOutput(w io.Writer, result model.Model, format string) error {

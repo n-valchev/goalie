@@ -113,7 +113,7 @@ func TestAFolderWithOnlyMainIsNamedMain(t *testing.T) {
 func TestARepoWithNoGoFilesGivesEmptyLists(t *testing.T) {
 	dir := writeTree(t, map[string]string{"go.mod": goMod})
 	stdout, _ := run(t, dir, 0, "--format", "json")
-	want := "{\n  \"version\": 1,\n  \"title\": \"example.com/shop\",\n  \"module\": \"example.com/shop\",\n  \"classes\": [],\n  \"edges\": []\n}\n"
+	want := "{\n  \"version\": 1,\n  \"title\": \"example.com/shop\",\n  \"module\": \"example.com/shop\",\n  \"packages\": [],\n  \"classes\": [],\n  \"edges\": []\n}\n"
 	if stdout != want {
 		t.Errorf("stdout = %s\nwant %s", stdout, want)
 	}
