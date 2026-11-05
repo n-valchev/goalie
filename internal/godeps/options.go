@@ -1,0 +1,95 @@
+package godeps
+
+import (
+	"flag"
+	"fmt"
+	"io"
+
+	"github.com/n-valchev/goalie/internal/cliflags"
+	"github.com/n-valchev/goalie/internal/config"
+)
+
+const usage = `godeps maps the packages of a Go module and the imports between them.
+
+Usage:
+  godeps [flags] [paths]
+
+With no paths, godeps uses the paths in .goalierc, or else scans the current
+directory tree. It reads go.mod from the current directory only, and leaves out
+test files, the standard library, and imports of code it didn't scan.
+
+Flags:
+  --format F               Output format: html or json (default html). html is
+                           not available yet, so use json.
+  --arch-go-report <file>  Read this arch-go report.
+  --crap-report <file>     Read this gocrap report.
+  --dry-report <file>      Read this godry report.
+  --editor-url <template>  Link to source with {file} and {line}.
+  --title <text>           Title of the map (default: the module path).
+  --skip-tags a,b          Skip files that can only build with these tags.
+  --skip-files a,b         Skip files that match these patterns, with the rules
+                           of godry --skip-files.
+  --shared a,b             These patterns name your shared code.
+  --help                   Print this help.
+
+Settings file:
+  godeps reads .goalierc from the current directory only. These settings at the
+  top level apply to all goalie tools: paths, skipTags, skipFiles, shared. These
+  settings go in the "godeps" object: format, archGoReport, crapReport,
+  dryReport, editorURL, title, foreign, omit, order.
+
+Exit codes:
+  0  The output was written.
+  2  Any error.
+`
+
+const (
+	formatHTML = "html"
+	formatJSON = "json"
+)
+
+type options struct {
+	config.Repo
+	format       string
+	archGoReport string
+	crapReport   string
+	dryReport    string
+	editorURL    string
+	title        string
+	foreign      []string
+	omit         []string
+	order        []string
+	help         bool
+	fromFlags    map[string]bool
+}
+
+func parseOptions(args []string) (options, error) {
+	var opts options
+	flags := flag.NewFlagSet("godeps", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	flags.Usage = func() {}
+	flags.StringVar(&opts.format, "format", formatHTML, "")
+	flags.StringVar(&opts.archGoReport, "arch-go-report", "", "")
+	flags.StringVar(&opts.crapReport, "crap-report", "", "")
+	flags.StringVar(&opts.dryReport, "dry-report", "", "")
+	flags.StringVar(&opts.editorURL, "editor-url", "", "")
+	flags.StringVar(&opts.title, "title", "", "")
+	opts.AddFlags(flags)
+
+	parsed, err := cliflags.Parse(flags, args)
+	if err != nil {
+		return opts, err
+	}
+	opts.Paths, opts.help, opts.fromFlags = parsed.Paths, parsed.Help, parsed.Set
+	if opts.help {
+		return opts, nil
+	}
+	return opts, opts.validate()
+}
+
+func (o options) validate() error {
+	if o.format != formatHTML && o.format != formatJSON {
+		return fmt.Errorf("invalid --format %q: must be html or json", o.format)
+	}
+	return nil
+}

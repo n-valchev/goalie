@@ -23,6 +23,7 @@ type Settings struct {
 	Shared    []string `json:"shared"`
 	Godry     Godry    `json:"godry"`
 	Gocrap    Gocrap   `json:"gocrap"`
+	Godeps    Godeps   `json:"godeps"`
 }
 
 // Godry holds pointers because a setting of 0 or false must replace a default, and only a setting
@@ -48,6 +49,19 @@ type Gocrap struct {
 	CoverProfiles []string `json:"coverProfiles"`
 	Format        *string  `json:"format"`
 	WarnOnly      *bool    `json:"warnOnly"`
+}
+
+// Godeps holds pointers for the same reason as Godry.
+type Godeps struct {
+	Format       *string  `json:"format"`
+	ArchGoReport *string  `json:"archGoReport"`
+	CrapReport   *string  `json:"crapReport"`
+	DryReport    *string  `json:"dryReport"`
+	EditorURL    *string  `json:"editorURL"`
+	Title        *string  `json:"title"`
+	Foreign      []string `json:"foreign"`
+	Omit         []string `json:"omit"`
+	Order        []string `json:"order"`
 }
 
 // Read looks only in dir, for the same reason as files.ReadIgnoreFile. A misspelled setting is an

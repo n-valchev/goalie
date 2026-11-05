@@ -198,6 +198,7 @@ func TestBadConfigsAreErrors(t *testing.T) {
 		{"unknown setting", `{"weakLabels": 1}`, "weakLabels"},
 		{"unknown godry setting", `{"godry": {"weakLabels": 1}}`, "weakLabels"},
 		{"unknown gocrap setting", `{"gocrap": {"limits": 1}}`, "limits"},
+		{"unknown godeps setting", `{"godeps": {"titel": "x"}}`, "titel"},
 		{"godry setting at the top level", `{"threshold": 0.9}`, "threshold"},
 		{"wrong type names its line", "{\n  \"paths\": \"a\"\n}\n", ".goalierc:2:"},
 		{"fraction for a count", `{"godry": {"minLines": 1.5}}`, ".goalierc"},
@@ -246,5 +247,5 @@ func TestHelpWorksWithABadConfig(t *testing.T) {
 }
 
 func TestGodryAcceptsTheSettingsOfOtherTools(t *testing.T) {
-	wantCode(t, configTree(t, `{"gocrap": {"limit": 30, "warnOnly": true}}`), 1)
+	wantCode(t, configTree(t, `{"gocrap": {"limit": 30, "warnOnly": true}, "godeps": {"title": "x"}}`), 1)
 }

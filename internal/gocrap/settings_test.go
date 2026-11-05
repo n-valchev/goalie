@@ -105,6 +105,21 @@ func TestBadSettingsAreErrors(t *testing.T) {
 	}
 }
 
+func TestAMisspelledGodepsSettingIsAnError(t *testing.T) {
+	dir := writeTree(t, map[string]string{"go.mod": goMod, "a.go": smallFile, ".goalierc": `{"godeps": {"titel": "x"}}`})
+	if _, stderr := run(t, dir, 2); !strings.Contains(stderr, "titel") {
+		t.Errorf("stderr = %q; want the setting named", stderr)
+	}
+}
+
+func TestGocrapAcceptsTheSettingsOfGodeps(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"go.mod": goMod, "a.go": smallFile, "p.out": "mode: set\n",
+		".goalierc": `{"godeps": {"title": "x"}, "gocrap": {"coverProfiles": ["p.out"]}}`,
+	})
+	run(t, dir, 0)
+}
+
 func TestAFlagAfterAPathStillCounts(t *testing.T) {
 	dir := writeTree(t, map[string]string{"go.mod": goMod, "a.go": smallFile, "p.out": "mode: set\n"})
 	run(t, dir, 1, ".", "--cover-profiles", "p.out", "--limit", "5")
