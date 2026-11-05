@@ -30,16 +30,6 @@ type folderModel struct {
 	Edges    []edge        `json:"edges"`
 }
 
-func readFolders(t *testing.T, dir string, args ...string) folderModel {
-	t.Helper()
-	stdout, _ := run(t, dir, 0, append([]string{"--format", "json"}, args...)...)
-	var result folderModel
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		t.Fatalf("stdout is not a model: %v\n%s", err, stdout)
-	}
-	return result
-}
-
 func wantBoxes(t *testing.T, got folderModel, want ...box) {
 	t.Helper()
 	if !slices.Equal(got.Packages, want) {
@@ -62,7 +52,7 @@ func TestEachFolderOnAClassPathIsABoxThatCountsTheClassesBelowIt(t *testing.T) {
 		"billing/tax/eu/eu.go": "package eu\n",
 		"web/server.go":        "package web\n",
 	})
-	got := readFolders(t, dir)
+	got := readModel[folderModel](t, dir)
 	wantBoxes(t, got,
 		box{ID: "billing", Name: "billing", PackageCount: 3},
 		box{ID: "billing/invoice", Name: "invoice", Parent: "billing", PackageCount: 1},
@@ -80,7 +70,7 @@ func TestEachFolderOnAClassPathIsABoxThatCountsTheClassesBelowIt(t *testing.T) {
 
 func TestAClassAtTheRootHasNoBox(t *testing.T) {
 	dir := writeTree(t, map[string]string{"go.mod": goMod, "shop.go": "package shop\n"})
-	got := readFolders(t, dir)
+	got := readModel[folderModel](t, dir)
 	wantBoxes(t, got)
 	wantPlaced(t, got, placedClass{ID: "example.com/shop", Name: "shop", Path: "."})
 }
@@ -94,7 +84,7 @@ func TestSharedClassesHangUnderOneTopLevelBox(t *testing.T) {
 		"lib/plain/p.go": "package plain\n",
 		".goalierc":      `{"shared": ["lib/auth/**", "lib/log/**"]}`,
 	})
-	got := readFolders(t, dir)
+	got := readModel[folderModel](t, dir)
 	wantBoxes(t, got,
 		box{ID: ":shared", Name: "shared", Shared: true, PackageCount: 2},
 		box{ID: ":shared/lib", Name: "lib", Parent: ":shared", Shared: true, PackageCount: 2},
@@ -116,13 +106,13 @@ func TestOneMatchingFileMakesTheWholeClassShared(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod, "a/a.go": "package a\n", "a/common.go": "package a\n",
 	})
-	got := readFolders(t, dir, "--shared", "a/common.go")
+	got := readModel[folderModel](t, dir, "--shared", "a/common.go")
 	wantPlaced(t, got, placedClass{ID: "example.com/shop/a", Name: "a", Path: "a", Package: ":shared/a"})
 }
 
 func TestASharedClassAtTheRootSitsInTheSharedBox(t *testing.T) {
 	dir := writeTree(t, map[string]string{"go.mod": goMod, "shop.go": "package shop\n"})
-	got := readFolders(t, dir, "--shared", "shop.go")
+	got := readModel[folderModel](t, dir, "--shared", "shop.go")
 	wantBoxes(t, got, box{ID: ":shared", Name: "shared", Shared: true, PackageCount: 1})
 	wantPlaced(t, got, placedClass{ID: "example.com/shop", Name: "shop", Path: ".", Package: ":shared"})
 }
@@ -131,7 +121,7 @@ func TestTheSharedFlagReplacesTheSetting(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod, "a/a.go": "package a\n", "b/b.go": "package b\n", ".goalierc": `{"shared": ["a/**"]}`,
 	})
-	wantBoxes(t, readFolders(t, dir, "--shared", "b/**"),
+	wantBoxes(t, readModel[folderModel](t, dir, "--shared", "b/**"),
 		box{ID: ":shared", Name: "shared", Shared: true, PackageCount: 1},
 		box{ID: ":shared/b", Name: "b", Parent: ":shared", Shared: true, PackageCount: 1},
 		box{ID: "a", Name: "a", PackageCount: 1},
@@ -146,7 +136,7 @@ func TestAForeignModuleIsOneClassThatTakesImportsAtOrBelowIt(t *testing.T) {
 		"z/z.go":    "package z\n\nimport _ \"example.com/shop/a\"\n",
 		".goalierc": `{"godeps": {"foreign": ["example.com/lib"]}}`,
 	})
-	got := readFolders(t, dir)
+	got := readModel[folderModel](t, dir)
 	wantPlaced(t, got,
 		placedClass{ID: "example.com/lib", Name: "example.com/lib", Foreign: true},
 		placedClass{ID: "example.com/shop/a", Name: "a", Path: "a", Package: "a"},
@@ -174,7 +164,7 @@ func TestAForeignModuleMatchesWholePathElementsOnly(t *testing.T) {
 		"a/a.go":    "package a\n\nimport _ \"example.com/library\"\n",
 		".goalierc": `{"godeps": {"foreign": ["example.com/lib"]}}`,
 	})
-	got := readFolders(t, dir)
+	got := readModel[folderModel](t, dir)
 	wantPlaced(t, got, placedClass{ID: "example.com/shop/a", Name: "a", Path: "a", Package: "a"})
 	if len(got.Edges) != 0 {
 		t.Errorf("edges = %+v, want none", got.Edges)
@@ -187,7 +177,7 @@ func TestAForeignModuleThatNothingImportsIsLeftOut(t *testing.T) {
 		"a/a.go":    "package a\n",
 		".goalierc": `{"godeps": {"foreign": ["example.com/lib"]}}`,
 	})
-	wantPlaced(t, readFolders(t, dir), placedClass{ID: "example.com/shop/a", Name: "a", Path: "a", Package: "a"})
+	wantPlaced(t, readModel[folderModel](t, dir), placedClass{ID: "example.com/shop/a", Name: "a", Path: "a", Package: "a"})
 }
 
 func TestAnImportBelowTwoForeignModulesMakesOneEdgeToTheNearest(t *testing.T) {
@@ -196,7 +186,7 @@ func TestAnImportBelowTwoForeignModulesMakesOneEdgeToTheNearest(t *testing.T) {
 		"a/a.go":    "package a\n\nimport _ \"example.com/lib/sub/x\"\n",
 		".goalierc": `{"godeps": {"foreign": ["example.com/lib", "example.com/lib/sub"]}}`,
 	})
-	got := readFolders(t, dir)
+	got := readModel[folderModel](t, dir)
 	want := []edge{{"example.com/shop/a", "example.com/lib/sub", "dependency"}}
 	if !slices.Equal(got.Edges, want) {
 		t.Errorf("edges = %+v, want %+v", got.Edges, want)
@@ -210,7 +200,7 @@ func TestEdgesToForeignModulesAreSortedByModule(t *testing.T) {
 		"a/a.go":    "package a\n\nimport (\n\t_ \"example.com/x-y\"\n\t_ \"example.com/x/z\"\n)\n",
 		".goalierc": `{"godeps": {"foreign": ["example.com/x-y", "example.com"]}}`,
 	})
-	got := readFolders(t, dir)
+	got := readModel[folderModel](t, dir)
 	want := []edge{
 		{"example.com/shop/a", "example.com", "dependency"},
 		{"example.com/shop/a", "example.com/x-y", "dependency"},
@@ -235,7 +225,7 @@ func TestAForeignEntryNeverTakesTheModulesOwnPackages(t *testing.T) {
 				"gen/gen.go": "// Code generated by x. DO NOT EDIT.\n\npackage gen\n",
 				".goalierc":  `{"godeps": {"foreign": ["` + test.foreign + `"]}}`,
 			})
-			got := readFolders(t, dir)
+			got := readModel[folderModel](t, dir)
 			wantPlaced(t, got,
 				placedClass{ID: "example.com/shop", Name: "shop", Path: "."},
 				placedClass{ID: "example.com/shop/a", Name: "a", Path: "a", Package: "a"},
@@ -257,7 +247,7 @@ func TestAnOmittedClassAndItsEdgesAreGone(t *testing.T) {
 		"gen/sub/s.go": "package sub\n",
 		".goalierc":    `{"godeps": {"omit": ["gen/**"], "foreign": ["example.com/lib"]}}`,
 	})
-	got := readFolders(t, dir)
+	got := readModel[folderModel](t, dir)
 	wantBoxes(t, got, box{ID: "a", Name: "a", PackageCount: 1}, box{ID: "b", Name: "b", PackageCount: 1})
 	wantPlaced(t, got,
 		placedClass{ID: "example.com/shop/a", Name: "a", Path: "a", Package: "a"},
@@ -292,7 +282,7 @@ func TestOmitPatternsMatchTheClassPathByTheFileRules(t *testing.T) {
 			dir := writeTree(t, tree)
 			write(t, dir, ".goalierc", `{"godeps": {"omit": ["`+test.pattern+`"]}}`)
 			var got []string
-			for _, class := range readFolders(t, dir).Classes {
+			for _, class := range readModel[folderModel](t, dir).Classes {
 				got = append(got, class.Path)
 			}
 			if !slices.Equal(got, test.want) {
@@ -307,7 +297,7 @@ func TestAnOmittedFileIsNotParsed(t *testing.T) {
 		"go.mod": goMod, "a/a.go": "package a\n", "gen/g.go": "package gen\n\nfunc broken( {\n",
 		".goalierc": `{"godeps": {"omit": ["gen/**"]}}`,
 	})
-	wantPlaced(t, readFolders(t, dir), placedClass{ID: "example.com/shop/a", Name: "a", Path: "a", Package: "a"})
+	wantPlaced(t, readModel[folderModel](t, dir), placedClass{ID: "example.com/shop/a", Name: "a", Path: "a", Package: "a"})
 }
 
 func TestAnOmittedFolderStillCountsForTheSharedWarning(t *testing.T) {
@@ -390,7 +380,7 @@ func TestFileSelectionDecidesTheBoxes(t *testing.T) {
 				"go.mod": goMod, "keep/k.go": "package keep\n", "drop/d.go": "//go:build legacy\n\npackage drop\n",
 				".goalierc": test.config, ".goalieignore": test.ignore,
 			})
-			wantBoxes(t, readFolders(t, dir, test.args...), box{ID: "keep", Name: "keep", PackageCount: 1})
+			wantBoxes(t, readModel[folderModel](t, dir, test.args...), box{ID: "keep", Name: "keep", PackageCount: 1})
 		})
 	}
 }

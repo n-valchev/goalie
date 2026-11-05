@@ -99,7 +99,7 @@ func TestTheGradeComesFromTheScoreAndTheLimit(t *testing.T) {
 				".goalierc": test.config,
 				"crap.json": crapReport(crapRow("a/a.go", 3, "F", test.score)),
 			})
-			if got := readGrades(t, dir, "--crap-report", "crap.json").op(t, "F").Grade; got != test.want {
+			if got := readModel[gradedModel](t, dir, "--crap-report", "crap.json").op(t, "F").Grade; got != test.want {
 				t.Errorf("grade = %q, want %q", got, test.want)
 			}
 		})
@@ -114,7 +114,7 @@ func TestSharedLimitAppliesPerFileNotPerClass(t *testing.T) {
 		".goalierc": `{"shared": ["a/one.go"], "gocrap": {"limit": 100, "sharedLimit": 8}}`,
 		"crap.json": crapReport(crapRow("a/one.go", 3, "One", 9), crapRow("a/two.go", 3, "Two", 9)),
 	})
-	got := readGrades(t, dir, "--crap-report", "crap.json")
+	got := readModel[gradedModel](t, dir, "--crap-report", "crap.json")
 	if grade := got.op(t, "One").Grade; grade != "red" {
 		t.Errorf("One = %q, want red", grade)
 	}
@@ -130,7 +130,7 @@ func TestTheSharedFlagChoosesWhichCodeTakesSharedLimit(t *testing.T) {
 		".goalierc": `{"gocrap": {"limit": 100, "sharedLimit": 8}}`,
 		"crap.json": crapReport(crapRow("a/a.go", 3, "F", 9)),
 	})
-	if got := readGrades(t, dir, "--crap-report", "crap.json", "--shared", "a/**").op(t, "F").Grade; got != "red" {
+	if got := readModel[gradedModel](t, dir, "--crap-report", "crap.json", "--shared", "a/**").op(t, "F").Grade; got != "red" {
 		t.Errorf("grade = %q, want red", got)
 	}
 }
@@ -139,7 +139,7 @@ func TestAnOpMissingFromTheReportIsRedAndHasNoScores(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod, "a/a.go": "package a\n\nfunc F() {}\n", "crap.json": crapReport(),
 	})
-	op := readGrades(t, dir, "--crap-report", "crap.json").op(t, "F")
+	op := readModel[gradedModel](t, dir, "--crap-report", "crap.json").op(t, "F")
 	if op.Grade != "red" {
 		t.Errorf("grade = %q, want red", op.Grade)
 	}
@@ -154,7 +154,7 @@ func TestAnIgnoredFunctionIsMissingFromTheReportSoItIsRed(t *testing.T) {
 		"a/a.go":    "package a\n\n//gocrap:ignore generated\nfunc F() {}\n",
 		"crap.json": crapReport(),
 	})
-	if got := readGrades(t, dir, "--crap-report", "crap.json").op(t, "F").Grade; got != "red" {
+	if got := readModel[gradedModel](t, dir, "--crap-report", "crap.json").op(t, "F").Grade; got != "red" {
 		t.Errorf("grade = %q, want red", got)
 	}
 }
@@ -164,7 +164,7 @@ func TestACoverageOfZeroIsPrinted(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod, "a/a.go": "package a\n\nfunc F() {}\n", "crap.json": crapReport(row),
 	})
-	if got := readGrades(t, dir, "--crap-report", "crap.json").op(t, "F").Coverage; got == nil || *got != 0 {
+	if got := readModel[gradedModel](t, dir, "--crap-report", "crap.json").op(t, "F").Coverage; got == nil || *got != 0 {
 		t.Errorf("coverage = %v, want 0", got)
 	}
 }
@@ -176,7 +176,7 @@ func TestAFunctionWithNoBodyHasNoGradeAndDoesNotCountAsMissing(t *testing.T) {
 		"b/b.go":    "package b\n\nfunc Stub2()\n",
 		"crap.json": crapReport(crapRow("a/a.go", 5, "F", 1)),
 	})
-	got := readGrades(t, dir, "--crap-report", "crap.json")
+	got := readModel[gradedModel](t, dir, "--crap-report", "crap.json")
 	if grade := got.op(t, "Stub").Grade; grade != "" {
 		t.Errorf("Stub = %q, want no grade", grade)
 	}
@@ -215,7 +215,7 @@ func TestAClassAndEveryBoxAboveItTakeTheWorstGradeBelowThem(t *testing.T) {
 			crapRow("web/web.go", 3, "Serve", 1),
 		),
 	})
-	got := readGrades(t, dir, "--crap-report", "crap.json")
+	got := readModel[gradedModel](t, dir, "--crap-report", "crap.json")
 	wantClassGrades(t, got, map[string]string{
 		".": "red", "billing": "green", "billing/tax": "yellow", "billing/card": "green", "web": "green", "empty": "",
 	})
@@ -231,7 +231,7 @@ func TestTheSharedBoxesTakeTheGradeOfSharedCode(t *testing.T) {
 		".goalierc":  `{"shared": ["lib/**"], "gocrap": {"sharedLimit": 8}}`,
 		"crap.json":  crapReport(crapRow("lib/log.go", 3, "Log", 9)),
 	})
-	wantBoxGrades(t, readGrades(t, dir, "--crap-report", "crap.json"), map[string]string{":shared": "red", ":shared/lib": "red"})
+	wantBoxGrades(t, readModel[gradedModel](t, dir, "--crap-report", "crap.json"), map[string]string{":shared": "red", ":shared/lib": "red"})
 }
 
 func TestAForeignClassHasNoGrade(t *testing.T) {
@@ -276,7 +276,7 @@ func TestTheLimitInTheReportIsIgnored(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod, "a/a.go": "package a\n\nfunc F() {}\n", "crap.json": crapReport(row),
 	})
-	if got := readGrades(t, dir, "--crap-report", "crap.json").op(t, "F").Grade; got != "green" {
+	if got := readModel[gradedModel](t, dir, "--crap-report", "crap.json").op(t, "F").Grade; got != "green" {
 		t.Errorf("grade = %q, want green", got)
 	}
 }

@@ -31,16 +31,6 @@ type gradedModel struct {
 	Classes  []gradedClass `json:"classes"`
 }
 
-func readGrades(t *testing.T, dir string, args ...string) gradedModel {
-	t.Helper()
-	stdout, _ := run(t, dir, 0, append([]string{"--format", "json"}, args...)...)
-	var result gradedModel
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		t.Fatalf("stdout is not a model: %v\n%s", err, stdout)
-	}
-	return result
-}
-
 func (m gradedModel) op(t *testing.T, name string) scoredOp {
 	t.Helper()
 	for _, class := range m.Classes {
@@ -105,7 +95,7 @@ func TestTheCrapReportSettingApplies(t *testing.T) {
 		".goalierc": `{"godeps": {"crapReport": "crap.json"}}`,
 		"crap.json": crapReport(crapRow("a/a.go", 3, "F", 1)),
 	})
-	if got := readGrades(t, dir).op(t, "F").Grade; got != "green" {
+	if got := readModel[gradedModel](t, dir).op(t, "F").Grade; got != "green" {
 		t.Errorf("grade = %q, want green", got)
 	}
 }
@@ -113,7 +103,7 @@ func TestTheCrapReportSettingApplies(t *testing.T) {
 func TestAnAbsoluteCrapReportPathIsReadAsItIs(t *testing.T) {
 	reports := writeTree(t, map[string]string{"crap.json": crapReport(crapRow("a/a.go", 3, "F", 1))})
 	dir := writeTree(t, map[string]string{"go.mod": goMod, "a/a.go": "package a\n\nfunc F() {}\n"})
-	if got := readGrades(t, dir, "--crap-report", reports+"/crap.json").op(t, "F").Grade; got != "green" {
+	if got := readModel[gradedModel](t, dir, "--crap-report", reports+"/crap.json").op(t, "F").Grade; got != "green" {
 		t.Errorf("grade = %q, want green", got)
 	}
 }
@@ -158,7 +148,7 @@ func TestAPositionMatchesEvenWhenTheNameDiffers(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod, "a/a.go": "package a\n\nfunc F() {}\n", "crap.json": crapReport(crapRow("a/a.go", 3, "Old", 40)),
 	})
-	if got := readGrades(t, dir, "--crap-report", "crap.json").op(t, "F").Crap; got == nil || *got != 40 {
+	if got := readModel[gradedModel](t, dir, "--crap-report", "crap.json").op(t, "F").Crap; got == nil || *got != 40 {
 		t.Errorf("crap = %v, want 40", got)
 	}
 }
@@ -243,7 +233,7 @@ func TestAnOpTakesItsScoresFromTheRowAtItsFileAndLine(t *testing.T) {
 		"a/a.go":    "package a\n\nfunc F() {}\n",
 		"crap.json": crapReport(crapRow("a/a.go", 3, "F", 2.25)),
 	})
-	op := readGrades(t, dir, "--crap-report", "crap.json").op(t, "F")
+	op := readModel[gradedModel](t, dir, "--crap-report", "crap.json").op(t, "F")
 	if op.Crap == nil || *op.Crap != 2.25 {
 		t.Errorf("crap = %v, want 2.25", op.Crap)
 	}

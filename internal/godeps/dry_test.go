@@ -44,16 +44,6 @@ type dryModel struct {
 	Classes  []dryClass `json:"classes"`
 }
 
-func readDryModel(t *testing.T, dir string, args ...string) dryModel {
-	t.Helper()
-	stdout, _ := run(t, dir, 0, append([]string{"--format", "json"}, args...)...)
-	var result dryModel
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		t.Fatalf("stdout is not a model: %v\n%s", err, stdout)
-	}
-	return result
-}
-
 func (m dryModel) op(t *testing.T, class, name string) dryOp {
 	t.Helper()
 	for _, found := range m.Classes {
@@ -68,7 +58,7 @@ func (m dryModel) op(t *testing.T, class, name string) dryOp {
 }
 
 func TestAnOpInTwoPairsGetsADuplicateForEachOtherSide(t *testing.T) {
-	result := readDryModel(t, dryFixture, "--dry-report", "dry.json", "--editor-url", "idea://open?file={file}&line={line}")
+	result := readModel[dryModel](t, dryFixture, "--dry-report", "dry.json", "--editor-url", "idea://open?file={file}&line={line}")
 	got := result.op(t, "example.com/shop/billing/invoice", "Total").Duplicates
 	want := []duplicate{
 		{"example.com/shop/orders", "Order.Sum", "orders/order.go", 5, "idea://open?file=testdata/godry/orders/order.go&line=5", 1},
@@ -80,7 +70,7 @@ func TestAnOpInTwoPairsGetsADuplicateForEachOtherSide(t *testing.T) {
 }
 
 func TestADuplicateLinkUsesTheDefaultEditorURL(t *testing.T) {
-	result := readDryModel(t, dryFixture, "--dry-report", "dry.json")
+	result := readModel[dryModel](t, dryFixture, "--dry-report", "dry.json")
 	got := result.op(t, "example.com/shop/orders", "Order.Sum").Duplicates[0].URL
 	if want := "file://testdata/godry/billing/invoice/total.go"; got != want {
 		t.Errorf("url = %q, want %q", got, want)
@@ -123,7 +113,7 @@ func dryTree(t *testing.T, extra map[string]string) string {
 }
 
 func TestAnOpInTwoPairsCountsOnce(t *testing.T) {
-	result := readDryModel(t, dryFixture, "--dry-report", "dry.json")
+	result := readModel[dryModel](t, dryFixture, "--dry-report", "dry.json")
 	for _, class := range result.Classes {
 		wantCount(t, class.ID, class.DuplicateCount, 1)
 	}
@@ -135,7 +125,7 @@ func TestAnOpInTwoPairsCountsOnce(t *testing.T) {
 
 func TestDuplicateCountAddsUpAtAnyDepthAndShowsZero(t *testing.T) {
 	dir := dryTree(t, map[string]string{"dry.json": pairReport("a/b/one.go", "a/two.go")})
-	result := readDryModel(t, dir, "--dry-report", "dry.json")
+	result := readModel[dryModel](t, dir, "--dry-report", "dry.json")
 	want := map[string]int{"a": 2, "a/b": 1, "c": 0}
 	for _, box := range result.Packages {
 		wantCount(t, box.ID, box.DuplicateCount, want[box.ID])
@@ -148,7 +138,7 @@ func TestDuplicateCountAddsUpAtAnyDepthAndShowsZero(t *testing.T) {
 
 func TestDuplicateCountReachesTheSharedBox(t *testing.T) {
 	dir := dryTree(t, map[string]string{"dry.json": pairReport("a/b/one.go", "root.go")})
-	result := readDryModel(t, dir, "--dry-report", "dry.json", "--shared", "a/**")
+	result := readModel[dryModel](t, dir, "--dry-report", "dry.json", "--shared", "a/**")
 	want := map[string]int{":shared": 1, ":shared/a": 1, ":shared/a/b": 1, "c": 0}
 	for _, box := range result.Packages {
 		wantCount(t, box.ID, box.DuplicateCount, want[box.ID])
@@ -162,7 +152,7 @@ func TestAForeignClassHasNoDuplicateCount(t *testing.T) {
 		".goalierc": `{"godeps": {"foreign": ["example.com/lib"]}}`,
 		"dry.json":  `{"findings": []}`,
 	})
-	for _, class := range readDryModel(t, dir, "--dry-report", "dry.json").Classes {
+	for _, class := range readModel[dryModel](t, dir, "--dry-report", "dry.json").Classes {
 		if class.ID == "example.com/lib" && class.DuplicateCount != nil {
 			t.Errorf("foreign class duplicateCount = %d, want none", *class.DuplicateCount)
 		}
@@ -210,17 +200,17 @@ func TestTheDryReportComesFromTheSettingUnlessTheFlagReplacesIt(t *testing.T) {
 		"dry.json":  pairReport("a/b/one.go", "a/two.go"),
 		"none.json": `{"findings": []}`,
 	})
-	if got := readDryModel(t, dir).op(t, "example.com/shop/a", "G").Duplicates; len(got) != 1 {
+	if got := readModel[dryModel](t, dir).op(t, "example.com/shop/a", "G").Duplicates; len(got) != 1 {
 		t.Errorf("from the setting: duplicates = %+v, want one", got)
 	}
-	if got := readDryModel(t, dir, "--dry-report", "none.json").op(t, "example.com/shop/a", "G").Duplicates; len(got) != 0 {
+	if got := readModel[dryModel](t, dir, "--dry-report", "none.json").op(t, "example.com/shop/a", "G").Duplicates; len(got) != 0 {
 		t.Errorf("from the flag: duplicates = %+v, want none", got)
 	}
 }
 
 func TestAnAbsoluteDryReportPathIsUsedAsItIs(t *testing.T) {
 	report := filepath.Join(writeTree(t, map[string]string{"dry.json": pairReport("a/b/one.go", "a/two.go")}), "dry.json")
-	if got := readDryModel(t, dryTree(t, nil), "--dry-report", report).op(t, "example.com/shop/a", "G").Duplicates; len(got) != 1 {
+	if got := readModel[dryModel](t, dryTree(t, nil), "--dry-report", report).op(t, "example.com/shop/a", "G").Duplicates; len(got) != 1 {
 		t.Errorf("duplicates = %+v, want one", got)
 	}
 }
@@ -296,7 +286,7 @@ func TestADuplicateOnALineWithTwoFunctionsGoesToTheNamedOne(t *testing.T) {
 					"left": {"file": "a/a.go", "function": "` + test.left + `", "startLine": 3},
 					"right": {"file": "b/b.go", "function": "` + test.right + `", "startLine": 5}}]}`,
 			})
-			got := readDryModel(t, dir, "--dry-report", "dry.json")
+			got := readModel[dryModel](t, dir, "--dry-report", "dry.json")
 			left := got.op(t, "example.com/shop/a", test.leftOp).Duplicates
 			if len(left) != 1 || left[0].Name != test.rightOp || left[0].ID != "example.com/shop/b" {
 				t.Errorf("%s duplicates = %+v, want %s in b", test.leftOp, left, test.rightOp)
@@ -324,7 +314,7 @@ func TestOneFunctionKeepsEveryPairOnItsLine(t *testing.T) {
 			{"score": 0.9, "left": {"file": "a/a.go", "function": "F", "startLine": 3}, "right": {"file": "b/b.go", "function": "H", "startLine": 3}},
 			{"score": 0.8, "left": {"file": "a/a.go", "function": "F", "startLine": 3}, "right": {"file": "b/b.go", "function": "M", "startLine": 5}}]}`,
 	})
-	got := readDryModel(t, dir, "--dry-report", "dry.json")
+	got := readModel[dryModel](t, dir, "--dry-report", "dry.json")
 	if duplicates := got.op(t, "example.com/shop/a", "F").Duplicates; len(duplicates) != 2 {
 		t.Errorf("F duplicates = %+v, want two", duplicates)
 	}

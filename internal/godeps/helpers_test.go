@@ -62,10 +62,10 @@ func run(t *testing.T, dir string, want int, args ...string) (stdout, stderr str
 	return out.String(), errOut.String()
 }
 
-func readModel(t *testing.T, dir string, args ...string) model {
+func readModel[T any](t *testing.T, dir string, args ...string) T {
 	t.Helper()
 	stdout, _ := run(t, dir, 0, append([]string{"--format", "json"}, args...)...)
-	var result model
+	var result T
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("stdout is not a model: %v\n%s", err, stdout)
 	}

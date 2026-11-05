@@ -25,7 +25,7 @@ func TestEveryFormOfAnEmbeddedTypeMakesACompositionEdge(t *testing.T) {
 				"a/a.go": "package a\n\nimport \"example.com/shop/b\"\n\ntype S struct {\n\t" + test.field + "\n}\n",
 				"b/b.go": baseFile,
 			})
-			wantEdges(t, readModel(t, dir), composition("a", "b"), dependency("a", "b"))
+			wantEdges(t, readModel[model](t, dir), composition("a", "b"), dependency("a", "b"))
 		})
 	}
 }
@@ -36,7 +36,7 @@ func TestAnAliasedImportResolvesOnItsAlias(t *testing.T) {
 		"a/a.go": "package a\n\nimport base \"example.com/shop/b\"\n\ntype S struct {\n\tbase.T\n}\n",
 		"b/b.go": baseFile,
 	})
-	wantEdges(t, readModel(t, dir), composition("a", "b"), dependency("a", "b"))
+	wantEdges(t, readModel[model](t, dir), composition("a", "b"), dependency("a", "b"))
 }
 
 func TestAnImportResolvesOnThePackageClauseNotTheFolder(t *testing.T) {
@@ -45,7 +45,7 @@ func TestAnImportResolvesOnThePackageClauseNotTheFolder(t *testing.T) {
 		"a/a.go":        "package a\n\nimport \"example.com/shop/go-thing\"\n\ntype S struct {\n\tthing.T\n}\n",
 		"go-thing/t.go": "package thing\n\ntype T struct{}\n",
 	})
-	wantEdges(t, readModel(t, dir), composition("a", "go-thing"), dependency("a", "go-thing"))
+	wantEdges(t, readModel[model](t, dir), composition("a", "go-thing"), dependency("a", "go-thing"))
 }
 
 func TestTheFolderNameOfAnImportIsNotAQualifier(t *testing.T) {
@@ -56,7 +56,7 @@ func TestTheFolderNameOfAnImportIsNotAQualifier(t *testing.T) {
 		"b/b.go": baseFile,
 		"x/x.go": "package y\n\nvar V = 1\n",
 	})
-	wantEdges(t, readModel(t, dir), composition("a", "b"), dependency("a", "b"), dependency("a", "x"))
+	wantEdges(t, readModel[model](t, dir), composition("a", "b"), dependency("a", "b"), dependency("a", "x"))
 }
 
 func TestAnImportOfAFolderWithTwoClausesUsesTheLibraryClause(t *testing.T) {
@@ -72,7 +72,7 @@ func TestAnImportOfAFolderWithTwoClausesUsesTheLibraryClause(t *testing.T) {
 				"lib/lib.go":  "package foo\n\ntype T struct{}\n",
 				test.toolFile: "//go:build tools\n\npackage main\n",
 			})
-			wantEdges(t, readModel(t, dir), composition("a", "lib"), dependency("a", "lib"))
+			wantEdges(t, readModel[model](t, dir), composition("a", "lib"), dependency("a", "lib"))
 		})
 	}
 }
@@ -83,7 +83,7 @@ func TestAnEmbeddedTypeInAFileReadBeforeItsTargetStillResolves(t *testing.T) {
 		"z/z.go": "package zed\n\ntype T struct{}\n",
 		"a/a.go": "package a\n\nimport \"example.com/shop/z\"\n\ntype S struct {\n\tzed.T\n}\n",
 	})
-	wantEdges(t, readModel(t, dir), composition("a", "z"), dependency("a", "z"))
+	wantEdges(t, readModel[model](t, dir), composition("a", "z"), dependency("a", "z"))
 }
 
 func TestAStructNestedInADeclarationCounts(t *testing.T) {
@@ -92,7 +92,7 @@ func TestAStructNestedInADeclarationCounts(t *testing.T) {
 		"a/a.go": "package a\n\nimport \"example.com/shop/b\"\n\ntype S struct {\n\tInner []struct {\n\t\tb.T\n\t}\n}\n",
 		"b/b.go": baseFile,
 	})
-	wantEdges(t, readModel(t, dir), composition("a", "b"), dependency("a", "b"))
+	wantEdges(t, readModel[model](t, dir), composition("a", "b"), dependency("a", "b"))
 }
 
 func TestWhatIsNotACompositionEdge(t *testing.T) {
@@ -111,7 +111,7 @@ func TestWhatIsNotACompositionEdge(t *testing.T) {
 				"a/a.go": "package a\n\n" + test.source,
 				"b/b.go": baseFile + "\ntype R interface{}\n",
 			})
-			wantEdges(t, readModel(t, dir), dependency("a", "b"))
+			wantEdges(t, readModel[model](t, dir), dependency("a", "b"))
 		})
 	}
 }
@@ -122,7 +122,7 @@ func TestAnEmbeddedTypeOutsideTheModuleMakesNoEdge(t *testing.T) {
 		"a/a.go": "package a\n\nimport (\n\t\"sync\"\n\t\"example.com/other/b\"\n)\n\ntype S struct {\n\tsync.Mutex\n\tb.T\n}\n",
 		"b/b.go": baseFile,
 	})
-	wantEdges(t, readModel(t, dir))
+	wantEdges(t, readModel[model](t, dir))
 }
 
 func TestAnEmbeddedTypeInAClassThatWasNotScannedMakesNoEdge(t *testing.T) {
@@ -132,7 +132,7 @@ func TestAnEmbeddedTypeInAClassThatWasNotScannedMakesNoEdge(t *testing.T) {
 		"b/b.go":    baseFile,
 		".goalierc": `{"skipFiles": ["b/**"]}`,
 	})
-	wantEdges(t, readModel(t, dir))
+	wantEdges(t, readModel[model](t, dir))
 }
 
 func TestAnEmbeddedTypeInAnOmittedClassMakesNoEdge(t *testing.T) {
@@ -142,7 +142,7 @@ func TestAnEmbeddedTypeInAnOmittedClassMakesNoEdge(t *testing.T) {
 		"b/b.go":    baseFile,
 		".goalierc": `{"godeps": {"omit": ["b"]}}`,
 	})
-	wantEdges(t, readModel(t, dir))
+	wantEdges(t, readModel[model](t, dir))
 }
 
 func TestAnEmbeddedTypeOfAForeignModuleIsOnlyADependency(t *testing.T) {
@@ -151,7 +151,7 @@ func TestAnEmbeddedTypeOfAForeignModuleIsOnlyADependency(t *testing.T) {
 		"a/a.go":    "package a\n\nimport \"example.com/lib\"\n\ntype S struct {\n\tlib.T\n}\n",
 		".goalierc": `{"godeps": {"foreign": ["example.com/lib"]}}`,
 	})
-	wantEdges(t, readModel(t, dir), edge{"example.com/shop/a", "example.com/lib", "dependency"})
+	wantEdges(t, readModel[model](t, dir), edge{"example.com/shop/a", "example.com/lib", "dependency"})
 }
 
 func TestAClassEmbeddingItsOwnTypeHasNoEdge(t *testing.T) {
@@ -160,7 +160,7 @@ func TestAClassEmbeddingItsOwnTypeHasNoEdge(t *testing.T) {
 		"a/a.go":    "package a\n\ntype T struct{}\n",
 		"a/tool.go": "//go:build tools\n\npackage main\n\nimport \"example.com/shop/a\"\n\ntype S struct {\n\ta.T\n}\n",
 	})
-	wantEdges(t, readModel(t, dir))
+	wantEdges(t, readModel[model](t, dir))
 }
 
 func TestTwoEmbeddedTypesFromOneClassMakeOneEdge(t *testing.T) {
@@ -170,7 +170,7 @@ func TestTwoEmbeddedTypesFromOneClassMakeOneEdge(t *testing.T) {
 		"a/a2.go": "package a\n\nimport other \"example.com/shop/b\"\n\ntype V struct {\n\tother.T\n}\n",
 		"b/b.go":  baseFile,
 	})
-	wantEdges(t, readModel(t, dir), composition("a", "b"), dependency("a", "b"))
+	wantEdges(t, readModel[model](t, dir), composition("a", "b"), dependency("a", "b"))
 }
 
 func TestEdgesAreSortedByFromThenToThenKind(t *testing.T) {
@@ -180,7 +180,7 @@ func TestEdgesAreSortedByFromThenToThenKind(t *testing.T) {
 		"b/b.go": "package b\n\nimport \"example.com/shop/c\"\n\ntype S struct {\n\tc.T\n}\n",
 		"c/c.go": "package c\n\ntype T struct{}\n",
 	})
-	wantEdges(t, readModel(t, dir),
+	wantEdges(t, readModel[model](t, dir),
 		dependency("a", "b"), composition("a", "c"), dependency("a", "c"),
 		composition("b", "c"), dependency("b", "c"),
 	)

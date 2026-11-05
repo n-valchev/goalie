@@ -110,7 +110,7 @@ func TestTheModuleLineIsReadInEveryForm(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			dir := writeTree(t, map[string]string{"go.mod": test.content, "a/a.go": "package a\n"})
-			if got := readModel(t, dir); got.Module != "example.com/shop" {
+			if got := readModel[model](t, dir); got.Module != "example.com/shop" {
 				t.Errorf("module = %q", got.Module)
 			}
 		})
@@ -173,7 +173,7 @@ func TestTheTitleComesFromTheFlagThenTheSettingThenTheModule(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := readModel(t, smallTree(t, test.config), test.args...); got.Title != test.want {
+			if got := readModel[model](t, smallTree(t, test.config), test.args...); got.Title != test.want {
 				t.Errorf("title = %q, want %q", got.Title, test.want)
 			}
 		})
@@ -196,7 +196,7 @@ func TestRepoSettingsChooseTheFiles(t *testing.T) {
 			dir := writeTree(t, map[string]string{
 				"go.mod": goMod, "a/a.go": "package a\n", "b/b.go": tagged, "c/c.go": "package c\n", ".goalierc": test.config,
 			})
-			wantClasses(t, readModel(t, dir, test.args...), class{"example.com/shop/a", "a", "a"})
+			wantClasses(t, readModel[model](t, dir, test.args...), class{"example.com/shop/a", "a", "a"})
 		})
 	}
 }
@@ -205,7 +205,7 @@ func TestTheIgnoreFileApplies(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod, "a/a.go": "package a\n", "b/b.go": "package b\n", ".goalieignore": "b/**\n",
 	})
-	wantClasses(t, readModel(t, dir), class{"example.com/shop/a", "a", "a"})
+	wantClasses(t, readModel[model](t, dir), class{"example.com/shop/a", "a", "a"})
 }
 
 func TestHelpPrintsTheFlagsAndExitsCleanly(t *testing.T) {
