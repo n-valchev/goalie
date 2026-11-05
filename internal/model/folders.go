@@ -12,11 +12,12 @@ const sharedBox = ":shared"
 
 // Package is a folder box that groups classes and other boxes.
 type Package struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Parent       string `json:"parent,omitempty"`
-	Shared       bool   `json:"shared,omitempty"`
-	PackageCount int    `json:"packageCount"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Parent         string `json:"parent,omitempty"`
+	Shared         bool   `json:"shared,omitempty"`
+	PackageCount   int    `json:"packageCount"`
+	DuplicateCount *int   `json:"duplicateCount,omitempty"`
 }
 
 // placeClasses sets the box of each class and returns the boxes.

@@ -1,0 +1,282 @@
+package godeps_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/n-valchev/goalie/internal/godry"
+)
+
+const dryFixture = "testdata/godry"
+
+type duplicate struct {
+	ID    string  `json:"id"`
+	Name  string  `json:"name"`
+	File  string  `json:"file"`
+	Line  int     `json:"line"`
+	URL   string  `json:"url"`
+	Score float64 `json:"score"`
+}
+
+type dryOp struct {
+	Name       string      `json:"name"`
+	Duplicates []duplicate `json:"duplicates"`
+}
+
+type dryClass struct {
+	ID             string  `json:"id"`
+	DuplicateCount *int    `json:"duplicateCount"`
+	Ops            []dryOp `json:"ops"`
+}
+
+type dryBox struct {
+	ID             string `json:"id"`
+	DuplicateCount *int   `json:"duplicateCount"`
+}
+
+type dryModel struct {
+	Packages []dryBox   `json:"packages"`
+	Classes  []dryClass `json:"classes"`
+}
+
+func readDryModel(t *testing.T, dir string, args ...string) dryModel {
+	t.Helper()
+	stdout, _ := run(t, dir, 0, append([]string{"--format", "json"}, args...)...)
+	var result dryModel
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("stdout is not a model: %v\n%s", err, stdout)
+	}
+	return result
+}
+
+func (m dryModel) op(t *testing.T, class, name string) dryOp {
+	t.Helper()
+	for _, found := range m.Classes {
+		for _, op := range found.Ops {
+			if found.ID == class && op.Name == name {
+				return op
+			}
+		}
+	}
+	t.Fatalf("no op %s in class %s: %+v", name, class, m.Classes)
+	return dryOp{}
+}
+
+func TestAnOpInTwoPairsGetsADuplicateForEachOtherSide(t *testing.T) {
+	result := readDryModel(t, dryFixture, "--dry-report", "dry.json", "--editor-url", "idea://open?file={file}&line={line}")
+	got := result.op(t, "example.com/shop/billing/invoice", "Total").Duplicates
+	want := []duplicate{
+		{"example.com/shop/orders", "Order.Sum", "orders/order.go", 5, "idea://open?file=testdata/godry/orders/order.go&line=5", 1},
+		{"example.com/shop/web/cart", "Subtotal", "web/cart/cart.go", 3, "idea://open?file=testdata/godry/web/cart/cart.go&line=3", 1},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("duplicates = %+v, want %+v", got, want)
+	}
+}
+
+func TestADuplicateLinkUsesTheDefaultEditorURL(t *testing.T) {
+	result := readDryModel(t, dryFixture, "--dry-report", "dry.json")
+	got := result.op(t, "example.com/shop/orders", "Order.Sum").Duplicates[0].URL
+	if want := "file://testdata/godry/billing/invoice/total.go"; got != want {
+		t.Errorf("url = %q, want %q", got, want)
+	}
+}
+
+func wantCount(t *testing.T, what string, got *int, want int) {
+	t.Helper()
+	if got == nil {
+		t.Errorf("%s has no duplicateCount, want %d", what, want)
+	} else if *got != want {
+		t.Errorf("%s duplicateCount = %d, want %d", what, *got, want)
+	}
+}
+
+const repeated = `func %NAME%(values []int) int {
+	return len(values)
+}
+`
+
+func pairReport(left, right string) string {
+	return `{"findings": [{"score": 0.9,
+		"left": {"file": "` + left + `", "function": "F", "startLine": 3},
+		"right": {"file": "` + right + `", "function": "G", "startLine": 3}}]}`
+}
+
+func dryTree(t *testing.T, extra map[string]string) string {
+	t.Helper()
+	tree := map[string]string{
+		"go.mod":     goMod,
+		"root.go":    "package shop\n\n" + strings.ReplaceAll(repeated, "%NAME%", "F"),
+		"a/b/one.go": "package b\n\n" + strings.ReplaceAll(repeated, "%NAME%", "F") + "\n" + strings.ReplaceAll(repeated, "%NAME%", "Clean"),
+		"a/two.go":   "package a\n\n" + strings.ReplaceAll(repeated, "%NAME%", "G"),
+		"c/c.go":     "package c\n\n" + strings.ReplaceAll(repeated, "%NAME%", "Clean"),
+	}
+	for name, content := range extra {
+		tree[name] = content
+	}
+	return writeTree(t, tree)
+}
+
+func TestAnOpInTwoPairsCountsOnce(t *testing.T) {
+	result := readDryModel(t, dryFixture, "--dry-report", "dry.json")
+	for _, class := range result.Classes {
+		wantCount(t, class.ID, class.DuplicateCount, 1)
+	}
+	want := map[string]int{"billing": 1, "billing/invoice": 1, "orders": 1, "web": 1, "web/cart": 1}
+	for _, box := range result.Packages {
+		wantCount(t, box.ID, box.DuplicateCount, want[box.ID])
+	}
+}
+
+func TestDuplicateCountAddsUpAtAnyDepthAndShowsZero(t *testing.T) {
+	dir := dryTree(t, map[string]string{"dry.json": pairReport("a/b/one.go", "a/two.go")})
+	result := readDryModel(t, dir, "--dry-report", "dry.json")
+	want := map[string]int{"a": 2, "a/b": 1, "c": 0}
+	for _, box := range result.Packages {
+		wantCount(t, box.ID, box.DuplicateCount, want[box.ID])
+	}
+	wantClass := map[string]int{"example.com/shop": 0, "example.com/shop/a": 1, "example.com/shop/a/b": 1, "example.com/shop/c": 0}
+	for _, class := range result.Classes {
+		wantCount(t, class.ID, class.DuplicateCount, wantClass[class.ID])
+	}
+}
+
+func TestDuplicateCountReachesTheSharedBox(t *testing.T) {
+	dir := dryTree(t, map[string]string{"dry.json": pairReport("a/b/one.go", "root.go")})
+	result := readDryModel(t, dir, "--dry-report", "dry.json", "--shared", "a/**")
+	want := map[string]int{":shared": 1, ":shared/a": 1, ":shared/a/b": 1, "c": 0}
+	for _, box := range result.Packages {
+		wantCount(t, box.ID, box.DuplicateCount, want[box.ID])
+	}
+}
+
+func TestAForeignClassHasNoDuplicateCount(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"go.mod":    goMod,
+		"a/a.go":    "package a\n\nimport _ \"example.com/lib\"\n",
+		".goalierc": `{"godeps": {"foreign": ["example.com/lib"]}}`,
+		"dry.json":  `{"findings": []}`,
+	})
+	for _, class := range readDryModel(t, dir, "--dry-report", "dry.json").Classes {
+		if class.ID == "example.com/lib" && class.DuplicateCount != nil {
+			t.Errorf("foreign class duplicateCount = %d, want none", *class.DuplicateCount)
+		}
+	}
+}
+
+func TestWithNoDryReportTheModelHasNoDuplicateData(t *testing.T) {
+	stdout, _ := run(t, dryFixture, 0, "--format", "json")
+	for _, field := range []string{"duplicates", "duplicateCount"} {
+		if strings.Contains(stdout, field) {
+			t.Errorf("stdout holds %q with no report:\n%s", field, stdout)
+		}
+	}
+}
+
+func TestAMissingDryReportFails(t *testing.T) {
+	_, stderr := run(t, dryTree(t, nil), 2, "--format", "json", "--dry-report", "nowhere.json")
+	if !strings.Contains(stderr, "nowhere.json") {
+		t.Errorf("stderr = %q, want the path named", stderr)
+	}
+}
+
+func TestAnInvalidDryReportFails(t *testing.T) {
+	tests := []struct{ name, content string }{
+		{"not json", "oops"},
+		{"empty", ""},
+		{"no findings", "{}"},
+		{"null findings", `{"findings": null}`},
+		{"a gocrap report", `{"limit": 8, "findings": [{"file": "root.go", "line": 3, "crap": 2}]}`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := dryTree(t, map[string]string{"dry.json": test.content})
+			_, stderr := run(t, dir, 2, "--format", "json", "--dry-report", "dry.json")
+			if !strings.Contains(stderr, "dry.json") {
+				t.Errorf("stderr = %q, want the path named", stderr)
+			}
+		})
+	}
+}
+
+func TestTheDryReportComesFromTheSettingUnlessTheFlagReplacesIt(t *testing.T) {
+	dir := dryTree(t, map[string]string{
+		".goalierc": `{"godeps": {"dryReport": "dry.json"}}`,
+		"dry.json":  pairReport("a/b/one.go", "a/two.go"),
+		"none.json": `{"findings": []}`,
+	})
+	if got := readDryModel(t, dir).op(t, "example.com/shop/a", "G").Duplicates; len(got) != 1 {
+		t.Errorf("from the setting: duplicates = %+v, want one", got)
+	}
+	if got := readDryModel(t, dir, "--dry-report", "none.json").op(t, "example.com/shop/a", "G").Duplicates; len(got) != 0 {
+		t.Errorf("from the flag: duplicates = %+v, want none", got)
+	}
+}
+
+func TestAnAbsoluteDryReportPathIsUsedAsItIs(t *testing.T) {
+	report := filepath.Join(writeTree(t, map[string]string{"dry.json": pairReport("a/b/one.go", "a/two.go")}), "dry.json")
+	if got := readDryModel(t, dryTree(t, nil), "--dry-report", report).op(t, "example.com/shop/a", "G").Duplicates; len(got) != 1 {
+		t.Errorf("duplicates = %+v, want one", got)
+	}
+}
+
+func TestSidesThatMatchNoOpWarnOnceWithTheCount(t *testing.T) {
+	report := `{"findings": [
+		{"score": 0.9, "left": {"file": "gone.go", "function": "F", "startLine": 3}, "right": {"file": "gone.go", "function": "G", "startLine": 9}},
+		{"score": 0.9, "left": {"file": "a/two.go", "function": "G", "startLine": 99}, "right": {"file": "a/two_test.go", "function": "H", "startLine": 3}}
+	]}`
+	dir := dryTree(t, map[string]string{"dry.json": report})
+	_, stderr := run(t, dir, 0, "--format", "json", "--dry-report", "dry.json")
+	if want := "godeps: godry report sides with no function: 4\n"; stderr != want {
+		t.Errorf("stderr = %q, want %q", stderr, want)
+	}
+}
+
+func TestAReportThatMatchesPrintsNoWarning(t *testing.T) {
+	if _, stderr := run(t, dryFixture, 0, "--format", "json", "--dry-report", "dry.json"); stderr != "" {
+		t.Errorf("stderr = %q, want nothing", stderr)
+	}
+}
+
+func TestAnOpKeepsItsMarkWhenTheOtherSideIsOffTheMap(t *testing.T) {
+	dir := dryTree(t, map[string]string{
+		"dry.json":   pairReport("a/two.go", "gen/gen.go"),
+		"gen/gen.go": "package gen\n\n" + strings.ReplaceAll(repeated, "%NAME%", "G"),
+		".goalierc":  `{"godeps": {"omit": ["gen"]}}`,
+	})
+	stdout, stderr := run(t, dir, 0, "--format", "json", "--dry-report", "dry.json", "--editor-url", "x:{line}")
+	if want := "godeps: godry report sides with no function: 1\n"; stderr != want {
+		t.Errorf("stderr = %q, want %q", stderr, want)
+	}
+	if strings.Contains(stdout, `"id": ""`) {
+		t.Errorf("stdout holds an empty id:\n%s", stdout)
+	}
+	var result dryModel
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatal(err)
+	}
+	got := result.op(t, "example.com/shop/a", "G").Duplicates
+	want := []duplicate{{"", "G", "gen/gen.go", 3, "x:3", 0.9}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("duplicates = %+v, want %+v", got, want)
+	}
+}
+
+func TestTheFixtureIsWhatGodryPrints(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := godry.Run([]string{"--format", "json", "--warn-only"}, dryFixture, &stdout, &stderr); code != 0 {
+		t.Fatalf("godry exit code = %d, stderr = %q", code, stderr.String())
+	}
+	want, err := os.ReadFile(filepath.Join(dryFixture, "dry.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stdout.String() != string(want) {
+		t.Errorf("godry prints %s\nfixture holds %s", stdout.String(), want)
+	}
+}

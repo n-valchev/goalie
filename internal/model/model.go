@@ -34,13 +34,14 @@ type Model struct {
 
 // Class is one Go package. It has that name because Package in this model is a folder box.
 type Class struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Path    string `json:"path,omitempty"`
-	Package string `json:"package,omitempty"`
-	Foreign bool   `json:"foreign,omitempty"`
-	Types   []Type `json:"types"`
-	Ops     []Op   `json:"ops"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Path           string `json:"path,omitempty"`
+	Package        string `json:"package,omitempty"`
+	Foreign        bool   `json:"foreign,omitempty"`
+	DuplicateCount *int   `json:"duplicateCount,omitempty"`
+	Types          []Type `json:"types"`
+	Ops            []Op   `json:"ops"`
 }
 
 type Edge struct {

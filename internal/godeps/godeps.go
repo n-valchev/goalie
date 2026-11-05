@@ -59,6 +59,9 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 	if err := joinArchGo(dir, opts.archGoReport, &result, source, stderr); err != nil {
 		return fail(stderr, err)
 	}
+	if err := joinDry(dir, opts.dryReport, &result, source, stderr); err != nil {
+		return fail(stderr, err)
+	}
 	warnUnmatchedOrder(stderr, result)
 	if err := writeOutput(stdout, result, opts.format); err != nil {
 		return fail(stderr, err)

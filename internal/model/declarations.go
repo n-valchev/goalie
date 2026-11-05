@@ -37,12 +37,13 @@ type Method struct {
 }
 
 type Op struct {
-	Name     string `json:"name"`
-	File     string `json:"file"`
-	Line     int    `json:"line"`
-	EndLine  int    `json:"endLine"`
-	Exported bool   `json:"exported"`
-	URL      string `json:"url"`
+	Name       string      `json:"name"`
+	File       string      `json:"file"`
+	Line       int         `json:"line"`
+	EndLine    int         `json:"endLine"`
+	Exported   bool        `json:"exported"`
+	URL        string      `json:"url"`
+	Duplicates []Duplicate `json:"duplicates,omitempty"`
 }
 
 // fileReader turns one parsed file into model entries.
