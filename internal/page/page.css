@@ -76,14 +76,16 @@ h1 { margin: 0 0 4px; font-size: 18px; overflow-wrap: anywhere; }
   line-height: 9px;
   text-align: center;
 }
-.key-arrow, .key-loop { height: 0; border-width: 2px 0 0; background: none; vertical-align: 3px; border-color: var(--line); }
+.key-arrow, .key-loop, .key-break { height: 0; border-width: 2px 0 0; background: none; vertical-align: 3px; border-color: var(--line); }
 .key-loop { border-top-style: dotted; border-color: var(--loop); }
+.key-break { border-top-style: dashed; border-color: var(--red-edge); }
 .key-foreign { border-radius: 50%; }
 .key-green { background: var(--green); border-color: var(--green-edge); }
 .key-yellow { background: var(--yellow); border-color: var(--yellow-edge); }
 .key-red { background: var(--red); border: 1px dashed var(--red-edge); color: var(--text); }
 
-#map { position: relative; flex: 1; min-height: 0; overflow: auto; }
+#stage { position: relative; flex: 1; min-height: 0; }
+#map { position: relative; height: 100%; overflow: auto; }
 #canvas { position: relative; }
 #arrows { position: absolute; inset: 0; }
 #nodes { position: absolute; inset: 0; pointer-events: none; }
@@ -122,29 +124,45 @@ h1 { margin: 0 0 4px; font-size: 18px; overflow-wrap: anywhere; }
 .node.foreign { border-radius: 50%; padding: 4px 20px; }
 .node.stub { border-width: 1px; border-style: dotted; opacity: 0.85; }
 .node.stub .name { font-weight: 400; }
+.score { display: inline-block; margin-top: 2px; padding: 0 6px; border: 1px solid var(--frame); border-radius: 4px; font-size: 12px; }
 .grade-green { background: var(--green); border-color: var(--green-edge); }
 .grade-yellow { background: var(--yellow); border-color: var(--yellow-edge); }
 .node.grade-red, .grade-red { background: var(--red); border-color: var(--red-edge); border-style: dashed; }
 
 .arrow { stroke: var(--line); stroke-width: 1.5; }
 .arrow.loop { stroke: var(--loop); stroke-dasharray: 2 4; stroke-width: 2; }
+.arrow.break { stroke: var(--red-edge); stroke-dasharray: 8 5; stroke-width: 2; }
+.arrow.selected { stroke-width: 4; }
+/* A 2px line is too thin to hover over, so a wider clear line takes the mouse for it. */
+.arrow-hit { stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; outline: none; }
+.arrow-hit:focus-visible { stroke: var(--frame); }
 .head { fill: var(--line); }
 .head-loop { fill: var(--loop); }
+.head-break { fill: var(--red-edge); }
 .loop-label { fill: var(--loop); font-size: 11px; text-anchor: middle; paint-order: stroke; stroke: var(--page); stroke-width: 3px; }
 
 #empty { padding: 24px; color: var(--muted); }
 
-#card {
+#card, #breaks {
   position: absolute;
-  top: 12px;
-  right: 16px;
-  width: min(420px, calc(100% - 32px));
+  overflow: auto;
   padding: 12px 16px;
   border: 1px solid var(--frame);
   border-radius: 8px;
   background: var(--page);
   box-shadow: 0 4px 16px rgb(0 0 0 / 25%);
 }
-#card h2 { margin: 0 0 4px; font-size: 16px; overflow-wrap: anywhere; }
-#card p { margin: 0 0 8px; color: var(--muted); overflow-wrap: anywhere; }
-#card button { font: inherit; }
+#card { top: 12px; right: 16px; width: min(460px, calc(100% - 32px)); max-height: calc(100% - 24px); }
+/* Only a selected panel takes the mouse. A panel that opens under the pointer on hover would end the hover and close itself. */
+#breaks { bottom: 12px; left: 16px; width: min(560px, calc(100% - 32px)); max-height: 45%; pointer-events: none; }
+#breaks.selected { pointer-events: auto; }
+#card h2, #breaks h2 { margin: 0 0 4px; font-size: 16px; overflow-wrap: anywhere; }
+#card p, #breaks p { margin: 0 0 8px; color: var(--muted); overflow-wrap: anywhere; }
+#card button, #breaks button { font: inherit; }
+#card h3, #breaks h3 { margin: 12px 0 4px; font-size: 14px; overflow-wrap: anywhere; }
+#card a, #breaks a { color: inherit; font-weight: 600; }
+.entries, .members { margin: 0; padding: 0; list-style: none; }
+.entries > li { padding: 3px 0; overflow-wrap: anywhere; }
+.members { padding-left: 12px; }
+.where { color: var(--muted); font-size: 12px; user-select: all; }
+.break-mark { color: var(--red-edge); font-weight: 600; }

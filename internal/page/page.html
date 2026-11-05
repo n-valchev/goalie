@@ -14,6 +14,7 @@
     <li><span class="key key-box"></span> Double-click a box to open it. Press Esc to go up.</li>
     <li><span class="key key-arrow"></span> The box at the tail imports the box at the head.</li>
     <li><span class="key key-loop"></span> Dotted and marked "loop": this arrow closes an import loop.</li>
+    <li><span class="key key-break"></span> Red and dashed: this arrow holds an import that breaks an arch-go rule. Hover over it or click it to read the rule.</li>
     <li><span class="key key-foreign"></span> Oval: a module outside this repository.</li>
     <li><span class="key key-green"></span> Low risk</li>
     <li><span class="key key-yellow"></span> Medium risk</li>
@@ -21,10 +22,11 @@
     <li><span class="key key-box"></span> Grey: no risk data</li>
   </ul>
 </header>
-<main id="map">
+<main id="stage">
+<div id="map">
   <noscript>This page needs JavaScript to draw the map.</noscript>
   <div id="canvas">
-    <svg id="arrows" aria-hidden="true">
+    <svg id="arrows">
       <defs>
         <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">
           <path class="head" d="M0 0 L10 5 L0 10 Z"/>
@@ -32,12 +34,17 @@
         <marker id="head-loop" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">
           <path class="head-loop" d="M0 0 L10 5 L0 10 Z"/>
         </marker>
+        <marker id="head-break" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto">
+          <path class="head-break" d="M0 0 L10 5 L0 10 Z"/>
+        </marker>
       </defs>
       <g id="lines"></g>
     </svg>
     <div id="nodes"></div>
   </div>
-  <aside id="card" hidden></aside>
+</div>
+<aside id="card" hidden></aside>
+<aside id="breaks" hidden aria-live="polite"></aside>
 </main>
 <script type="application/json" id="model">{{.Model}}</script>
 <script>{{.Script}}</script>
