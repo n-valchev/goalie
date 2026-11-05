@@ -1,24 +1,29 @@
-# godry
+# goalie
 
-godry finds Go functions with the same structure, so that you can catch a copied function before it merges. It compares functions across the whole repository, not one package at a time. It ships as one binary and uses only the Go standard library.
+goalie is a set of checks that stop poor code before it merges. It is made for repos where coding agents write code. Each tool ships as its own binary, and all tools share one settings file.
 
-A renamed copy still matches. godry ignores the names of local variables, the names of fields, and the values of literals. It keeps the names of called functions and the operators, so functions that do different work don't match.
+| Tool | What it finds |
+| --- | --- |
+| [godry](#find-duplicates) | Go functions with the same structure, such as a copied function |
+| [gocrap](#find-risky-functions) | Go functions that are complex and poorly tested |
 
-## Install godry
+godry and gocrap use only the Go standard library.
+
+## Install goalie
 
 Choose one method.
 
 | Method | Command | What you need |
 | --- | --- | --- |
-| Go | `go install github.com/n-valchev/goalie/cmd/godry@latest` | Go 1.25 or later |
-| Nix, run once | `nix run github:n-valchev/goalie#godry -- --help` | Nix with flakes |
+| Go | `go install github.com/n-valchev/goalie/cmd/godry@latest github.com/n-valchev/goalie/cmd/gocrap@latest` | Go 1.25 or later |
+| Nix, run once | `nix run github:n-valchev/goalie#godry -- --help`, or `#gocrap` | Nix with flakes |
 | Nix, keep on your `PATH` | `nix profile add github:n-valchev/goalie` | Nix with flakes |
 
-To check the install, run `godry --help`. The command prints the modes, flags, skip rules, and exit codes.
+To check the install, run `godry --help` and `gocrap --help`. Each command prints its modes, flags, skip rules, and exit codes.
 
 `--base` runs `git`. If you install with Go, you must have `git` on your `PATH`. The Nix package includes `git` and uses it only when your `PATH` has no `git`.
 
-To add godry to your own Nix package set, use the overlay:
+To add goalie to your own Nix package set, use the overlay:
 
 ```nix
 {
@@ -31,6 +36,10 @@ To add godry to your own Nix package set, use the overlay:
 ```
 
 ## Find duplicates
+
+godry finds Go functions with the same structure. It compares functions across the whole repository, not one package at a time.
+
+A renamed copy still matches. godry ignores the names of local variables, the names of fields, and the values of literals. It keeps the names of called functions and the operators, so functions that do different work don't match.
 
 godry has two modes.
 
@@ -282,7 +291,115 @@ godry: no merge base between "origin/main" and HEAD: in a shallow clone, fetch m
 
 To adopt godry without blocking work, add `--warn-only` first. Remove it when you have checked the limits on your repository.
 
-## Develop godry
+## Find risky functions
+
+gocrap scores each function by its complexity and its test coverage. A high score means the function is risky to change. It uses the CRAP (Change Risk Anti-Pattern) formula, where CC is cyclomatic complexity:
+
+```text
+score = CC² × (1 - coverage)³ + CC
+```
+
+For example, a function with a complexity of 6 scores 42 with no coverage, and 10.5 with 50% coverage. Full coverage leaves a score equal to the complexity, so a very complex function fails even if it is fully tested.
+
+| Mode | Command | Reports |
+| --- | --- | --- |
+| All code | `gocrap [paths]` | Every function above the limit |
+| New code | `gocrap --base <rev> [paths]` | New or changed functions above the limit |
+
+```text
+pkg/a.go:12: Run scores 130.2 (complexity 12, coverage 45.0%, limit 30)
+```
+
+Findings come worst first. A clean run prints `No functions over the limit.` To list every function, run `gocrap --limit 0`. Use `--format json` to get an object with a `findings` array. Each finding has `file`, `line`, `function`, `score`, `complexity`, `coverage` (a fraction from `0` to `1`), and `limit`.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | No function is over its limit, or some are and you set `--warn-only` |
+| `1` | A function is over its limit |
+| `2` | An error, even with `--warn-only` |
+
+### Set the limits
+
+Set the limits in the `gocrap` object of `.goalierc`:
+
+```json
+{
+  "shared": ["pkg/**"],
+  "gocrap": {
+    "limit": 30,
+    "sharedLimit": 15,
+    "coverCommand": "make coverage"
+  }
+}
+```
+
+| Setting | Flag | Type | Default |
+| --- | --- | --- | --- |
+| `base` | `--base` | String | None |
+| `limit` | `--limit` | Number | `30` |
+| `sharedLimit` | `--shared-limit` | Number | The value of `limit` |
+| `coverCommand` | None | String | See [Measure all your test suites](#measure-all-your-test-suites) |
+| `coverProfiles` | `--cover-profiles` | List of strings | None |
+| `format` | `--format` | `"text"` or `"json"` | `"text"` |
+| `warnOnly` | `--warn-only` | `true` or `false` | `false` |
+
+- A score equal to the limit passes.
+- `sharedLimit` applies to files that match `shared`. Every product depends on shared code, so you can hold it to a stricter limit. `sharedLimit` without `shared` is an error.
+- gocrap also uses `paths`, `skipFiles`, `skipTags`, and `.goalieignore`. See [Keep settings in a file](#keep-settings-in-a-file).
+- gocrap never scores `*_test.go` files.
+- To exclude one function, write `//gocrap:ignore <reason>` directly above it. `//godry:ignore` has no effect on gocrap.
+
+### Measure all your test suites
+
+gocrap runs one command to gather coverage. With no settings, the command is:
+
+```sh
+go test -coverpkg=./... -coverprofile="$GOCRAP_COVER_DIR/coverage.out" ./...
+```
+
+If your repo has more suites, set `coverCommand`. gocrap follows these steps:
+
+1. It creates an empty temporary folder and sets `GOCRAP_COVER_DIR` to that path.
+2. It runs your command with `sh -c`, from the directory it runs in.
+3. It reads each file in that folder as a text coverage profile. It ignores subfolders.
+4. It merges the profiles. A code block counts as covered if any profile covers it.
+
+This example runs unit, integration, and end-to-end (e2e) tests:
+
+```sh
+set -e
+go test -coverpkg=./... -coverprofile="$GOCRAP_COVER_DIR/unit.out" ./...
+go test -tags integration -coverpkg=./... -coverprofile="$GOCRAP_COVER_DIR/integration.out" ./...
+
+mkdir "$GOCRAP_COVER_DIR/raw"
+go build -cover -coverpkg=./... -o "$GOCRAP_COVER_DIR/raw/app" ./cmd/app
+GOCOVERDIR="$GOCRAP_COVER_DIR/raw" ./e2e/run.sh "$GOCRAP_COVER_DIR/raw/app"
+go tool covdata textfmt -i="$GOCRAP_COVER_DIR/raw" -o="$GOCRAP_COVER_DIR/e2e.out"
+```
+
+- Keep `-coverpkg=./...`. Without it, Go counts coverage only in the package that holds the test, and code reached from other packages scores as untested.
+- An e2e binary must exit normally, because a killed process writes no coverage. In a container, mount the `GOCOVERDIR` folder.
+- If the command fails, gocrap exits with `2` and prints no scores. A suite that stopped early would give falsely high scores. Use `set -e` so that a failed suite fails the command.
+- The command's output goes to stderr, so stdout stays the report.
+- A function in no profile has 0% coverage. This includes files that no test run builds, such as files for another platform. To leave them out, use `skipFiles` or `skipTags`.
+- gocrap runs the tests in new-code mode too, because any test can cover a changed function. If no function changed, it runs nothing.
+
+If CI has already run the tests, list the files in `coverProfiles`, or pass `--cover-profiles a.out,b.out`. gocrap then runs no command. Setting both `coverCommand` and `coverProfiles` in the file is an error, but `--cover-profiles` replaces either one for a run.
+
+gocrap supports one Go module, and it reads `go.mod` from the directory it runs in, or above it. A profile that holds a file outside that module is an error. Limit `paths` to one module if your repo holds several.
+
+`coverCommand` can run any command. An agent can also use it to raise its scores. Require human approval for changes to `.goalierc`, for example with `CODEOWNERS`.
+
+### Run gocrap in CI
+
+Use the same job setup as godry, with `fetch-depth: 0`:
+
+```yaml
+      - run: go install github.com/n-valchev/goalie/cmd/gocrap@latest
+      - run: "$(go env GOPATH)/bin/gocrap --base origin/${{ github.base_ref }}"
+```
+
+## Develop goalie
 
 1. Run `nix develop` to enter a shell with Go and `git`. You can also use your own Go 1.25 or later.
 2. Run `go test ./...` to run the tests.
@@ -292,8 +409,10 @@ Nix sees only the files that Git tracks. Run `git add` on a new file before you 
 
 ## Credits
 
+gocrap follows [crap4go](https://github.com/unclebob/crap4go), and shares no code with it. Scores can differ from crap4go's scores, because gocrap does not count `default` clauses as branches.
+
 godry follows the method of [dryer](https://github.com/unclebob/dryer) and [dry4clj](https://github.com/unclebob/dry4clj). Scores differ from dryer's scores, because godry parses code with `go/parser` and the two parsers build different trees.
 
 ## License
 
-godry uses the [0BSD license](LICENSE).
+goalie uses the [0BSD license](LICENSE).
