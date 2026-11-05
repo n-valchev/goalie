@@ -5,11 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/n-valchev/goalie/internal/cliflags"
 	"github.com/n-valchev/goalie/internal/compare"
-	"github.com/n-valchev/goalie/internal/files"
+	"github.com/n-valchev/goalie/internal/config"
 	"github.com/n-valchev/goalie/internal/report"
 )
 
@@ -102,6 +101,7 @@ func (f format) write(w io.Writer, pairs []compare.Pair) error {
 }
 
 type options struct {
+	config.Repo
 	base         string
 	threshold    float64
 	minLines     int
@@ -109,13 +109,9 @@ type options struct {
 	format       format
 	warnOnly     bool
 	includeTests bool
-	skipTags     []string
-	skipFiles    []string
-	shared       []string
 	weakAnchors  int
 	weakLiterals float64
 	help         bool
-	paths        []string
 	fromFlags    map[string]bool
 }
 
@@ -140,26 +136,13 @@ func parseOptions(args []string) (options, error) {
 	flags.StringVar((*string)(&opts.format), "format", string(formatText), "")
 	flags.BoolVar(&opts.warnOnly, "warn-only", false, "")
 	flags.BoolVar(&opts.includeTests, "include-tests", false, "")
-	flags.Func("skip-tags", "", func(value string) error {
-		opts.skipTags = strings.Split(value, ",")
-		return nil
-	})
-	flags.Func("skip-files", "", func(value string) error {
-		cleaned, err := files.CleanPatterns(strings.Split(value, ","))
-		opts.skipFiles = append(opts.skipFiles, cleaned...)
-		return err
-	})
-	flags.Func("shared", "", func(value string) error {
-		cleaned, err := files.CleanPatterns(strings.Split(value, ","))
-		opts.shared = append(opts.shared, cleaned...)
-		return err
-	})
+	opts.AddFlags(flags)
 
 	parsed, err := cliflags.Parse(flags, args)
 	if err != nil {
 		return opts, err
 	}
-	opts.paths, opts.help, opts.fromFlags = parsed.Paths, parsed.Help, parsed.Set
+	opts.Paths, opts.help, opts.fromFlags = parsed.Paths, parsed.Help, parsed.Set
 	if opts.help {
 		return opts, nil
 	}

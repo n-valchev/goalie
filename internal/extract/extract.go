@@ -15,8 +15,6 @@ import (
 	"sync/atomic"
 )
 
-const ignoreDirective = "//godry:ignore"
-
 // Function is a function or method with a body.
 type Function struct {
 	File      string // Slash-separated path, as passed to Parse.
@@ -33,8 +31,9 @@ func (f Function) Lines() int {
 }
 
 // Parse reads files, given relative to dir, and returns their functions in file order.
-// A function under a //godry:ignore comment is left out.
-func Parse(dir string, files []string) ([]Function, error) {
+// A function under a comment that starts with directive is left out. Each tool has its own, because
+// a reason to skip a function in one check says nothing about the other.
+func Parse(dir string, files []string, directive string) ([]Function, error) {
 	type result struct {
 		functions []Function
 		err       error
@@ -49,7 +48,7 @@ func Parse(dir string, files []string) ([]Function, error) {
 				if i >= len(files) {
 					return
 				}
-				functions, err := parseFile(dir, files[i])
+				functions, err := parseFile(dir, files[i], directive)
 				results[i] = result{functions, err}
 			}
 		})
@@ -66,7 +65,7 @@ func Parse(dir string, files []string) ([]Function, error) {
 	return functions, nil
 }
 
-func parseFile(dir, file string) ([]Function, error) {
+func parseFile(dir, file, directive string) ([]Function, error) {
 	source, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
 	if err != nil {
 		return nil, err
@@ -83,7 +82,7 @@ func parseFile(dir, file string) ([]Function, error) {
 			continue
 		}
 		// Before the body check, because a directive with no reason fails on any function.
-		ignored, err := hasIgnoreDirective(fset, fn)
+		ignored, err := hasIgnoreDirective(fset, fn, directive)
 		if err != nil {
 			return nil, err
 		}
@@ -133,19 +132,19 @@ func receiverType(fn *ast.FuncDecl) string {
 	}
 }
 
-func hasIgnoreDirective(fset *token.FileSet, fn *ast.FuncDecl) (bool, error) {
+func hasIgnoreDirective(fset *token.FileSet, fn *ast.FuncDecl, directive string) (bool, error) {
 	if fn.Doc == nil {
 		return false, nil
 	}
 	ignored := false
 	for _, comment := range fn.Doc.List {
 		words := strings.Fields(comment.Text)
-		if words[0] != ignoreDirective {
+		if words[0] != directive {
 			continue
 		}
 		if len(words) == 1 {
 			position := fset.PositionFor(comment.Pos(), false)
-			return false, fmt.Errorf("%s:%d: %s needs a reason", position.Filename, position.Line, ignoreDirective)
+			return false, fmt.Errorf("%s:%d: %s needs a reason", position.Filename, position.Line, directive)
 		}
 		ignored = true
 	}

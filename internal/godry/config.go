@@ -5,7 +5,6 @@ import (
 
 	"github.com/n-valchev/goalie/internal/cliflags"
 	"github.com/n-valchev/goalie/internal/config"
-	"github.com/n-valchev/goalie/internal/files"
 )
 
 // applyConfig runs after the flags are parsed and validated, so that a failure here is the file's.
@@ -28,21 +27,8 @@ func applyConfig(dir string, opts *options) error {
 	cliflags.Fill(set, "format", (*string)(&opts.format), tool.Format)
 	cliflags.Fill(set, "warn-only", &opts.warnOnly, tool.WarnOnly)
 	cliflags.Fill(set, "include-tests", &opts.includeTests, tool.IncludeTests)
-	if !set["skip-tags"] {
-		opts.skipTags = file.SkipTags
-	}
-	if len(opts.paths) == 0 {
-		opts.paths = file.Paths
-	}
-	skipFiles, err := files.CleanPatterns(file.SkipFiles)
-	if err != nil {
-		return fmt.Errorf("%s: %w", config.Name, err)
-	}
-	opts.skipFiles = append(opts.skipFiles, skipFiles...)
-	if !set["shared"] {
-		if opts.shared, err = files.CleanPatterns(file.Shared); err != nil {
-			return fmt.Errorf("%s: %w", config.Name, err)
-		}
+	if err := opts.Apply(file, set); err != nil {
+		return err
 	}
 	if err := opts.validate(); err != nil {
 		return fmt.Errorf("%s: %w", config.Name, err)

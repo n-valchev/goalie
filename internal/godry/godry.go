@@ -7,11 +7,12 @@ import (
 
 	"github.com/n-valchev/goalie/internal/compare"
 	"github.com/n-valchev/goalie/internal/extract"
-	"github.com/n-valchev/goalie/internal/files"
 	"github.com/n-valchev/goalie/internal/fingerprint"
 	"github.com/n-valchev/goalie/internal/gitchange"
 	"github.com/n-valchev/goalie/internal/report"
 )
+
+const ignoreDirective = "//godry:ignore"
 
 const (
 	exitClean      = 0
@@ -37,28 +38,15 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 			return fail(stderr, err)
 		}
 	}
-	ignored, err := files.ReadIgnoreFile(dir)
-	if err != nil {
-		return fail(stderr, err)
-	}
-	rules := files.Rules{
-		IncludeTests: opts.includeTests,
-		SkipTags:     opts.skipTags,
-		SkipFiles:    append(ignored, opts.skipFiles...),
-	}
-	paths, err := files.Find(dir, opts.paths, rules)
+	paths, err := opts.Find(dir, opts.includeTests)
 	if err != nil {
 		return fail(stderr, err)
 	}
 	if len(paths) == 0 {
 		return nothingToCompare("No Go files found.", opts, stdout, stderr)
 	}
-	// A warning, not an error, because paths can limit a run to code with no shared folder. Without
-	// it, a mistyped pattern would quietly label shared code as a product.
-	for _, pattern := range files.Unmatched(opts.shared, paths) {
-		fmt.Fprintf(stderr, "godry: shared pattern %q matches no file; to match a folder, write folder/**\n", pattern)
-	}
-	functions, err := extract.Parse(dir, paths)
+	opts.WarnUnmatched(stderr, "godry", paths)
+	functions, err := extract.Parse(dir, paths, ignoreDirective)
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -74,7 +62,7 @@ func Run(args []string, dir string, stdout, stderr io.Writer) int {
 		compare.Find(all, newFunctions, opts.threshold),
 		compare.WeakLimits{Anchors: opts.weakAnchors, Literals: opts.weakLiterals},
 	)
-	compare.Classify(pairs, opts.shared)
+	compare.Classify(pairs, opts.Shared)
 	if err := opts.format.write(stdout, pairs); err != nil {
 		return fail(stderr, err)
 	}
