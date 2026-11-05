@@ -98,9 +98,20 @@ func readModule(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	inBlock := false
+	// Go ends a word at a parenthesis, so "module(" opens a block and "module (a/b)" is no module line.
+	spaced := strings.NewReplacer("(", " ( ", ")", " ) ")
 	for _, line := range strings.Split(string(content), "\n") {
 		line, _, _ = strings.Cut(line, "//")
-		if fields := strings.Fields(line); len(fields) == 2 && fields[0] == "module" && fields[1] != "(" {
+		fields := strings.Fields(spaced.Replace(line))
+		switch {
+		case inBlock && len(fields) == 1 && fields[0] == ")":
+			inBlock = false
+		case inBlock && len(fields) == 1:
+			return strings.Trim(fields[0], "\"`"), nil
+		case len(fields) == 2 && fields[0] == "module" && fields[1] == "(":
+			inBlock = true
+		case len(fields) == 2 && fields[0] == "module":
 			return strings.Trim(fields[1], "\"`"), nil
 		}
 	}

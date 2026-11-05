@@ -85,6 +85,8 @@ func TestAGoModWithNoModuleLineIsAnError(t *testing.T) {
 		{"only go", "go 1.25\n"},
 		{"commented out", "// module example.com/shop\n"},
 		{"no path", "module\n"},
+		{"an empty block", "module (\n)\n"},
+		{"a block on one line", "module (example.com/shop)\n"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -101,6 +103,9 @@ func TestTheModuleLineIsReadInEveryForm(t *testing.T) {
 		{"quoted", "module \"example.com/shop\"\n"},
 		{"raw quoted", "module `example.com/shop`\n"},
 		{"indented with Windows line ends", "\tmodule example.com/shop\r\n"},
+		{"a block", "module (\n\texample.com/shop\n)\n\ngo 1.25\n"},
+		{"a block with no space", "module(\n\texample.com/shop\n)\n"},
+		{"a block with comments and blank lines", "module ( // the shop\n\n\t// why\n\t\"example.com/shop\" // here\n)\n"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
