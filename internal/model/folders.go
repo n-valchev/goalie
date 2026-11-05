@@ -21,7 +21,6 @@ type Package struct {
 	Grade          string `json:"grade,omitempty"`
 }
 
-// placeClasses sets the box of each class and returns the boxes.
 func placeClasses(classes []Class, shared map[string]bool) []Package {
 	boxes := map[string]*Package{}
 	for i := range classes {

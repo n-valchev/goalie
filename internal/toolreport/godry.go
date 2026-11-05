@@ -2,7 +2,6 @@ package toolreport
 
 import "fmt"
 
-// DryPair is one finding of godry.
 type DryPair struct {
 	Score float64 `json:"score"`
 	Left  DrySide `json:"left"`

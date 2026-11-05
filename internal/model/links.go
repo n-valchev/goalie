@@ -7,7 +7,6 @@ import (
 	"strings"
 )
 
-// URL returns the editor link for a line of a file, with file relative to Dir as in the model.
 func (s Source) URL(file string, line int) string {
 	absolute := filepath.ToSlash(filepath.Join(s.Dir, filepath.FromSlash(file)))
 	return strings.NewReplacer("{file}", encodePath(absolute), "{line}", strconv.Itoa(line)).Replace(s.EditorURL)

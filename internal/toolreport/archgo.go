@@ -9,7 +9,6 @@ import (
 // contains imported package". The report holds the imported path nowhere else.
 var importedPackage = regexp.MustCompile(`imported package '([^']+)'`)
 
-// Break is one import that arch-go flags.
 type Break struct {
 	Rule    string
 	Package string

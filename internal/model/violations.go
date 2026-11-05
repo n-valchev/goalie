@@ -9,7 +9,7 @@ type Violation struct {
 	Details []string `json:"details"`
 }
 
-// MarkBreaks sets the violations of the edges and returns how many breaks have no edge.
+// MarkBreaks returns how many breaks have no edge.
 func MarkBreaks(result *Model, source Source, breaks []toolreport.Break) int {
 	edges := map[[2]string]*Edge{}
 	for i := range result.Edges {

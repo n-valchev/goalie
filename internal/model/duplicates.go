@@ -29,8 +29,7 @@ type placedOp struct {
 	op    *Op
 }
 
-// JoinDuplicates sets the duplicates of the ops and the counts of the classes and boxes. It returns
-// how many sides of the pairs match no op.
+// JoinDuplicates returns how many sides of the pairs match no op.
 func JoinDuplicates(result *Model, source Source, pairs []toolreport.DryPair) int {
 	ops := map[opPosition][]placedOp{}
 	for i := range result.Classes {

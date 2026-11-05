@@ -11,7 +11,6 @@ import (
 	"github.com/n-valchev/goalie/internal/files"
 )
 
-// DefaultLimit is the score above which gocrap reports a function, when nothing sets a limit.
 const DefaultLimit = 30.0
 
 // Limits is the rule that decides each function's limit, so that godeps grades with what gocrap fails on.

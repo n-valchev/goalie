@@ -22,7 +22,6 @@ var everySetting = []string{
 	"format", "archGoReport", "crapReport", "dryReport", "editorURL", "title", "foreign", "omit", "order",
 }
 
-// between returns the text from the heading to the next heading of the same level.
 func between(t *testing.T, text, heading string) string {
 	t.Helper()
 	_, after, found := strings.Cut(text, heading+"\n")

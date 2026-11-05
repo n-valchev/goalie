@@ -20,7 +20,7 @@ type Score struct {
 	Coverage   float64 `json:"coverage"`
 }
 
-// JoinCrap sets the scores and grades and returns how many rows match no op.
+// JoinCrap returns how many rows match no op.
 func JoinCrap(result *Model, rows []toolreport.CrapRow, limits crap.Limits) int {
 	ops := map[opPosition][]placedOp{}
 	for i := range result.Classes {

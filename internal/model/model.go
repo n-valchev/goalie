@@ -139,7 +139,6 @@ func Build(source Source) (Model, error) {
 
 func byID(a, b Class) int { return cmp.Compare(a.ID, b.ID) }
 
-// importTargets returns the sorted ids of the classes that the imports reach.
 func importTargets(imports []string, source Source, scanned map[string]bool) []string {
 	var targets []string
 	for _, imported := range imports {

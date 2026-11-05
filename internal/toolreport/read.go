@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-// readJSON reads a report. A relative file starts from dir, where every tool runs.
+// A relative file starts from dir, where every tool runs.
 func readJSON(dir, file string, report any) error {
 	path := file
 	if !filepath.IsAbs(path) {

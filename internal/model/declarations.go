@@ -50,7 +50,6 @@ type Op struct {
 	NoBody bool `json:"-"`
 }
 
-// fileReader turns one parsed file into model entries.
 type fileReader struct {
 	fset   *token.FileSet
 	file   string
