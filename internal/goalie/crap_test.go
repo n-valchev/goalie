@@ -1,6 +1,8 @@
 package goalie_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -35,7 +37,8 @@ const (
 	// halfCovered lists statements of Decide: 1 of 2 covered gives 6² × 0.5³ + 6 = 10.5.
 	halfCovered = "mode: set\nexample.com/m/a.go:4.2,4.10 1 1\nexample.com/m/a.go:7.2,7.10 1 0\n"
 
-	decideOverDefault = "a.go:3: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 30)\n"
+	decideOverDefault = "a.go:3: fail crap: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 30)\n"
+	decideWarn        = "a.go:3: warn crap: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 30)\n"
 )
 
 // repoWithNewFunction has only a go.mod in Git, so Decide counts as changed code.
@@ -50,14 +53,15 @@ func repoWithNewFunction(t *testing.T, settings, profile string) string {
 
 func TestEachModeDecidesWhatACrapResultDoes(t *testing.T) {
 	cases := []struct {
-		name     string
-		settings string
-		wantCode int
+		name       string
+		settings   string
+		wantCode   int
+		wantStdout string
 	}{
-		{"a rule with no mode fails", `{"rules": {"crap": {"coverProfiles": ["p.out"]}}}`, 1},
-		{"fail fails", `{"rules": {"crap": {"mode": "fail", "coverProfiles": ["p.out"]}}}`, 1},
-		{"warn reports and passes", `{"rules": {"crap": {"mode": "warn", "coverProfiles": ["p.out"]}}}`, 0},
-		{"off runs as warn when named", `{"rules": {"crap": {"mode": "off", "coverProfiles": ["p.out"]}}}`, 0},
+		{"a rule with no mode fails", `{"rules": {"crap": {"coverProfiles": ["p.out"]}}}`, 1, decideOverDefault},
+		{"fail fails", `{"rules": {"crap": {"mode": "fail", "coverProfiles": ["p.out"]}}}`, 1, decideOverDefault},
+		{"warn reports and passes", `{"rules": {"crap": {"mode": "warn", "coverProfiles": ["p.out"]}}}`, 0, decideWarn},
+		{"off runs as warn when named", `{"rules": {"crap": {"mode": "off", "coverProfiles": ["p.out"]}}}`, 0, decideWarn},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -66,10 +70,24 @@ func TestEachModeDecidesWhatACrapResultDoes(t *testing.T) {
 			if code != tc.wantCode {
 				t.Errorf("exit code = %d, want %d; stderr: %s", code, tc.wantCode, stderr)
 			}
-			if stdout != decideOverDefault {
-				t.Errorf("stdout = %q, want %q", stdout, decideOverDefault)
+			if stdout != tc.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout, tc.wantStdout)
 			}
 		})
+	}
+}
+
+func TestCrapSaysNothingAndRunsNoTestsWhenItIsOff(t *testing.T) {
+	dir := repoWithNewFunction(t, `{"rules": {"crap": {"mode": "off", "coverCommand": "touch started"}}}`, emptyProfile)
+	code, stdout, stderr := runGoalie(t, dir, "check", "--base", "HEAD")
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want nothing", stdout)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "started")); err == nil {
+		t.Error("the cover command ran")
 	}
 }
 
@@ -80,9 +98,9 @@ func TestOnlyAScoreAboveTheLimitIsAResult(t *testing.T) {
 		wantCode   int
 		wantStdout string
 	}{
-		{"one step below the score", "10", 1, "a.go:3: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n"},
-		{"equal to the score", "10.5", 0, "No functions over the limit.\n"},
-		{"a limit of 0 is a normal limit", "0", 1, "a.go:3: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 0)\n"},
+		{"one step below the score", "10", 1, "a.go:3: fail crap: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n"},
+		{"equal to the score", "10.5", 0, ""},
+		{"a limit of 0 is a normal limit", "0", 1, "a.go:3: fail crap: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 0)\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -109,7 +127,7 @@ func TestTheSharedLimitAppliesOnlyToSharedCode(t *testing.T) {
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
 	}
-	want := "shared/a.go:3: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 41)\n"
+	want := "shared/a.go:3: fail crap: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 41)\n"
 	if stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
@@ -135,13 +153,13 @@ func TestEachScopeDecidesWhichFunctionsAreScored(t *testing.T) {
 		wantStdout string
 	}{
 		{"changes skips old code and runs no tests", `{"rules": {"crap": {"scope": "changes", "coverCommand": "exit 1"}}}`,
-			[]string{"check", "crap", "--base", "HEAD"}, 0, "No new functions found.\n"},
+			[]string{"check", "crap", "--base", "HEAD"}, 0, ""},
 		{"all sees old code with no revision", `{"rules": {"crap": {"scope": "all", "coverProfiles": ["p.out"]}}}`,
 			[]string{"check", "crap"}, 1, decideOverDefault},
 		{"all sees old code despite a revision", `{"rules": {"crap": {"scope": "all", "coverProfiles": ["p.out"]}}}`,
 			[]string{"check", "crap", "--base", "HEAD"}, 1, decideOverDefault},
 		{"all follows the mode", `{"rules": {"crap": {"scope": "all", "mode": "warn", "coverProfiles": ["p.out"]}}}`,
-			[]string{"check", "crap"}, 0, decideOverDefault},
+			[]string{"check", "crap"}, 0, decideWarn},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -185,7 +203,7 @@ func TestTheCoverCommandSuppliesCoverage(t *testing.T) {
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
 	}
-	want := "a.go:3: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n"
+	want := "a.go:3: fail crap: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n"
 	if stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
@@ -201,8 +219,8 @@ func TestWithNoCoverSettingsTheDefaultCommandRunsTheTests(t *testing.T) {
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0; stdout: %s; stderr: %s", code, stdout, stderr)
 	}
-	if want := "No functions over the limit.\n"; stdout != want {
-		t.Errorf("stdout = %q, want %q", stdout, want)
+	if stdout != "" {
+		t.Errorf("stdout = %q, want nothing", stdout)
 	}
 }
 
@@ -226,8 +244,11 @@ func TestRepoSettingsApplyToCrap(t *testing.T) {
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)
 	}
-	if want := "No Go files found.\n"; stdout != want {
-		t.Errorf("stdout = %q, want %q", stdout, want)
+	if stdout != "" {
+		t.Errorf("stdout = %q, want nothing", stdout)
+	}
+	if !strings.Contains(stderr, "No Go files found.") {
+		t.Errorf("stderr = %q, want it to say that it found no Go files", stderr)
 	}
 }
 

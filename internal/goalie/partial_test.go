@@ -31,12 +31,12 @@ func TestEachPartialCaseStartsAtItsExactBoundary(t *testing.T) {
 		wantStdout string
 	}{
 		{"c² + c = L is safe", "42", 0, ""},
-		{"just under c² + c needs coverage", "41", 0, "a.go:3: Decide needs at least 1% coverage (complexity 6, limit 41)\n"},
-		{"c = L needs full coverage", "6", 0, "a.go:3: Decide needs at least 100% coverage (complexity 6, limit 6)\n"},
-		{"c = L + 1 can't pass", "5", 1, "a.go:3: Decide can't pass at any coverage, so split it (complexity 6, limit 5)\n"},
-		{"a limit of 0 can't pass", "0", 1, "a.go:3: Decide can't pass at any coverage, so split it (complexity 6, limit 0)\n"},
+		{"just under c² + c needs coverage", "41", 0, "a.go:3: warn crap: Decide needs at least 1% coverage (complexity 6, limit 41)\n"},
+		{"c = L needs full coverage", "6", 0, "a.go:3: warn crap: Decide needs at least 100% coverage (complexity 6, limit 6)\n"},
+		{"c = L + 1 can't pass", "5", 1, "a.go:3: fail crap: Decide can't pass at any coverage, so split it (complexity 6, limit 5)\n"},
+		{"a limit of 0 can't pass", "0", 1, "a.go:3: fail crap: Decide can't pass at any coverage, so split it (complexity 6, limit 0)\n"},
 		// 27% scores 20.005, so a value rounded to the nearest percent would still fail.
-		{"the value rounds up", "20", 0, "a.go:3: Decide needs at least 28% coverage (complexity 6, limit 20)\n"},
+		{"the value rounds up", "20", 0, "a.go:3: warn crap: Decide needs at least 28% coverage (complexity 6, limit 20)\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -58,9 +58,9 @@ func TestThePRDExamplesHoldAtTheDefaultLimit(t *testing.T) {
 		wantStdout string
 	}{
 		{5, 0, ""},
-		{10, 0, "a.go:3: F needs at least 42% coverage (complexity 10, limit 30)\n"},
-		{20, 0, "a.go:3: F needs at least 71% coverage (complexity 20, limit 30)\n"},
-		{31, 1, "a.go:3: F can't pass at any coverage, so split it (complexity 31, limit 30)\n"},
+		{10, 0, "a.go:3: warn crap: F needs at least 42% coverage (complexity 10, limit 30)\n"},
+		{20, 0, "a.go:3: warn crap: F needs at least 71% coverage (complexity 20, limit 30)\n"},
+		{31, 1, "a.go:3: fail crap: F can't pass at any coverage, so split it (complexity 31, limit 30)\n"},
 	}
 	for _, tc := range cases {
 		t.Run(fmt.Sprint("complexity ", tc.complexity), func(t *testing.T) {
@@ -73,8 +73,9 @@ func TestThePRDExamplesHoldAtTheDefaultLimit(t *testing.T) {
 
 func TestOnlyACantPassResultFollowsTheMode(t *testing.T) {
 	const (
-		needsCoverage = "a.go:3: Decide needs at least 28% coverage (complexity 6, limit 20)\n"
-		cantPass      = "a.go:3: Decide can't pass at any coverage, so split it (complexity 6, limit 5)\n"
+		needsCoverage = "a.go:3: warn crap: Decide needs at least 28% coverage (complexity 6, limit 20)\n"
+		cantPass      = "a.go:3: fail crap: Decide can't pass at any coverage, so split it (complexity 6, limit 5)\n"
+		cantPassWarn  = "a.go:3: warn crap: Decide can't pass at any coverage, so split it (complexity 6, limit 5)\n"
 	)
 	cases := []struct {
 		mode       string
@@ -86,8 +87,8 @@ func TestOnlyACantPassResultFollowsTheMode(t *testing.T) {
 		{"warn", "20", 0, needsCoverage},
 		{"off", "20", 0, needsCoverage},
 		{"fail", "5", 1, cantPass},
-		{"warn", "5", 0, cantPass},
-		{"off", "5", 0, cantPass},
+		{"warn", "5", 0, cantPassWarn},
+		{"off", "5", 0, cantPassWarn},
 	}
 	for _, tc := range cases {
 		t.Run(tc.mode+" at limit "+tc.limit, func(t *testing.T) {
@@ -111,7 +112,7 @@ func TestAPartialCheckUsesNoCoverage(t *testing.T) {
 			dir := repoWithNewFunction(t, tc.settings, emptyProfile)
 			// A real test run can't compile this file, so it would end the check with an error.
 			write(t, dir, "a_test.go", "package m\n\nnot Go code\n")
-			wantPartial(t, dir, 0, "a.go:3: Decide needs at least 28% coverage (complexity 6, limit 20)\n")
+			wantPartial(t, dir, 0, "a.go:3: warn crap: Decide needs at least 28% coverage (complexity 6, limit 20)\n")
 			if _, err := os.Stat(filepath.Join(dir, "started")); err == nil {
 				t.Error("the cover command ran")
 			}
@@ -125,9 +126,9 @@ func TestAPartialCheckReportsOnlyWhatTheScopeCovers(t *testing.T) {
 		settings   string
 		wantStdout string
 	}{
-		{"changes skips old code", `{"rules": {"crap": {"limit": 20}}}`, "No new functions found.\n"},
+		{"changes skips old code", `{"rules": {"crap": {"limit": 20}}}`, ""},
 		{"all sees old code", `{"rules": {"crap": {"limit": 20, "scope": "all"}}}`,
-			"a.go:3: Decide needs at least 28% coverage (complexity 6, limit 20)\n"},
+			"a.go:3: warn crap: Decide needs at least 28% coverage (complexity 6, limit 20)\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -139,7 +140,7 @@ func TestAPartialCheckReportsOnlyWhatTheScopeCovers(t *testing.T) {
 func TestAPartialCheckGivesNoResultForFunctionsWithNoComplexity(t *testing.T) {
 	dir := gitRepo(t, map[string]string{"go.mod": goMod})
 	write(t, dir, "a.go", "package m\n\nfunc Assembly(a int) int\n\n//gocrap:ignore generated\n"+withComplexity("Ignored", 31))
-	wantPartial(t, dir, 0, "No new functions found.\n")
+	wantPartial(t, dir, 0, "")
 }
 
 func TestAPartialCheckUsesTheSharedLimit(t *testing.T) {
@@ -147,16 +148,16 @@ func TestAPartialCheckUsesTheSharedLimit(t *testing.T) {
 	write(t, dir, "shared/a.go", decideFile)
 	write(t, dir, "product/a.go", decideFile)
 	write(t, dir, ".goalierc", `{"shared": ["shared/**"], "rules": {"crap": {"limit": 42, "sharedLimit": 5}}}`)
-	wantPartial(t, dir, 1, "shared/a.go:3: Decide can't pass at any coverage, so split it (complexity 6, limit 5)\n")
+	wantPartial(t, dir, 1, "shared/a.go:3: fail crap: Decide can't pass at any coverage, so split it (complexity 6, limit 5)\n")
 }
 
 func TestPartialResultsStartWithTheHighestComplexityOverLimit(t *testing.T) {
 	dir := gitRepo(t, map[string]string{"go.mod": goMod})
 	write(t, dir, "a.go", "package m\n\n"+withComplexity("Near", 20)+"\n"+withComplexity("Nearer", 30))
 	write(t, dir, "z.go", "package m\n\n"+withComplexity("Over", 31))
-	wantPartial(t, dir, 1, "z.go:3: Over can't pass at any coverage, so split it (complexity 31, limit 30)\n"+
-		"a.go:64: Nearer needs at least 100% coverage (complexity 30, limit 30)\n"+
-		"a.go:3: Near needs at least 71% coverage (complexity 20, limit 30)\n")
+	wantPartial(t, dir, 1, "z.go:3: fail crap: Over can't pass at any coverage, so split it (complexity 31, limit 30)\n"+
+		"a.go:64: warn crap: Nearer needs at least 100% coverage (complexity 30, limit 30)\n"+
+		"a.go:3: warn crap: Near needs at least 71% coverage (complexity 20, limit 30)\n")
 }
 
 func TestACantPassResultComesFirstEvenAtALimitOfZero(t *testing.T) {
@@ -164,8 +165,8 @@ func TestACantPassResultComesFirstEvenAtALimitOfZero(t *testing.T) {
 	write(t, dir, "a.go", decideFile)
 	write(t, dir, "shared/z.go", "package shared\n\n"+withComplexity("One", 1))
 	write(t, dir, ".goalierc", `{"shared": ["shared/**"], "rules": {"crap": {"limit": 6, "sharedLimit": 0}}}`)
-	wantPartial(t, dir, 1, "shared/z.go:3: One can't pass at any coverage, so split it (complexity 1, limit 0)\n"+
-		"a.go:3: Decide needs at least 100% coverage (complexity 6, limit 6)\n")
+	wantPartial(t, dir, 1, "shared/z.go:3: fail crap: One can't pass at any coverage, so split it (complexity 1, limit 0)\n"+
+		"a.go:3: warn crap: Decide needs at least 100% coverage (complexity 6, limit 6)\n")
 }
 
 func TestDupGivesTheSameResultInAFullAndAPartialCheck(t *testing.T) {
@@ -185,7 +186,7 @@ func TestCrapParsesOnlyChangedFilesWhenItHasARevision(t *testing.T) {
 	dir := gitRepo(t, map[string]string{"go.mod": goMod, "old.go": "package m\n\nfunc broken( {\n"})
 	write(t, dir, "a.go", decideFile)
 	write(t, dir, ".goalierc", `{"rules": {"crap": {"limit": 20}}}`)
-	wantPartial(t, dir, 0, "a.go:3: Decide needs at least 28% coverage (complexity 6, limit 20)\n")
+	wantPartial(t, dir, 0, "a.go:3: warn crap: Decide needs at least 28% coverage (complexity 6, limit 20)\n")
 
 	write(t, dir, "a.go", "package m\n\nfunc broken( {\n")
 	code, _, stderr := runGoalie(t, dir, "check", "crap", "--partial", "--base", "HEAD")
@@ -224,25 +225,26 @@ func TestOneEditedFileChecksWithinTheBudget(t *testing.T) {
 	dir := gitRepo(t, repo)
 	write(t, dir, "edited/edited.go", "package edited\n\n"+withComplexity("Over", 31)+"\n"+sumFunc("Sum"))
 
-	for _, rule := range []string{"crap", "dup"} {
+	for _, names := range [][]string{{"crap"}, {"dup"}, nil} {
+		args := append(append([]string{"check"}, names...), "--partial", "--base", "HEAD")
 		// The best of three, because the budget is for a machine that is not busy, and the file cache
 		// is cold for a first run.
 		best := time.Hour
 		for range 3 {
 			start := time.Now()
-			code, stdout, stderr := runGoalie(t, dir, "check", rule, "--partial", "--base", "HEAD")
+			code, stdout, stderr := runGoalie(t, dir, args...)
 			best = min(best, time.Since(start))
 
 			if code != 1 {
-				t.Errorf("%s: exit code = %d, want 1; stderr: %s", rule, code, stderr)
+				t.Errorf("%v: exit code = %d, want 1; stderr: %s", names, code, stderr)
 			}
 			if !strings.Contains(stdout, "edited/edited.go") {
-				t.Errorf("%s: stdout = %.200q, want a result for the edited file", rule, stdout)
+				t.Errorf("%v: stdout = %.200q, want a result for the edited file", names, stdout)
 			}
 		}
-		t.Logf("%s: %v", rule, best)
+		t.Logf("%v: %v", names, best)
 		if best > partialBudget {
-			t.Errorf("%s took %v, want at most %v", rule, best, partialBudget)
+			t.Errorf("%v took %v, want at most %v", names, best, partialBudget)
 		}
 	}
 }

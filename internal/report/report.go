@@ -15,14 +15,23 @@ func Text(w io.Writer, pairs []compare.Pair) error {
 		return err
 	}
 	for _, pair := range pairs {
-		_, err := fmt.Fprintf(w, "%s:%d: duplicates %s:%d (score %.2f, literals %s, anchors %d%s)\n",
-			pair.Left.File, pair.Left.StartLine, pair.Right.File, pair.Right.StartLine,
-			pair.Score, literalText(pair.Literals), pair.Anchors, caseText(pair.Case))
+		_, err := fmt.Fprintf(w, "%s:%d: duplicates %s:%d (score %.2f, %s)\n",
+			pair.Left.File, pair.Left.StartLine, pair.Right.File, pair.Right.StartLine, pair.Score, evidence(pair))
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// Summary leaves out the file and line of the pair, because the report that uses it gives them.
+func Summary(pair compare.Pair, limit float64) string {
+	return fmt.Sprintf("duplicates %s:%d (score %.2f, limit %g, %s)",
+		pair.Right.File, pair.Right.StartLine, pair.Score, limit, evidence(pair))
+}
+
+func evidence(pair compare.Pair) string {
+	return fmt.Sprintf("literals %s, anchors %d%s", literalText(pair.Literals), pair.Anchors, caseText(pair.Case))
 }
 
 func literalText(score *float64) string {
@@ -61,10 +70,14 @@ type jsonSide struct {
 	New       bool   `json:"new"`
 }
 
+func Finding(pair compare.Pair) jsonFinding {
+	return jsonFinding{pair.Score, pair.Literals, pair.Anchors, string(pair.Case), toJSON(pair.Left), toJSON(pair.Right)}
+}
+
 func JSON(w io.Writer, pairs []compare.Pair) error {
 	findings := make([]jsonFinding, 0, len(pairs))
 	for _, pair := range pairs {
-		findings = append(findings, jsonFinding{pair.Score, pair.Literals, pair.Anchors, string(pair.Case), toJSON(pair.Left), toJSON(pair.Right)})
+		findings = append(findings, Finding(pair))
 	}
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")

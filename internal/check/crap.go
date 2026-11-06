@@ -14,11 +14,13 @@ import (
 	"github.com/n-valchev/goalie/internal/gitchange"
 )
 
+const CrapRule = "crap"
+
 // Crap finds functions that are complex and poorly tested. An empty Base scores the whole repo.
 type Crap struct {
 	config.Repo
 	Tool          string
-	Partial       bool
+	Partial       bool // Only Results reads this, because only goalie has a partial check.
 	Base          string
 	Limits        crap.Limits
 	CoverCommand  string
@@ -52,18 +54,63 @@ func (c *Crap) Apply(file config.Settings, fromFlags map[string]bool) error {
 }
 
 func (c Crap) Run(dir string, stdout, stderr io.Writer) (found bool, err error) {
+	functions, notice, err := c.functions(dir, stderr)
+	if err != nil {
+		return false, err
+	}
+	if notice != "" {
+		return false, c.nothingToScore(notice, stdout, stderr)
+	}
+	findings, err := c.findings(dir, functions, stderr)
+	if err != nil {
+		return false, err
+	}
+	if err := c.write(stdout, findings); err != nil {
+		return false, err
+	}
+	return len(findings) > 0, nil
+}
+
+func (c Crap) Results(dir string, stderr io.Writer) ([]Result, error) {
+	functions, notice, err := c.functions(dir, stderr)
+	if err != nil {
+		return nil, err
+	}
+	if notice != "" {
+		noResults(stderr, c.Tool, CrapRule, notice)
+		return nil, nil
+	}
+	if c.Partial {
+		return c.estimates(functions), nil
+	}
+	findings, err := c.findings(dir, functions, stderr)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]Result, 0, len(findings))
+	for _, found := range findings {
+		results = append(results, Result{
+			Rule: CrapRule, Value: found.Score, Limit: found.Limit,
+			File: found.File, Line: found.Line, Message: found.message(), Details: found,
+		})
+	}
+	return results, nil
+}
+
+// A notice says why there is nothing to score.
+func (c Crap) functions(dir string, stderr io.Writer) (functions []extract.Function, notice string, err error) {
 	var changes gitchange.Changes
 	if c.Base != "" {
 		if changes, err = gitchange.Since(dir, c.Base); err != nil {
-			return false, err
+			return nil, "", err
 		}
 	}
 	paths, err := c.Find(dir, false)
 	if err != nil {
-		return false, err
+		return nil, "", err
 	}
 	if len(paths) == 0 {
-		return false, c.nothingToScore("No Go files found.", stdout, stderr)
+		return nil, "No Go files found.", nil
 	}
 	c.WarnUnmatched(stderr, c.Tool, paths)
 	var changed gitchange.Changes
@@ -75,9 +122,9 @@ func (c Crap) Run(dir string, stdout, stderr io.Writer) (found bool, err error) 
 			return !ok
 		})
 	}
-	functions, err := extract.Parse(dir, paths, crap.IgnoreDirective)
+	functions, err = extract.Parse(dir, paths, crap.IgnoreDirective)
 	if err != nil {
-		return false, err
+		return nil, "", err
 	}
 	if c.Base != "" {
 		functions = slices.DeleteFunc(functions, func(fn extract.Function) bool {
@@ -85,21 +132,18 @@ func (c Crap) Run(dir string, stdout, stderr io.Writer) (found bool, err error) 
 		})
 		// Before the coverage step, so that a change with no functions doesn't run the tests.
 		if len(functions) == 0 {
-			return false, c.nothingToScore("No new functions found.", stdout, stderr)
+			return nil, "No new functions found.", nil
 		}
 	}
-	if c.Partial {
-		return c.runPartial(functions, stdout)
-	}
+	return functions, "", nil
+}
+
+func (c Crap) findings(dir string, functions []extract.Function, stderr io.Writer) ([]finding, error) {
 	profile, err := c.gather(dir, stderr)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	findings := c.score(functions, profile)
-	if err := c.write(stdout, findings); err != nil {
-		return false, err
-	}
-	return len(findings) > 0, nil
+	return c.score(functions, profile), nil
 }
 
 type finding struct {
@@ -148,13 +192,16 @@ func (c Crap) write(w io.Writer, findings []finding) error {
 		return err
 	}
 	for _, found := range findings {
-		_, err := fmt.Fprintf(w, "%s:%d: %s scores %.1f (complexity %d, coverage %.1f%%, limit %g)\n",
-			found.File, found.Line, found.Function, found.Score, found.Complexity, found.Coverage*100, found.Limit)
-		if err != nil {
+		if _, err := fmt.Fprintf(w, "%s:%d: %s\n", found.File, found.Line, found.message()); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (f finding) message() string {
+	return fmt.Sprintf("%s scores %.1f (complexity %d, coverage %.1f%%, limit %g)",
+		f.Function, f.Score, f.Complexity, f.Coverage*100, f.Limit)
 }
 
 func (c Crap) nothingToScore(message string, stdout, stderr io.Writer) error {

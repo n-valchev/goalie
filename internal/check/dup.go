@@ -13,7 +13,10 @@ import (
 	"github.com/n-valchev/goalie/internal/report"
 )
 
-const ignoreDirective = "//godry:ignore"
+const (
+	DupRule         = "dup"
+	ignoreDirective = "//godry:ignore"
+)
 
 type Format string
 
@@ -108,30 +111,65 @@ func (d Dup) Validate() error {
 }
 
 func (d Dup) Run(dir string, stdout, stderr io.Writer) (found bool, err error) {
+	pairs, notice, err := d.pairs(dir, stderr)
+	if err != nil {
+		return false, err
+	}
+	if notice != "" {
+		return false, d.nothingToCompare(notice, stdout, stderr)
+	}
+	if err := d.Format.write(stdout, pairs); err != nil {
+		return false, err
+	}
+	return len(pairs) > 0, nil
+}
+
+func (d Dup) Results(dir string, stderr io.Writer) ([]Result, error) {
+	pairs, notice, err := d.pairs(dir, stderr)
+	if err != nil {
+		return nil, err
+	}
+	if notice != "" {
+		noResults(stderr, d.Tool, DupRule, notice)
+		return nil, nil
+	}
+	results := make([]Result, 0, len(pairs))
+	for _, pair := range pairs {
+		results = append(results, Result{
+			Rule: DupRule, Value: pair.Score, Limit: d.Threshold,
+			File: pair.Left.File, Line: pair.Left.StartLine,
+			Message: report.Summary(pair, d.Threshold), Details: report.Finding(pair),
+		})
+	}
+	return results, nil
+}
+
+// A notice says why there is nothing to compare.
+func (d Dup) pairs(dir string, stderr io.Writer) (pairs []compare.Pair, notice string, err error) {
 	var changes gitchange.Changes
 	if d.Base != "" {
 		if changes, err = gitchange.Since(dir, d.Base); err != nil {
-			return false, err
+			return nil, "", err
 		}
 	}
 	paths, err := d.Find(dir, d.IncludeTests)
 	if err != nil {
-		return false, err
+		return nil, "", err
 	}
 	if len(paths) == 0 {
-		return false, d.nothingToCompare("No Go files found.", stdout, stderr)
+		return nil, "No Go files found.", nil
 	}
 	d.WarnUnmatched(stderr, d.Tool, paths)
 	functions, err := extract.Parse(dir, paths, ignoreDirective)
 	if err != nil {
-		return false, err
+		return nil, "", err
 	}
 	all := d.candidates(functions)
 	newFunctions := compare.WholeRepo()
 	if d.Base != "" {
 		newFunctions = findNew(all, changes.For(dir, paths))
 		if newFunctions.Empty() {
-			return false, d.nothingToCompare("No new functions found.", stdout, stderr)
+			return nil, "No new functions found.", nil
 		}
 	}
 	pairs, dropped := compare.DropWeak(
@@ -139,9 +177,6 @@ func (d Dup) Run(dir string, stdout, stderr io.Writer) (found bool, err error) {
 		compare.WeakLimits{Anchors: d.WeakAnchors, Literals: d.WeakLiterals},
 	)
 	compare.Classify(pairs, d.Shared)
-	if err := d.Format.write(stdout, pairs); err != nil {
-		return false, err
-	}
 	// On stderr, so that stdout stays the same shape for anything that reads it.
 	switch {
 	case dropped == 1:
@@ -149,7 +184,7 @@ func (d Dup) Run(dir string, stdout, stderr io.Writer) (found bool, err error) {
 	case dropped > 1:
 		fmt.Fprintf(stderr, "%s: %d weak findings dropped\n", d.Tool, dropped)
 	}
-	return len(pairs) > 0, nil
+	return pairs, "", nil
 }
 
 func (d Dup) nothingToCompare(message string, stdout, stderr io.Writer) error {

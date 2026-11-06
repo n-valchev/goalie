@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"sync"
 
 	"github.com/n-valchev/goalie/internal/check"
 	"github.com/n-valchev/goalie/internal/config"
+	"github.com/n-valchev/goalie/internal/files"
 )
 
 const (
@@ -45,41 +47,114 @@ func runCheck(args []string, dir string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stderr, err)
 	}
-	control, build := file.Rules.Dup.Control, newDup
-	if slices.Contains(opts.ruleNames, "crap") {
-		control, build = file.Rules.Crap.Control, newCrap
-	}
-	mode := cmp.Or(control.Mode, config.ModeFail)
-	if mode == config.ModeOff {
-		if len(opts.ruleNames) == 0 {
-			return exitClean
-		}
-		// A maintainer names a rule that is off to try its limit on real code, without failing a build.
-		mode = config.ModeWarn
-	}
-	selected, err := build(file, opts)
+	// All of them before any runs, so that a mistake in the settings doesn't wait for a test run.
+	selected, err := selectRules(file, opts)
 	if err != nil {
 		return fail(stderr, err)
 	}
-	found, err := selected.Run(dir, stdout, stderr)
-	if err != nil {
+	results, failures := runRules(selected, dir, stderr)
+	// With no rule left to report, an empty list would read as clean code to anything that loads it.
+	if failures > 0 && failures == len(selected) {
+		return exitError
+	}
+	check.SortResults(results)
+	if err := check.WriteResults(stdout, opts.format, results); err != nil {
 		return fail(stderr, err)
 	}
-	if found && mode == config.ModeFail {
+	if failures > 0 {
+		return exitError
+	}
+	if slices.ContainsFunc(results, func(result check.Result) bool { return result.Mode == config.ModeFail }) {
 		return exitFailed
 	}
 	return exitClean
 }
 
 type rule interface {
-	Run(dir string, stdout, stderr io.Writer) (found bool, err error)
+	Results(dir string, stderr io.Writer) ([]check.Result, error)
+}
+
+type ruleEntry struct {
+	name    string
+	control func(config.Rules) config.Control
+	build   func(config.Settings, options) (rule, error)
+}
+
+var allRules = []ruleEntry{
+	{check.DupRule, func(rules config.Rules) config.Control { return rules.Dup.Control }, newDup},
+	{check.CrapRule, func(rules config.Rules) config.Control { return rules.Crap.Control }, newCrap},
+}
+
+type selectedRule struct {
+	name  string
+	mode  config.Mode
+	check rule
+}
+
+func selectRules(file config.Settings, opts options) ([]selectedRule, error) {
+	var selected []selectedRule
+	for _, entry := range allRules {
+		named := slices.Contains(opts.ruleNames, entry.name)
+		if len(opts.ruleNames) > 0 && !named {
+			continue
+		}
+		mode := cmp.Or(entry.control(file.Rules).Mode, config.ModeFail)
+		if mode == config.ModeOff {
+			if !named {
+				continue
+			}
+			// A maintainer names a rule that is off to try its limit on real code, without failing a build.
+			mode = config.ModeWarn
+		}
+		built, err := entry.build(file, opts)
+		if err != nil {
+			return nil, err
+		}
+		selected = append(selected, selectedRule{entry.name, mode, built})
+	}
+	return selected, nil
+}
+
+// runRules keeps going after an error, so that failed tests don't hide what the other rules found.
+// The rules run at the same time, because a partial check of a large repo must stay under 1 second,
+// and one after the other they come too close.
+func runRules(selected []selectedRule, dir string, stderr io.Writer) (results []check.Result, failures int) {
+	shared := &lockedWriter{target: stderr}
+	perRule := make([][]check.Result, len(selected))
+	errs := make([]error, len(selected))
+	files.Parallel(len(selected), func(i int) {
+		perRule[i], errs[i] = selected[i].check.Results(dir, shared)
+	})
+	for i, entry := range selected {
+		if errs[i] != nil {
+			fail(stderr, fmt.Errorf("%s: %w", entry.name, errs[i]))
+			failures++
+			continue
+		}
+		for _, result := range perRule[i] {
+			result.Mode = cmp.Or(result.Mode, entry.mode)
+			results = append(results, result)
+		}
+	}
+	return results, failures
+}
+
+type lockedWriter struct {
+	lock   sync.Mutex
+	target io.Writer
+}
+
+func (w *lockedWriter) Write(text []byte) (int, error) {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	return w.target.Write(text)
 }
 
 func newDup(file config.Settings, opts options) (rule, error) {
 	ruleSettings := file.Rules.Dup
 	dup := check.NewDup("goalie")
 	var err error
-	if dup.Base, err = revision(ruleSettings.Scope, opts.base, file); err != nil {
+	if dup.Base, err = revision(ruleSettings.Scope, opts, file); err != nil {
 		return nil, err
 	}
 	dup.ApplyRule(ruleSettings)
@@ -97,7 +172,7 @@ func newCrap(file config.Settings, opts options) (rule, error) {
 	crap := check.NewCrap("goalie")
 	crap.Partial = opts.partial
 	var err error
-	if crap.Base, err = revision(ruleSettings.Scope, opts.base, file); err != nil {
+	if crap.Base, err = revision(ruleSettings.Scope, opts, file); err != nil {
 		return nil, err
 	}
 	crap.ApplyRule(ruleSettings)
@@ -110,11 +185,11 @@ func newCrap(file config.Settings, opts options) (rule, error) {
 	return crap, nil
 }
 
-func revision(scope config.Scope, base string, file config.Settings) (string, error) {
-	if scope == config.ScopeAll {
+func revision(scope config.Scope, opts options, file config.Settings) (string, error) {
+	if opts.all || scope == config.ScopeAll {
 		return "", nil
 	}
-	result := cmp.Or(base, file.Base)
+	result := cmp.Or(opts.base, file.Base)
 	// A default of HEAD would see no changes in CI, so a forgotten flag would pass every build.
 	if result == "" {
 		return "", fmt.Errorf("needs a revision: use --base <rev>, or set base in %s", config.Name)

@@ -34,7 +34,7 @@ func TestEachDupSettingApplies(t *testing.T) {
 			write(t, dir, tc.file, tc.content)
 			write(t, dir, ".goalierc", tc.settings)
 
-			code, stdout, stderr := runGoalie(t, dir, "check", "--base", "HEAD")
+			code, stdout, stderr := runGoalie(t, dir, "check", "dup", "--base", "HEAD")
 
 			if code != tc.wantCode {
 				t.Errorf("exit code = %d, want %d; stdout: %s; stderr: %s", code, tc.wantCode, stdout, stderr)
@@ -59,7 +59,7 @@ func TestALimitOfZeroKeepsTheRuleOn(t *testing.T) {
 			write(t, dir, "b.go", "package a\n\n"+tc.new)
 			write(t, dir, ".goalierc", tc.settings)
 
-			code, stdout, stderr := runGoalie(t, dir, "check", "--base", "HEAD")
+			code, stdout, stderr := runGoalie(t, dir, "check", "dup", "--base", "HEAD")
 
 			if code != 1 {
 				t.Errorf("exit code = %d, want 1; stdout: %s; stderr: %s", code, stdout, stderr)

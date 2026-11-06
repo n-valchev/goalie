@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/n-valchev/goalie/internal/check"
 	"github.com/n-valchev/goalie/internal/cliflags"
@@ -13,22 +14,37 @@ import (
 const usage = `goalie checks Go code against one set of rules.
 
 Usage:
-  goalie check [rule] [--base <rev>] [--partial]
+  goalie check [rules] [--base <rev>] [--all] [--partial] [--format <format>]
 
 Rules:
   dup   Reports functions with the same structure as another function.
   crap  Reports functions that are complex and poorly tested. It runs your
         tests to get coverage, unless you use --partial.
 
-With no rule name, goalie runs dup, unless dup is off. Name crap to run it. You
-can name one rule at a time. A rule that you name runs even if it is off, and
-then it reports as warn.
+With no rule names, goalie runs every rule that isn't off. A rule that you name
+runs even if it is off, and then it reports as warn.
 
 Flags:
-  --base <rev>  Compare against this revision. This replaces base in .goalierc.
-                A rule with scope changes needs a revision from one of them.
-  --partial     Run no tests and read no coverage. See "Partial check".
-  --help        Print this help.
+  --base <rev>       Compare against this revision. This replaces base in
+                     .goalierc. A rule with scope changes needs a revision from
+                     one of them.
+  --all              Check the whole repository: every rule has scope all, and
+                     no revision is needed. Each rule still follows its mode.
+  --partial          Run no tests and read no coverage. See "Partial check".
+  --format <format>  text or json. The default is text.
+  --help             Print this help.
+
+Results:
+  Each line of text gives the file, the line, the mode, the rule, and the value
+  and limit:
+
+    a.go:3: fail crap: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 30)
+
+  fail results come first, then warn results. Within each, the highest value
+  divided by its limit comes first. A limit of 0 counts as 1 for this order.
+
+  stdout holds only results. With json, it holds a list called findings. Each
+  entry has rule, mode, value, and limit, and the fields of its rule.
 
 Settings file:
   goalie reads .goalierc from the current directory only. It holds one JSON
@@ -65,21 +81,24 @@ Partial check:
                   This follows the mode of crap.
 
 Exit codes:
-  0  No rule failed.
-  1  A rule failed.
+  0  No fail result.
+  1  At least one fail result.
   2  Any error, including a missing revision, an unknown rule name, an unknown
-     mode or scope, or a failed coverage command.
+     mode or scope, or a failed coverage command. If the tests fail, goalie
+     reports the other rules, skips crap, and prints the failure on stderr.
 `
 
 type options struct {
 	base      string
 	ruleNames []string
+	all       bool
 	partial   bool
+	format    check.Format
 	help      bool
 }
 
 func parseCheck(args []string) (options, error) {
-	opts := options{}
+	opts := options{format: check.FormatText}
 	flags := flag.NewFlagSet("goalie check", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.Usage = func() {}
@@ -91,6 +110,11 @@ func parseCheck(args []string) (options, error) {
 		opts.base = value
 		return nil
 	})
+	flags.Func("format", "", func(value string) error {
+		opts.format = check.Format(value)
+		return opts.format.Validate()
+	})
+	flags.BoolVar(&opts.all, "all", false, "")
 	flags.BoolVar(&opts.partial, "partial", false, "")
 	parsed, err := cliflags.Parse(flags, args)
 	if err != nil {
@@ -99,13 +123,9 @@ func parseCheck(args []string) (options, error) {
 	opts.help, opts.ruleNames = parsed.Help, parsed.Paths
 	// A typing mistake must not pass as a clean result.
 	for _, name := range opts.ruleNames {
-		if name != "dup" && name != "crap" {
+		if !slices.ContainsFunc(allRules, func(entry ruleEntry) bool { return entry.name == name }) {
 			return opts, fmt.Errorf("unknown rule %q", name)
 		}
-	}
-	// Running only one of the named rules would report the other as clean.
-	if len(opts.ruleNames) > 1 {
-		return opts, errors.New("names more than one rule: run one rule at a time")
 	}
 	return opts, nil
 }

@@ -38,7 +38,6 @@ func TestEveryCommandLineMistakeExitsWithTwo(t *testing.T) {
 		{"no command", nil, "command"},
 		{"unknown command", []string{"lint"}, `"lint"`},
 		{"unknown rule", []string{"check", "dupe", "--base", "HEAD"}, `"dupe"`},
-		{"two rules", []string{"check", "dup", "crap", "--base", "HEAD"}, "one rule"},
 		{"unknown flag", []string{"check", "dup", "--bse", "HEAD"}, "bse"},
 		{"empty revision", []string{"check", "dup", "--base", ""}, "revision"},
 		{"unknown revision", []string{"check", "dup", "--base", "no-such-rev"}, "no-such-rev"},
@@ -118,17 +117,6 @@ func TestABrokenSettingsFileExitsWithTwo(t *testing.T) {
 	}
 }
 
-func TestCheckWithNoRuleNamesRunsDup(t *testing.T) {
-	dir := gitRepo(t, map[string]string{"a.go": "package a\n\n" + sumFunc("Total")})
-	write(t, dir, "b.go", "package a\n\n"+sumFunc("Copied"))
-
-	code, _, stderr := runGoalie(t, dir, "check", "--base", "HEAD")
-
-	if code != 1 {
-		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
-	}
-}
-
 func TestHelpPrintsUsage(t *testing.T) {
 	for _, args := range [][]string{{"--help"}, {"check", "--help"}} {
 		code, stdout, stderr := runGoalie(t, t.TempDir(), args...)
@@ -150,7 +138,7 @@ func TestDupReportsANewCopyOfAnExistingFunction(t *testing.T) {
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
 	}
-	want := "b.go:3: duplicates a.go:3 (score 1.00, literals 1.00, anchors 0)\n"
+	want := "b.go:3: fail dup: duplicates a.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"
 	if stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}

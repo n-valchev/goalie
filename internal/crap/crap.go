@@ -91,7 +91,7 @@ func Score(complexity int, coverage float64) float64 {
 func CoverageNeeded(complexity int, limit float64) (needed float64, canPass bool) {
 	c := float64(complexity)
 	if c > limit {
-		return 1, false
+		return 0, false
 	}
 	if c*c+c <= limit {
 		return 0, true
