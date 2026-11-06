@@ -9,11 +9,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
-	"sync"
-	"sync/atomic"
+
+	gofiles "github.com/n-valchev/goalie/internal/files"
 )
 
 // Function is a function or method with a body.
@@ -40,21 +39,10 @@ func Parse(dir string, files []string, directive string) ([]Function, error) {
 		err       error
 	}
 	results := make([]result, len(files))
-	var next atomic.Int64
-	var workers sync.WaitGroup
-	for range min(runtime.GOMAXPROCS(0), len(files)) {
-		workers.Go(func() {
-			for {
-				i := int(next.Add(1)) - 1
-				if i >= len(files) {
-					return
-				}
-				functions, err := parseFile(dir, files[i], directive)
-				results[i] = result{functions, err}
-			}
-		})
-	}
-	workers.Wait()
+	gofiles.Parallel(len(files), func(i int) {
+		functions, err := parseFile(dir, files[i], directive)
+		results[i] = result{functions, err}
+	})
 	// Results stay in file order, so the first error and the function order match a serial parse.
 	var functions []Function
 	for _, result := range results {

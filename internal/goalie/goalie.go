@@ -57,7 +57,7 @@ func runCheck(args []string, dir string, stdout, stderr io.Writer) int {
 		// A maintainer names a rule that is off to try its limit on real code, without failing a build.
 		mode = config.ModeWarn
 	}
-	selected, err := build(file, opts.base)
+	selected, err := build(file, opts)
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -75,11 +75,11 @@ type rule interface {
 	Run(dir string, stdout, stderr io.Writer) (found bool, err error)
 }
 
-func newDup(file config.Settings, base string) (rule, error) {
+func newDup(file config.Settings, opts options) (rule, error) {
 	ruleSettings := file.Rules.Dup
 	dup := check.NewDup("goalie")
 	var err error
-	if dup.Base, err = revision(ruleSettings.Scope, base, file); err != nil {
+	if dup.Base, err = revision(ruleSettings.Scope, opts.base, file); err != nil {
 		return nil, err
 	}
 	dup.ApplyRule(ruleSettings)
@@ -92,11 +92,12 @@ func newDup(file config.Settings, base string) (rule, error) {
 	return dup, nil
 }
 
-func newCrap(file config.Settings, base string) (rule, error) {
+func newCrap(file config.Settings, opts options) (rule, error) {
 	ruleSettings := file.Rules.Crap
 	crap := check.NewCrap("goalie")
+	crap.Partial = opts.partial
 	var err error
-	if crap.Base, err = revision(ruleSettings.Scope, base, file); err != nil {
+	if crap.Base, err = revision(ruleSettings.Scope, opts.base, file); err != nil {
 		return nil, err
 	}
 	crap.ApplyRule(ruleSettings)

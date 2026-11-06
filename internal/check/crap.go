@@ -18,6 +18,7 @@ import (
 type Crap struct {
 	config.Repo
 	Tool          string
+	Partial       bool
 	Base          string
 	Limits        crap.Limits
 	CoverCommand  string
@@ -65,12 +66,20 @@ func (c Crap) Run(dir string, stdout, stderr io.Writer) (found bool, err error) 
 		return false, c.nothingToScore("No Go files found.", stdout, stderr)
 	}
 	c.WarnUnmatched(stderr, c.Tool, paths)
+	var changed gitchange.Changes
+	if c.Base != "" {
+		changed = changes.For(dir, paths)
+		// No other file can hold a result, and parsing all of them breaks the partial check's budget.
+		paths = slices.DeleteFunc(paths, func(file string) bool {
+			_, ok := changed[file]
+			return !ok
+		})
+	}
 	functions, err := extract.Parse(dir, paths, crap.IgnoreDirective)
 	if err != nil {
 		return false, err
 	}
 	if c.Base != "" {
-		changed := changes.For(dir, paths)
 		functions = slices.DeleteFunc(functions, func(fn extract.Function) bool {
 			return !changed.Touches(fn.File, fn.StartLine, fn.EndLine)
 		})
@@ -78,6 +87,9 @@ func (c Crap) Run(dir string, stdout, stderr io.Writer) (found bool, err error) 
 		if len(functions) == 0 {
 			return false, c.nothingToScore("No new functions found.", stdout, stderr)
 		}
+	}
+	if c.Partial {
+		return c.runPartial(functions, stdout)
 	}
 	profile, err := c.gather(dir, stderr)
 	if err != nil {

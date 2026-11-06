@@ -85,3 +85,16 @@ func Score(complexity int, coverage float64) float64 {
 	c := float64(complexity)
 	return c*c*math.Pow(1-coverage, 3) + c
 }
+
+// CoverageNeeded inverts Score, with coverage as a fraction. canPass is false when the complexity
+// alone is over the limit, because a score never falls below the complexity.
+func CoverageNeeded(complexity int, limit float64) (needed float64, canPass bool) {
+	c := float64(complexity)
+	if c > limit {
+		return 1, false
+	}
+	if c*c+c <= limit {
+		return 0, true
+	}
+	return 1 - math.Cbrt((limit-c)/(c*c)), true
+}

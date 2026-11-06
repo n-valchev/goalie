@@ -13,12 +13,12 @@ import (
 const usage = `goalie checks Go code against one set of rules.
 
 Usage:
-  goalie check [rule] [--base <rev>]
+  goalie check [rule] [--base <rev>] [--partial]
 
 Rules:
   dup   Reports functions with the same structure as another function.
   crap  Reports functions that are complex and poorly tested. It runs your
-        tests to get coverage.
+        tests to get coverage, unless you use --partial.
 
 With no rule name, goalie runs dup, unless dup is off. Name crap to run it. You
 can name one rule at a time. A rule that you name runs even if it is off, and
@@ -27,6 +27,7 @@ then it reports as warn.
 Flags:
   --base <rev>  Compare against this revision. This replaces base in .goalierc.
                 A rule with scope changes needs a revision from one of them.
+  --partial     Run no tests and read no coverage. See "Partial check".
   --help        Print this help.
 
 Settings file:
@@ -53,6 +54,16 @@ Coverage:
   text coverage profiles there. The default command is:
     ` + check.DefaultCoverCommand + `
 
+Partial check:
+  The dup rule gives the same result as in a full check. The crap rule looks
+  only at the complexity of each function:
+
+  Safe            It passes even with no coverage. No output.
+  Needs coverage  It reports the coverage that the function needs. This never
+                  fails, in any mode, because only a test run can tell.
+  Can't pass      Its complexity is over the limit, so no coverage can help.
+                  This follows the mode of crap.
+
 Exit codes:
   0  No rule failed.
   1  A rule failed.
@@ -63,6 +74,7 @@ Exit codes:
 type options struct {
 	base      string
 	ruleNames []string
+	partial   bool
 	help      bool
 }
 
@@ -79,6 +91,7 @@ func parseCheck(args []string) (options, error) {
 		opts.base = value
 		return nil
 	})
+	flags.BoolVar(&opts.partial, "partial", false, "")
 	parsed, err := cliflags.Parse(flags, args)
 	if err != nil {
 		return opts, err

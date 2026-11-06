@@ -30,7 +30,7 @@ func Find(dir string, paths []string, rules Rules) ([]string, error) {
 	}
 	tags := append([]string{"ignore"}, rules.SkipTags...)
 	// A set, because overlapping paths must not make a function its own duplicate.
-	found := map[string]bool{}
+	candidates := map[string]string{}
 	for _, root := range paths {
 		if !filepath.IsAbs(root) {
 			root = filepath.Join(dir, root)
@@ -60,28 +60,44 @@ func Find(dir string, paths []string, rules Rules) ([]string, error) {
 			if MatchesAny(rules.SkipFiles, rel) {
 				return nil
 			}
-			source, err := os.ReadFile(file)
-			if err != nil {
-				return err
-			}
-			skipped, err := skippedByHeader(rel, source, tags)
-			if err != nil {
-				return err
-			}
-			if !skipped {
-				found[rel] = true
-			}
+			candidates[rel] = file
 			return nil
 		})
 		if err != nil {
 			return nil, err
 		}
 	}
-	result := make([]string, 0, len(found))
-	for file := range found {
-		result = append(result, file)
+	return withoutSkippedHeaders(candidates, tags)
+}
+
+// withoutSkippedHeaders reads files in parallel, because one at a time this step alone takes most
+// of the time budget of a partial check on a large repo. It returns the first error in sorted order,
+// so that a run names the same file every time.
+func withoutSkippedHeaders(candidates map[string]string, tags []string) ([]string, error) {
+	names := make([]string, 0, len(candidates))
+	for rel := range candidates {
+		names = append(names, rel)
 	}
-	sort.Strings(result)
+	sort.Strings(names)
+	skipped := make([]bool, len(names))
+	errs := make([]error, len(names))
+	Parallel(len(names), func(i int) {
+		source, err := os.ReadFile(candidates[names[i]])
+		if err != nil {
+			errs[i] = err
+			return
+		}
+		skipped[i], errs[i] = skippedByHeader(names[i], source, tags)
+	})
+	result := make([]string, 0, len(names))
+	for i, rel := range names {
+		if errs[i] != nil {
+			return nil, errs[i]
+		}
+		if !skipped[i] {
+			result = append(result, rel)
+		}
+	}
 	return result, nil
 }
 

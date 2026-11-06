@@ -20,10 +20,11 @@ func write(t *testing.T, dir, name, content string) {
 }
 
 // git hides the machine's own Git config, so that a developer's settings can't change what a test
-// sets up. Run itself still sees the real config.
+// sets up. Run itself still sees the real config. A commit of a large repo would otherwise start
+// background maintenance, which slows a timed run and writes to the folder while the test removes it.
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", append([]string{"-c", "maintenance.auto=false"}, args...)...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
 		"GIT_CONFIG_GLOBAL="+os.DevNull,
