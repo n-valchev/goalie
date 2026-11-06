@@ -3,7 +3,6 @@ package godry
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 
 	"github.com/n-valchev/goalie/internal/check"
@@ -122,25 +121,5 @@ func parseOptions(args []string) (options, error) {
 	if opts.help {
 		return opts, nil
 	}
-	return opts, opts.validate()
-}
-
-func (o options) validate() error {
-	// Written so that NaN, which fails every comparison, is rejected too.
-	if !(o.Threshold >= 0 && o.Threshold <= 1) {
-		return fmt.Errorf("invalid --threshold %v: must be between 0 and 1", o.Threshold)
-	}
-	if o.MinLines < 0 {
-		return fmt.Errorf("invalid --min-lines %d: must not be negative", o.MinLines)
-	}
-	if o.MinNodes < 0 {
-		return fmt.Errorf("invalid --min-nodes %d: must not be negative", o.MinNodes)
-	}
-	if o.WeakAnchors < 0 {
-		return fmt.Errorf("invalid --weak-anchors %d: must not be negative", o.WeakAnchors)
-	}
-	if !(o.WeakLiterals >= 0 && o.WeakLiterals <= 1) {
-		return fmt.Errorf("invalid --weak-literals %v: must be between 0 and 1", o.WeakLiterals)
-	}
-	return o.Format.Validate()
+	return opts, opts.Validate()
 }

@@ -14,13 +14,16 @@ import (
 
 const Name = ".goalierc"
 
-// Settings holds what describes the repo at the top level, and what belongs to one tool in that
-// tool's section. Every tool decodes every section, so a misspelled setting fails in any tool.
+// Settings holds what describes the repo at the top level, what belongs to one rule in Rules, and
+// what belongs to one tool in that tool's section. Every tool decodes every section, so a
+// misspelled setting fails in any tool.
 type Settings struct {
+	Base      string   `json:"base"`
 	Paths     []string `json:"paths"`
 	SkipTags  []string `json:"skipTags"`
 	SkipFiles []string `json:"skipFiles"`
 	Shared    []string `json:"shared"`
+	Rules     Rules    `json:"rules"`
 	Godry     Godry    `json:"godry"`
 	Gocrap    Gocrap   `json:"gocrap"`
 	Godeps    Godeps   `json:"godeps"`

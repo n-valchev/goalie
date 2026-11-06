@@ -2,6 +2,7 @@
 package goalie
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -39,27 +40,50 @@ func runCheck(args []string, dir string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, usage)
 		return exitClean
 	}
-	// A default of HEAD would see no changes in CI, so a forgotten flag would pass every build.
-	if opts.base == "" {
-		return fail(stderr, errors.New("needs a revision: use --base <rev>"))
-	}
 	file, err := config.Read(dir)
 	if err != nil {
 		return fail(stderr, err)
 	}
-	dup := check.NewDup("goalie")
-	dup.Base = opts.base
-	if err := dup.Apply(file, nil); err != nil {
+	mode := cmp.Or(file.Rules.Dup.Mode, config.ModeFail)
+	if mode == config.ModeOff {
+		if len(opts.ruleNames) == 0 {
+			return exitClean
+		}
+		// A maintainer names a rule that is off to try its limit on real code, without failing a build.
+		mode = config.ModeWarn
+	}
+	dup, err := newDup(file, opts.base)
+	if err != nil {
 		return fail(stderr, err)
 	}
 	found, err := dup.Run(dir, stdout, stderr)
 	if err != nil {
 		return fail(stderr, err)
 	}
-	if found {
+	if found && mode == config.ModeFail {
 		return exitFailed
 	}
 	return exitClean
+}
+
+func newDup(file config.Settings, base string) (check.Dup, error) {
+	rule := file.Rules.Dup
+	dup := check.NewDup("goalie")
+	if rule.Scope != config.ScopeAll {
+		dup.Base = cmp.Or(base, file.Base)
+		// A default of HEAD would see no changes in CI, so a forgotten flag would pass every build.
+		if dup.Base == "" {
+			return dup, fmt.Errorf("needs a revision: use --base <rev>, or set base in %s", config.Name)
+		}
+	}
+	dup.ApplyRule(rule)
+	if err := dup.Apply(file, nil); err != nil {
+		return dup, err
+	}
+	if err := dup.Validate(); err != nil {
+		return dup, fmt.Errorf("%s: %w", config.Name, err)
+	}
+	return dup, nil
 }
 
 func fail(stderr io.Writer, err error) int {

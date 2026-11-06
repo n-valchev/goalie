@@ -30,7 +30,7 @@ func applyConfig(dir string, opts *options) error {
 	if err := opts.Apply(file, set); err != nil {
 		return err
 	}
-	if err := opts.validate(); err != nil {
+	if err := opts.Validate(); err != nil {
 		return fmt.Errorf("%s: %w", config.Name, err)
 	}
 	return nil

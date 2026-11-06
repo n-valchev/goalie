@@ -199,6 +199,8 @@ func TestBadConfigsAreErrors(t *testing.T) {
 		{"unknown godry setting", `{"godry": {"weakLabels": 1}}`, "weakLabels"},
 		{"unknown gocrap setting", `{"gocrap": {"limits": 1}}`, "limits"},
 		{"unknown godeps setting", `{"godeps": {"titel": "x"}}`, "titel"},
+		{"unknown rule", `{"rules": {"dupe": {}}}`, "dupe"},
+		{"unknown mode", `{"rules": {"dup": {"mode": "warning"}}}`, "warning"},
 		{"godry setting at the top level", `{"threshold": 0.9}`, "threshold"},
 		{"wrong type names its line", "{\n  \"paths\": \"a\"\n}\n", ".goalierc:2:"},
 		{"fraction for a count", `{"godry": {"minLines": 1.5}}`, ".goalierc"},
@@ -244,6 +246,10 @@ func TestHelpWorksWithABadConfig(t *testing.T) {
 	if !strings.Contains(stdout, ".goalierc") {
 		t.Errorf("stdout = %q; want .goalierc listed", stdout)
 	}
+}
+
+func TestGodryAcceptsButIgnoresTheSettingsOfGoalie(t *testing.T) {
+	wantCode(t, configTree(t, `{"base": "no-such-rev", "rules": {"dup": {"mode": "off", "minLines": 100}}}`), 1)
 }
 
 func TestGodryAcceptsTheSettingsOfOtherTools(t *testing.T) {

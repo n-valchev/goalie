@@ -62,6 +62,41 @@ func NewDup(tool string) Dup {
 	}
 }
 
+func (d *Dup) ApplyRule(rule config.DupRule) {
+	fill(&d.Threshold, rule.Threshold)
+	fill(&d.MinLines, rule.MinLines)
+	fill(&d.MinNodes, rule.MinNodes)
+	fill(&d.WeakAnchors, rule.WeakAnchors)
+	fill(&d.WeakLiterals, rule.WeakLiterals)
+	fill(&d.IncludeTests, rule.IncludeTests)
+}
+
+func fill[T any](target, value *T) {
+	if value != nil {
+		*target = *value
+	}
+}
+
+func (d Dup) Validate() error {
+	// Written so that NaN, which fails every comparison, is rejected too.
+	if !(d.Threshold >= 0 && d.Threshold <= 1) {
+		return fmt.Errorf("invalid --threshold %v: must be between 0 and 1", d.Threshold)
+	}
+	if d.MinLines < 0 {
+		return fmt.Errorf("invalid --min-lines %d: must not be negative", d.MinLines)
+	}
+	if d.MinNodes < 0 {
+		return fmt.Errorf("invalid --min-nodes %d: must not be negative", d.MinNodes)
+	}
+	if d.WeakAnchors < 0 {
+		return fmt.Errorf("invalid --weak-anchors %d: must not be negative", d.WeakAnchors)
+	}
+	if !(d.WeakLiterals >= 0 && d.WeakLiterals <= 1) {
+		return fmt.Errorf("invalid --weak-literals %v: must be between 0 and 1", d.WeakLiterals)
+	}
+	return d.Format.Validate()
+}
+
 func (d Dup) Run(dir string, stdout, stderr io.Writer) (found bool, err error) {
 	var changes gitchange.Changes
 	if d.Base != "" {

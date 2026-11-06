@@ -143,6 +143,10 @@ func TestAFormatFlagReplacesTheSetting(t *testing.T) {
 	}
 }
 
+func TestGodepsAcceptsTheSettingsOfGoalie(t *testing.T) {
+	run(t, smallTree(t, `{"base": "no-such-rev", "rules": {"dup": {"mode": "off"}}, "godeps": {"format": "json"}}`), 0)
+}
+
 func TestEveryGodepsSettingIsAccepted(t *testing.T) {
 	config := `{"godeps": {
 		"format": "json", "archGoReport": "", "crapReport": "", "dryReport": "",
