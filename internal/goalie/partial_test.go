@@ -139,7 +139,7 @@ func TestAPartialCheckReportsOnlyWhatTheScopeCovers(t *testing.T) {
 
 func TestAPartialCheckGivesNoResultForFunctionsWithNoComplexity(t *testing.T) {
 	dir := gitRepo(t, map[string]string{"go.mod": goMod})
-	write(t, dir, "a.go", "package m\n\nfunc Assembly(a int) int\n\n//gocrap:ignore generated\n"+withComplexity("Ignored", 31))
+	write(t, dir, "a.go", "package m\n\nfunc Assembly(a int) int\n\n//goalie:ignore crap generated\n"+withComplexity("Ignored", 31))
 	wantPartial(t, dir, 0, "")
 }
 

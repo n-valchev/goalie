@@ -53,6 +53,7 @@ func (f Format) reportEmpty(message string, stdout, stderr io.Writer, writeEmpty
 type Dup struct {
 	config.Repo
 	Tool         string // Starts each line on stderr, so that a reader can see which command wrote it.
+	Parser       *extract.Parser
 	Base         string
 	Threshold    float64
 	MinLines     int
@@ -67,6 +68,7 @@ type Dup struct {
 func NewDup(tool string) Dup {
 	return Dup{
 		Tool:         tool,
+		Parser:       extract.NewParser(extract.Directive{Name: ignoreDirective, Implied: DupRule}),
 		Threshold:    0.82,
 		MinLines:     9,
 		MinNodes:     20,
@@ -160,7 +162,7 @@ func (d Dup) pairs(dir string, stderr io.Writer) (pairs []compare.Pair, notice s
 		return nil, "No Go files found.", nil
 	}
 	d.WarnUnmatched(stderr, d.Tool, paths)
-	functions, err := extract.Parse(dir, paths, ignoreDirective)
+	functions, err := d.Parser.Parse(dir, paths, DupRule)
 	if err != nil {
 		return nil, "", err
 	}

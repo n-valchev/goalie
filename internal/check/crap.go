@@ -21,6 +21,7 @@ type Crap struct {
 	config.Repo
 	Tool          string
 	Partial       bool // Only Results reads this, because only goalie has a partial check.
+	Parser        *extract.Parser
 	Base          string
 	Limits        crap.Limits
 	CoverCommand  string
@@ -31,6 +32,7 @@ type Crap struct {
 func NewCrap(tool string) Crap {
 	return Crap{
 		Tool:         tool,
+		Parser:       extract.NewParser(extract.Directive{Name: crap.IgnoreDirective, Implied: CrapRule}),
 		Limits:       crap.Limits{Limit: crap.DefaultLimit},
 		CoverCommand: DefaultCoverCommand,
 		Format:       FormatText,
@@ -122,7 +124,7 @@ func (c Crap) functions(dir string, stderr io.Writer) (functions []extract.Funct
 			return !ok
 		})
 	}
-	functions, err = extract.Parse(dir, paths, crap.IgnoreDirective)
+	functions, err = c.Parser.Parse(dir, paths, CrapRule)
 	if err != nil {
 		return nil, "", err
 	}

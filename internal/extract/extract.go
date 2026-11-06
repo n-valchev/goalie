@@ -2,6 +2,7 @@
 package extract
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	gofiles "github.com/n-valchev/goalie/internal/files"
 )
@@ -24,23 +26,41 @@ type Function struct {
 	StartLine int    // The line of the func keyword, so the doc comment doesn't count.
 	EndLine   int    // The line of the closing brace.
 	Decl      *ast.FuncDecl
+	excused   []string
 }
 
 func (f Function) Lines() int {
 	return f.EndLine - f.StartLine + 1
 }
 
-// Parse reads files, given relative to dir, and returns their functions in file order.
-// A function under a comment that starts with directive is left out. Each tool has its own, because
-// a reason to skip a function in one check says nothing about the other.
-func Parse(dir string, files []string, directive string) ([]Function, error) {
+type Directive struct {
+	Name    string
+	Rules   []string // The rule names that the comment may list.
+	Implied string   // The one rule of a directive that lists none.
+}
+
+// Parser belongs to one run. Its rules share it, so that a run reads each file once, however many
+// rules look at that file.
+type Parser struct {
+	directive Directive
+	lock      sync.Mutex
+	parsed    map[string]func() ([]Function, error)
+}
+
+func NewParser(directive Directive) *Parser {
+	return &Parser{directive: directive, parsed: map[string]func() ([]Function, error){}}
+}
+
+// Parse reads files, given relative to dir, and returns their functions in file order, apart from
+// those excused from rule.
+func (p *Parser) Parse(dir string, files []string, rule string) ([]Function, error) {
 	type result struct {
 		functions []Function
 		err       error
 	}
 	results := make([]result, len(files))
 	gofiles.Parallel(len(files), func(i int) {
-		functions, err := parseFile(dir, files[i], directive)
+		functions, err := p.parseOnce(dir, files[i])
 		results[i] = result{functions, err}
 	})
 	// Results stay in file order, so the first error and the function order match a serial parse.
@@ -49,12 +69,30 @@ func Parse(dir string, files []string, directive string) ([]Function, error) {
 		if result.err != nil {
 			return nil, result.err
 		}
-		functions = append(functions, result.functions...)
+		for _, fn := range result.functions {
+			if !slices.Contains(fn.excused, rule) {
+				functions = append(functions, fn)
+			}
+		}
 	}
 	return functions, nil
 }
 
-func parseFile(dir, file, directive string) ([]Function, error) {
+func (p *Parser) parseOnce(dir, file string) ([]Function, error) {
+	path := filepath.Join(dir, file)
+	p.lock.Lock()
+	parse, ok := p.parsed[path]
+	if !ok {
+		parse = sync.OnceValues(func() ([]Function, error) {
+			return parseFile(dir, file, p.directive)
+		})
+		p.parsed[path] = parse
+	}
+	p.lock.Unlock()
+	return parse()
+}
+
+func parseFile(dir, file string, directive Directive) ([]Function, error) {
 	source, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
 	if err != nil {
 		return nil, err
@@ -70,12 +108,12 @@ func parseFile(dir, file, directive string) ([]Function, error) {
 		if !ok {
 			continue
 		}
-		// Before the body check, because a directive with no reason fails on any function.
-		ignored, err := hasIgnoreDirective(fset, fn, directive)
+		// Before the body check, because a directive with a mistake fails on any function.
+		excused, err := directive.read(fset, fn)
 		if err != nil {
 			return nil, err
 		}
-		if ignored || fn.Body == nil {
+		if fn.Body == nil {
 			continue
 		}
 		functions = append(functions, Function{
@@ -86,6 +124,7 @@ func parseFile(dir, file, directive string) ([]Function, error) {
 			StartLine: fileLine(fset, fn.Pos()),
 			EndLine:   fileLine(fset, fn.Body.Rbrace),
 			Decl:      fn,
+			excused:   excused,
 		})
 	}
 	return functions, nil
@@ -132,21 +171,44 @@ func HasDirective(fn *ast.FuncDecl, directive string) bool {
 	})
 }
 
-func hasIgnoreDirective(fset *token.FileSet, fn *ast.FuncDecl, directive string) (bool, error) {
+func (d Directive) read(fset *token.FileSet, fn *ast.FuncDecl) ([]string, error) {
 	if fn.Doc == nil {
-		return false, nil
+		return nil, nil
 	}
-	ignored := false
+	var excused []string
 	for _, comment := range fn.Doc.List {
 		words := strings.Fields(comment.Text)
-		if words[0] != directive {
+		if words[0] != d.Name {
 			continue
 		}
-		if len(words) == 1 {
+		rules, err := d.rulesIn(words[1:])
+		if err != nil {
 			position := fset.PositionFor(comment.Pos(), false)
-			return false, fmt.Errorf("%s:%d: %s needs a reason", position.Filename, position.Line, directive)
+			return nil, fmt.Errorf("%s:%d: %s %w", position.Filename, position.Line, d.Name, err)
 		}
-		ignored = true
+		excused = append(excused, rules...)
 	}
-	return ignored, nil
+	return excused, nil
+}
+
+func (d Directive) rulesIn(words []string) ([]string, error) {
+	if d.Implied != "" {
+		if len(words) == 0 {
+			return nil, errors.New("needs a reason")
+		}
+		return []string{d.Implied}, nil
+	}
+	if len(words) == 0 {
+		return nil, errors.New("needs rule names and a reason")
+	}
+	rules := strings.Split(words[0], ",")
+	for _, rule := range rules {
+		if !slices.Contains(d.Rules, rule) {
+			return nil, fmt.Errorf("names unknown rule %q", rule)
+		}
+	}
+	if len(words) == 1 {
+		return nil, errors.New("needs a reason")
+	}
+	return rules, nil
 }

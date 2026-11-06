@@ -11,6 +11,7 @@ import (
 
 	"github.com/n-valchev/goalie/internal/check"
 	"github.com/n-valchev/goalie/internal/config"
+	"github.com/n-valchev/goalie/internal/extract"
 	"github.com/n-valchev/goalie/internal/files"
 )
 
@@ -77,7 +78,7 @@ type rule interface {
 type ruleEntry struct {
 	name    string
 	control func(config.Rules) config.Control
-	build   func(config.Settings, options) (rule, error)
+	build   func(config.Settings, options, *extract.Parser) (rule, error)
 }
 
 var allRules = []ruleEntry{
@@ -91,8 +92,17 @@ type selectedRule struct {
 	check rule
 }
 
+func ignoreDirective() extract.Directive {
+	directive := extract.Directive{Name: "//goalie:ignore"}
+	for _, entry := range allRules {
+		directive.Rules = append(directive.Rules, entry.name)
+	}
+	return directive
+}
+
 func selectRules(file config.Settings, opts options) ([]selectedRule, error) {
 	var selected []selectedRule
+	parser := extract.NewParser(ignoreDirective())
 	for _, entry := range allRules {
 		named := slices.Contains(opts.ruleNames, entry.name)
 		if len(opts.ruleNames) > 0 && !named {
@@ -106,7 +116,7 @@ func selectRules(file config.Settings, opts options) ([]selectedRule, error) {
 			// A maintainer names a rule that is off to try its limit on real code, without failing a build.
 			mode = config.ModeWarn
 		}
-		built, err := entry.build(file, opts)
+		built, err := entry.build(file, opts, parser)
 		if err != nil {
 			return nil, err
 		}
@@ -150,9 +160,10 @@ func (w *lockedWriter) Write(text []byte) (int, error) {
 	return w.target.Write(text)
 }
 
-func newDup(file config.Settings, opts options) (rule, error) {
+func newDup(file config.Settings, opts options, parser *extract.Parser) (rule, error) {
 	ruleSettings := file.Rules.Dup
 	dup := check.NewDup("goalie")
+	dup.Parser = parser
 	var err error
 	if dup.Base, err = revision(ruleSettings.Scope, opts, file); err != nil {
 		return nil, err
@@ -167,9 +178,10 @@ func newDup(file config.Settings, opts options) (rule, error) {
 	return dup, nil
 }
 
-func newCrap(file config.Settings, opts options) (rule, error) {
+func newCrap(file config.Settings, opts options, parser *extract.Parser) (rule, error) {
 	ruleSettings := file.Rules.Crap
 	crap := check.NewCrap("goalie")
+	crap.Parser = parser
 	crap.Partial = opts.partial
 	var err error
 	if crap.Base, err = revision(ruleSettings.Scope, opts, file); err != nil {
