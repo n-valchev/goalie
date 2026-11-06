@@ -1,7 +1,6 @@
 package goalie
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -38,20 +37,15 @@ func parseCheck(args []string) (options, error) {
 	flags := flag.NewFlagSet("goalie check", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.Usage = func() {}
-	flags.Func("base", "", func(value string) error {
-		if value == "" {
-			return errors.New("must name a revision")
-		}
-		opts.base = value
-		return nil
-	})
+	flags.StringVar(&opts.base, "base", "", "")
 	parsed, err := cliflags.Parse(flags, args)
 	if err != nil {
 		return opts, err
 	}
 	opts.help = parsed.Help
+	rules := parsed.Paths
 	// A typing mistake must not pass as a clean result.
-	for _, name := range parsed.Paths {
+	for _, name := range rules {
 		if name != "dup" {
 			return opts, fmt.Errorf("unknown rule %q", name)
 		}

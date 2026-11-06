@@ -1,4 +1,4 @@
-// Package check holds the check logic that goalie and the old commands share.
+// Package check holds the one implementation of each rule, for every command that runs it.
 package check
 
 import (
@@ -62,7 +62,6 @@ func NewDup(tool string) Dup {
 	}
 }
 
-// Run writes the report to stdout, and reports whether it holds any duplicates.
 func (d Dup) Run(dir string, stdout, stderr io.Writer) (found bool, err error) {
 	var changes gitchange.Changes
 	if d.Base != "" {
