@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/n-valchev/goalie/internal/check"
 	"github.com/n-valchev/goalie/internal/cliflags"
-	"github.com/n-valchev/goalie/internal/compare"
-	"github.com/n-valchev/goalie/internal/config"
-	"github.com/n-valchev/goalie/internal/report"
 )
 
 const usage = `godry finds Go functions with the same structure.
@@ -86,37 +84,15 @@ Exit codes:
   2  Any error, even with --warn-only.
 `
 
-type format string
-
-const (
-	formatText format = "text"
-	formatJSON format = "json"
-)
-
-func (f format) write(w io.Writer, pairs []compare.Pair) error {
-	if f == formatJSON {
-		return report.JSON(w, pairs)
-	}
-	return report.Text(w, pairs)
-}
-
 type options struct {
-	config.Repo
-	base         string
-	threshold    float64
-	minLines     int
-	minNodes     int
-	format       format
-	warnOnly     bool
-	includeTests bool
-	weakAnchors  int
-	weakLiterals float64
-	help         bool
-	fromFlags    map[string]bool
+	check.Dup
+	warnOnly  bool
+	help      bool
+	fromFlags map[string]bool
 }
 
 func parseOptions(args []string) (options, error) {
-	opts := options{}
+	opts := options{Dup: check.NewDup("godry")}
 	flags := flag.NewFlagSet("godry", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.Usage = func() {}
@@ -125,17 +101,17 @@ func parseOptions(args []string) (options, error) {
 		if value == "" {
 			return errors.New("must name a revision")
 		}
-		opts.base = value
+		opts.Base = value
 		return nil
 	})
-	flags.Float64Var(&opts.threshold, "threshold", 0.82, "")
-	flags.IntVar(&opts.minLines, "min-lines", 9, "")
-	flags.IntVar(&opts.minNodes, "min-nodes", 20, "")
-	flags.IntVar(&opts.weakAnchors, "weak-anchors", 0, "")
-	flags.Float64Var(&opts.weakLiterals, "weak-literals", 0.5, "")
-	flags.StringVar((*string)(&opts.format), "format", string(formatText), "")
+	flags.Float64Var(&opts.Threshold, "threshold", opts.Threshold, "")
+	flags.IntVar(&opts.MinLines, "min-lines", opts.MinLines, "")
+	flags.IntVar(&opts.MinNodes, "min-nodes", opts.MinNodes, "")
+	flags.IntVar(&opts.WeakAnchors, "weak-anchors", opts.WeakAnchors, "")
+	flags.Float64Var(&opts.WeakLiterals, "weak-literals", opts.WeakLiterals, "")
+	flags.StringVar((*string)(&opts.Format), "format", string(opts.Format), "")
 	flags.BoolVar(&opts.warnOnly, "warn-only", false, "")
-	flags.BoolVar(&opts.includeTests, "include-tests", false, "")
+	flags.BoolVar(&opts.IncludeTests, "include-tests", false, "")
 	opts.AddFlags(flags)
 
 	parsed, err := cliflags.Parse(flags, args)
@@ -151,23 +127,20 @@ func parseOptions(args []string) (options, error) {
 
 func (o options) validate() error {
 	// Written so that NaN, which fails every comparison, is rejected too.
-	if !(o.threshold >= 0 && o.threshold <= 1) {
-		return fmt.Errorf("invalid --threshold %v: must be between 0 and 1", o.threshold)
+	if !(o.Threshold >= 0 && o.Threshold <= 1) {
+		return fmt.Errorf("invalid --threshold %v: must be between 0 and 1", o.Threshold)
 	}
-	if o.minLines < 0 {
-		return fmt.Errorf("invalid --min-lines %d: must not be negative", o.minLines)
+	if o.MinLines < 0 {
+		return fmt.Errorf("invalid --min-lines %d: must not be negative", o.MinLines)
 	}
-	if o.minNodes < 0 {
-		return fmt.Errorf("invalid --min-nodes %d: must not be negative", o.minNodes)
+	if o.MinNodes < 0 {
+		return fmt.Errorf("invalid --min-nodes %d: must not be negative", o.MinNodes)
 	}
-	if o.weakAnchors < 0 {
-		return fmt.Errorf("invalid --weak-anchors %d: must not be negative", o.weakAnchors)
+	if o.WeakAnchors < 0 {
+		return fmt.Errorf("invalid --weak-anchors %d: must not be negative", o.WeakAnchors)
 	}
-	if !(o.weakLiterals >= 0 && o.weakLiterals <= 1) {
-		return fmt.Errorf("invalid --weak-literals %v: must be between 0 and 1", o.weakLiterals)
+	if !(o.WeakLiterals >= 0 && o.WeakLiterals <= 1) {
+		return fmt.Errorf("invalid --weak-literals %v: must be between 0 and 1", o.WeakLiterals)
 	}
-	if o.format != formatText && o.format != formatJSON {
-		return fmt.Errorf("invalid --format %q: must be text or json", o.format)
-	}
-	return nil
+	return o.Format.Validate()
 }

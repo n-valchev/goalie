@@ -1,4 +1,4 @@
-package godry
+package check
 
 import (
 	"github.com/n-valchev/goalie/internal/compare"

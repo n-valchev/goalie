@@ -18,15 +18,15 @@ func applyConfig(dir string, opts *options) error {
 	if tool.Base != nil && *tool.Base == "" {
 		return fmt.Errorf("%s: base must name a revision", config.Name)
 	}
-	cliflags.Fill(set, "base", &opts.base, tool.Base)
-	cliflags.Fill(set, "threshold", &opts.threshold, tool.Threshold)
-	cliflags.Fill(set, "min-lines", &opts.minLines, tool.MinLines)
-	cliflags.Fill(set, "min-nodes", &opts.minNodes, tool.MinNodes)
-	cliflags.Fill(set, "weak-anchors", &opts.weakAnchors, tool.WeakAnchors)
-	cliflags.Fill(set, "weak-literals", &opts.weakLiterals, tool.WeakLiterals)
-	cliflags.Fill(set, "format", (*string)(&opts.format), tool.Format)
+	cliflags.Fill(set, "base", &opts.Base, tool.Base)
+	cliflags.Fill(set, "threshold", &opts.Threshold, tool.Threshold)
+	cliflags.Fill(set, "min-lines", &opts.MinLines, tool.MinLines)
+	cliflags.Fill(set, "min-nodes", &opts.MinNodes, tool.MinNodes)
+	cliflags.Fill(set, "weak-anchors", &opts.WeakAnchors, tool.WeakAnchors)
+	cliflags.Fill(set, "weak-literals", &opts.WeakLiterals, tool.WeakLiterals)
+	cliflags.Fill(set, "format", (*string)(&opts.Format), tool.Format)
 	cliflags.Fill(set, "warn-only", &opts.warnOnly, tool.WarnOnly)
-	cliflags.Fill(set, "include-tests", &opts.includeTests, tool.IncludeTests)
+	cliflags.Fill(set, "include-tests", &opts.IncludeTests, tool.IncludeTests)
 	if err := opts.Apply(file, set); err != nil {
 		return err
 	}
