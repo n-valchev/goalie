@@ -1,4 +1,4 @@
-package gocrap
+package check
 
 import (
 	"errors"
@@ -17,12 +17,12 @@ const coverDirVariable = "GOCRAP_COVER_DIR"
 var globEscaper = strings.NewReplacer(`\`, `\\`, `*`, `\*`, `?`, `\?`, `[`, `\[`)
 
 // -coverpkg, because without it Go counts coverage only in the package that holds the test.
-const defaultCoverCommand = `go test -coverpkg=./... -coverprofile="$` + coverDirVariable + `/coverage.out" ./...`
+const DefaultCoverCommand = `go test -coverpkg=./... -coverprofile="$` + coverDirVariable + `/coverage.out" ./...`
 
-func gather(dir string, opts options, stderr io.Writer) (coverage.Profile, error) {
+func (c Crap) gather(dir string, stderr io.Writer) (coverage.Profile, error) {
 	profile := coverage.Profile{}
-	if len(opts.coverProfiles) > 0 {
-		for _, entry := range opts.coverProfiles {
+	if len(c.CoverProfiles) > 0 {
+		for _, entry := range c.CoverProfiles {
 			files, err := expand(dir, entry)
 			if err != nil {
 				return nil, err
@@ -37,12 +37,12 @@ func gather(dir string, opts options, stderr io.Writer) (coverage.Profile, error
 		return profile.Local(dir)
 	}
 	// An empty folder of our own, so that a profile from an earlier run can never affect a score.
-	coverDir, err := os.MkdirTemp("", "gocrap")
+	coverDir, err := os.MkdirTemp("", c.Tool)
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(coverDir)
-	command := exec.Command("sh", "-c", opts.coverCommand)
+	command := exec.Command("sh", "-c", c.CoverCommand)
 	command.Dir = dir
 	command.Env = append(os.Environ(), coverDirVariable+"="+coverDir)
 	// Not stdout, which must stay the report for anything that reads it.

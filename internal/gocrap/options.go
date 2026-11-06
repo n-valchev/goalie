@@ -3,14 +3,12 @@ package gocrap
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
+	"github.com/n-valchev/goalie/internal/check"
 	"github.com/n-valchev/goalie/internal/cliflags"
-	"github.com/n-valchev/goalie/internal/config"
-	"github.com/n-valchev/goalie/internal/crap"
 )
 
 const usage = `gocrap finds Go functions that are complex and poorly tested.
@@ -56,7 +54,7 @@ Coverage:
   GOCRAP_COVER_DIR to an empty folder, and the command must write one or more
   text coverage profiles there. gocrap merges them: a block counts as covered
   if any profile covers it. The default command is:
-    ` + defaultCoverCommand + `
+    ` + check.DefaultCoverCommand + `
   To run several test suites, set coverCommand in .goalierc, for example to
   "make coverage". If the command fails, gocrap exits with 2.
   A function in no profile has 0% coverage. gocrap supports one Go module.
@@ -73,25 +71,15 @@ Exit codes:
   2  Any error, even with --warn-only.
 `
 
-const (
-	formatText = "text"
-	formatJSON = "json"
-)
-
 type options struct {
-	config.Repo
-	base          string
-	limits        crap.Limits
-	coverCommand  string
-	coverProfiles []string
-	format        string
-	warnOnly      bool
-	help          bool
-	fromFlags     map[string]bool
+	check.Crap
+	warnOnly  bool
+	help      bool
+	fromFlags map[string]bool
 }
 
 func parseOptions(args []string) (options, error) {
-	opts := options{coverCommand: defaultCoverCommand}
+	opts := options{Crap: check.NewCrap("gocrap")}
 	flags := flag.NewFlagSet("gocrap", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.Usage = func() {}
@@ -100,20 +88,20 @@ func parseOptions(args []string) (options, error) {
 		if value == "" {
 			return errors.New("must name a revision")
 		}
-		opts.base = value
+		opts.Base = value
 		return nil
 	})
-	flags.Float64Var(&opts.limits.Limit, "limit", crap.DefaultLimit, "")
+	flags.Float64Var(&opts.Limits.Limit, "limit", opts.Limits.Limit, "")
 	flags.Func("shared-limit", "", func(value string) error {
 		limit, err := strconv.ParseFloat(value, 64)
-		opts.limits.SharedLimit = &limit
+		opts.Limits.SharedLimit = &limit
 		return err
 	})
 	flags.Func("cover-profiles", "", func(value string) error {
-		opts.coverProfiles = strings.Split(value, ",")
+		opts.CoverProfiles = strings.Split(value, ",")
 		return nil
 	})
-	flags.StringVar(&opts.format, "format", formatText, "")
+	flags.StringVar((*string)(&opts.Format), "format", string(opts.Format), "")
 	flags.BoolVar(&opts.warnOnly, "warn-only", false, "")
 	opts.AddFlags(flags)
 
@@ -129,11 +117,8 @@ func parseOptions(args []string) (options, error) {
 }
 
 func (o options) validate() error {
-	if err := o.limits.CheckValues(); err != nil {
+	if err := o.Limits.CheckValues(); err != nil {
 		return err
 	}
-	if o.format != formatText && o.format != formatJSON {
-		return fmt.Errorf("invalid --format %q: must be text or json", o.format)
-	}
-	return nil
+	return o.Format.Validate()
 }

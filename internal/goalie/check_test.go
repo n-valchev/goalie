@@ -38,6 +38,7 @@ func TestEveryCommandLineMistakeExitsWithTwo(t *testing.T) {
 		{"no command", nil, "command"},
 		{"unknown command", []string{"lint"}, `"lint"`},
 		{"unknown rule", []string{"check", "dupe", "--base", "HEAD"}, `"dupe"`},
+		{"two rules", []string{"check", "dup", "crap", "--base", "HEAD"}, "one rule"},
 		{"unknown flag", []string{"check", "dup", "--bse", "HEAD"}, "bse"},
 		{"empty revision", []string{"check", "dup", "--base", ""}, "revision"},
 		{"unknown revision", []string{"check", "dup", "--base", "no-such-rev"}, "no-such-rev"},

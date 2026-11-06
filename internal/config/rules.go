@@ -1,17 +1,19 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // Rules has one field for each rule, so that the strict decoder in Read rejects an unknown rule name.
 type Rules struct {
-	Dup DupRule `json:"dup"`
+	Dup  DupRule  `json:"dup"`
+	Crap CrapRule `json:"crap"`
 }
 
-// Control holds what every rule has. An empty value means that the file leaves it out, because the
-// default mode differs from rule to rule.
+// Control holds what every rule has. An empty value means that the file leaves it out.
 type Control struct {
 	Mode  Mode  `json:"mode"`
 	Scope Scope `json:"scope"`
@@ -26,6 +28,30 @@ type DupRule struct {
 	WeakAnchors  *int     `json:"weakAnchors"`
 	WeakLiterals *float64 `json:"weakLiterals"`
 	IncludeTests *bool    `json:"includeTests"`
+}
+
+// CrapRule holds pointers for the same reason as Godry.
+type CrapRule struct {
+	Control
+	Cover
+	Limit       *float64 `json:"limit"`
+	SharedLimit *float64 `json:"sharedLimit"`
+}
+
+type Cover struct {
+	CoverCommand  *string  `json:"coverCommand"`
+	CoverProfiles []string `json:"coverProfiles"`
+}
+
+func (c Cover) Check() error {
+	if c.CoverCommand != nil && strings.TrimSpace(*c.CoverCommand) == "" {
+		return errors.New("coverCommand must not be empty")
+	}
+	// The file can't say which one wins, so a flag does not excuse this either.
+	if c.CoverCommand != nil && len(c.CoverProfiles) > 0 {
+		return errors.New("set coverCommand or coverProfiles, not both")
+	}
+	return nil
 }
 
 type Mode string

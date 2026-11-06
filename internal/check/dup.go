@@ -36,6 +36,16 @@ func (f Format) write(w io.Writer, pairs []compare.Pair) error {
 	return report.Text(w, pairs)
 }
 
+func (f Format) reportEmpty(message string, stdout, stderr io.Writer, writeEmpty func() error) error {
+	if f == FormatJSON {
+		// A reader of --format json must always be able to parse stdout.
+		fmt.Fprintln(stderr, message)
+		return writeEmpty()
+	}
+	fmt.Fprintln(stdout, message)
+	return nil
+}
+
 // Dup finds functions with the same structure. An empty Base compares the whole repo.
 type Dup struct {
 	config.Repo
@@ -143,13 +153,9 @@ func (d Dup) Run(dir string, stdout, stderr io.Writer) (found bool, err error) {
 }
 
 func (d Dup) nothingToCompare(message string, stdout, stderr io.Writer) error {
-	if d.Format == FormatJSON {
-		// A reader of --format json must always be able to parse stdout.
-		fmt.Fprintln(stderr, message)
+	return d.Format.reportEmpty(message, stdout, stderr, func() error {
 		return report.JSON(stdout, nil)
-	}
-	fmt.Fprintln(stdout, message)
-	return nil
+	})
 }
 
 func (d Dup) candidates(functions []extract.Function) []compare.Candidate {

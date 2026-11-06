@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/n-valchev/goalie/internal/check"
 	"github.com/n-valchev/goalie/internal/config"
@@ -44,7 +45,11 @@ func runCheck(args []string, dir string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stderr, err)
 	}
-	mode := cmp.Or(file.Rules.Dup.Mode, config.ModeFail)
+	control, build := file.Rules.Dup.Control, newDup
+	if slices.Contains(opts.ruleNames, "crap") {
+		control, build = file.Rules.Crap.Control, newCrap
+	}
+	mode := cmp.Or(control.Mode, config.ModeFail)
 	if mode == config.ModeOff {
 		if len(opts.ruleNames) == 0 {
 			return exitClean
@@ -52,11 +57,11 @@ func runCheck(args []string, dir string, stdout, stderr io.Writer) int {
 		// A maintainer names a rule that is off to try its limit on real code, without failing a build.
 		mode = config.ModeWarn
 	}
-	dup, err := newDup(file, opts.base)
+	selected, err := build(file, opts.base)
 	if err != nil {
 		return fail(stderr, err)
 	}
-	found, err := dup.Run(dir, stdout, stderr)
+	found, err := selected.Run(dir, stdout, stderr)
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -66,24 +71,54 @@ func runCheck(args []string, dir string, stdout, stderr io.Writer) int {
 	return exitClean
 }
 
-func newDup(file config.Settings, base string) (check.Dup, error) {
-	rule := file.Rules.Dup
+type rule interface {
+	Run(dir string, stdout, stderr io.Writer) (found bool, err error)
+}
+
+func newDup(file config.Settings, base string) (rule, error) {
+	ruleSettings := file.Rules.Dup
 	dup := check.NewDup("goalie")
-	if rule.Scope != config.ScopeAll {
-		dup.Base = cmp.Or(base, file.Base)
-		// A default of HEAD would see no changes in CI, so a forgotten flag would pass every build.
-		if dup.Base == "" {
-			return dup, fmt.Errorf("needs a revision: use --base <rev>, or set base in %s", config.Name)
-		}
+	var err error
+	if dup.Base, err = revision(ruleSettings.Scope, base, file); err != nil {
+		return nil, err
 	}
-	dup.ApplyRule(rule)
+	dup.ApplyRule(ruleSettings)
 	if err := dup.Apply(file, nil); err != nil {
-		return dup, err
+		return nil, err
 	}
 	if err := dup.Validate(); err != nil {
-		return dup, fmt.Errorf("%s: %w", config.Name, err)
+		return nil, fmt.Errorf("%s: %w", config.Name, err)
 	}
 	return dup, nil
+}
+
+func newCrap(file config.Settings, base string) (rule, error) {
+	ruleSettings := file.Rules.Crap
+	crap := check.NewCrap("goalie")
+	var err error
+	if crap.Base, err = revision(ruleSettings.Scope, base, file); err != nil {
+		return nil, err
+	}
+	crap.ApplyRule(ruleSettings)
+	if err := crap.Apply(file, nil); err != nil {
+		return nil, err
+	}
+	if err := cmp.Or(ruleSettings.Cover.Check(), crap.Limits.Check()); err != nil {
+		return nil, fmt.Errorf("%s: %w", config.Name, err)
+	}
+	return crap, nil
+}
+
+func revision(scope config.Scope, base string, file config.Settings) (string, error) {
+	if scope == config.ScopeAll {
+		return "", nil
+	}
+	result := cmp.Or(base, file.Base)
+	// A default of HEAD would see no changes in CI, so a forgotten flag would pass every build.
+	if result == "" {
+		return "", fmt.Errorf("needs a revision: use --base <rev>, or set base in %s", config.Name)
+	}
+	return result, nil
 }
 
 func fail(stderr io.Writer, err error) int {

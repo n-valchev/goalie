@@ -120,6 +120,14 @@ func TestGocrapAcceptsTheSettingsOfGoalie(t *testing.T) {
 	run(t, dir, 0)
 }
 
+func TestGocrapAcceptsButIgnoresTheCrapRule(t *testing.T) {
+	dir := writeTree(t, map[string]string{
+		"go.mod": goMod, "a.go": smallFile, "p.out": "mode: set\n",
+		".goalierc": `{"rules": {"crap": {"limit": 0}}, "gocrap": {"coverProfiles": ["p.out"]}}`,
+	})
+	run(t, dir, 0)
+}
+
 func TestGocrapAcceptsTheSettingsOfGodeps(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod, "a.go": smallFile, "p.out": "mode: set\n",

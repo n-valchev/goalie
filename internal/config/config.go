@@ -45,13 +45,12 @@ type Godry struct {
 
 // Gocrap holds pointers for the same reason as Godry.
 type Gocrap struct {
-	Base          *string  `json:"base"`
-	Limit         *float64 `json:"limit"`
-	SharedLimit   *float64 `json:"sharedLimit"`
-	CoverCommand  *string  `json:"coverCommand"`
-	CoverProfiles []string `json:"coverProfiles"`
-	Format        *string  `json:"format"`
-	WarnOnly      *bool    `json:"warnOnly"`
+	Cover
+	Base        *string  `json:"base"`
+	Limit       *float64 `json:"limit"`
+	SharedLimit *float64 `json:"sharedLimit"`
+	Format      *string  `json:"format"`
+	WarnOnly    *bool    `json:"warnOnly"`
 }
 
 // Godeps holds pointers for the same reason as Godry.
