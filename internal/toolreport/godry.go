@@ -14,7 +14,10 @@ type DrySide struct {
 }
 
 func ReadDry(dir, file string) ([]DryPair, error) {
-	return readFindings(dir, file, "godry", "left or right file", func(pair DryPair) bool {
-		return pair.Left.File != "" && pair.Right.File != ""
+	return readFindings(dir, file, "dup", func(pair DryPair) string {
+		if pair.Left.File == "" || pair.Right.File == "" {
+			return "left or right file"
+		}
+		return ""
 	})
 }

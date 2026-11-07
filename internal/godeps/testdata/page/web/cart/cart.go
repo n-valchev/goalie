@@ -31,7 +31,7 @@ func Sum(items []int, limit int) int {
 	return total
 }
 
-//gocrap:ignore fixture
+//goalie:ignore crap fixture
 func Skipped() {}
 
 func Stub()

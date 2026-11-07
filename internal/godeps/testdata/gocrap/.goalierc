@@ -1,4 +1,4 @@
 {
   "shared": ["lib/**"],
-  "gocrap": {"limit": 4, "sharedLimit": 2}
+  "rules": {"crap": {"limit": 4, "sharedLimit": 2}}
 }

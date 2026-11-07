@@ -10,7 +10,7 @@ import (
 
 const fixtureDir = "testdata/page"
 
-var update = flag.Bool("update", false, "rewrite testdata/page/map.html")
+var update = flag.Bool("update", false, "rewrite the fixture files that tests compare against")
 
 // Editor links hold the absolute path of the checkout, which differs on each machine.
 var checkoutPath = regexp.MustCompile(`file:///[^"]*?/testdata/page/`)
@@ -28,7 +28,7 @@ func fixturePath(t *testing.T) string {
 // map. Any other count means that the reports no longer match the sources.
 func TestTheFixturePageIsCurrent(t *testing.T) {
 	stdout, stderr := run(t, fixturePath(t), 0)
-	const warnings = "godeps: godry report sides with no function: 2\ngodeps: gocrap rows with no function: 1\n"
+	const warnings = "godeps: dup report sides with no function: 2\ngodeps: crap rows with no function: 1\n"
 	if stderr != warnings {
 		t.Errorf("stderr = %q, want %q", stderr, warnings)
 	}

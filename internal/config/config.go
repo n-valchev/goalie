@@ -58,7 +58,7 @@ type Godeps struct {
 	Format       *string  `json:"format"`
 	ArchGoReport *string  `json:"archGoReport"`
 	CrapReport   *string  `json:"crapReport"`
-	DryReport    *string  `json:"dryReport"`
+	DupReport    *string  `json:"dupReport"`
 	EditorURL    *string  `json:"editorURL"`
 	Title        *string  `json:"title"`
 	Foreign      []string `json:"foreign"`

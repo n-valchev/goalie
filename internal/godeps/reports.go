@@ -24,14 +24,14 @@ func joinReports(dir string, opts options, result *model.Model, source model.Sou
 	if err != nil {
 		return err
 	}
-	err = joinReport(dir, opts.dryReport, toolreport.ReadDry, func(pairs []toolreport.DryPair) {
-		warn("godry report sides with no function", model.JoinDuplicates(result, source, pairs))
+	err = joinReport(dir, opts.dupReport, toolreport.ReadDry, func(pairs []toolreport.DryPair) {
+		warn("dup report sides with no function", model.JoinDuplicates(result, source, pairs))
 	})
 	if err != nil {
 		return err
 	}
 	return joinReport(dir, opts.crapReport, toolreport.ReadGocrap, func(rows []toolreport.CrapRow) {
-		warn("gocrap rows with no function", model.JoinCrap(result, rows, opts.limits))
+		warn("crap rows with no function", model.JoinCrap(result, rows, opts.limits))
 	})
 }
 

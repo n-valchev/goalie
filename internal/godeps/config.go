@@ -19,7 +19,7 @@ func applyConfig(dir string, opts *options) error {
 	cliflags.Fill(set, "format", &opts.format, tool.Format)
 	cliflags.Fill(set, "arch-go-report", &opts.archGoReport, tool.ArchGoReport)
 	cliflags.Fill(set, "crap-report", &opts.crapReport, tool.CrapReport)
-	cliflags.Fill(set, "dry-report", &opts.dryReport, tool.DryReport)
+	cliflags.Fill(set, "dup-report", &opts.dupReport, tool.DupReport)
 	cliflags.Fill(set, "editor-url", &opts.editorURL, tool.EditorURL)
 	cliflags.Fill(set, "title", &opts.title, tool.Title)
 	opts.foreign, opts.order = tool.Foreign, tool.Order
@@ -32,9 +32,10 @@ func applyConfig(dir string, opts *options) error {
 	if err := opts.validate(); err != nil {
 		return fmt.Errorf("%s: %w", config.Name, err)
 	}
-	opts.limits = crap.Limits{Limit: crap.DefaultLimit, SharedLimit: file.Gocrap.SharedLimit, Shared: opts.Shared}
-	if file.Gocrap.Limit != nil {
-		opts.limits.Limit = *file.Gocrap.Limit
+	rule := file.Rules.Crap
+	opts.limits = crap.Limits{Limit: crap.DefaultLimit, SharedLimit: rule.SharedLimit, Shared: opts.Shared}
+	if rule.Limit != nil {
+		opts.limits.Limit = *rule.Limit
 	}
 	if err := opts.limits.Check(); err != nil {
 		return fmt.Errorf("%s: %w", config.Name, err)

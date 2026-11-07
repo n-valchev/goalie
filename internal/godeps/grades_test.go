@@ -29,9 +29,7 @@ func wantBoxGrades(t *testing.T, got gradedModel, want map[string]string) {
 	}
 }
 
-// The fixture is real output. To rebuild it, run this from testdata/gocrap:
-//
-//	gocrap --limit 0 --shared-limit 0 --warn-only --format json > crap.json
+// The fixture is real goalie check output: see TestTheFixtureReportsAreWhatGoalieCheckPrints.
 func TestARealGocrapReportGradesEveryOp(t *testing.T) {
 	const dir = "testdata/gocrap"
 	stdout, stderr := run(t, dir, 0, "--format", "json", "--crap-report", "crap.json")
@@ -66,7 +64,7 @@ func TestARealGocrapReportGradesEveryOp(t *testing.T) {
 }
 
 func TestTheGradeComesFromTheScoreAndTheLimit(t *testing.T) {
-	const shared = `{"shared": ["a/**"], "gocrap": {"limit": 100, "sharedLimit": 8}}`
+	const shared = `{"shared": ["a/**"], "rules": {"crap": {"limit": 100, "sharedLimit": 8}}}`
 	tests := []struct {
 		name, config string
 		score        float64
@@ -76,19 +74,19 @@ func TestTheGradeComesFromTheScoreAndTheLimit(t *testing.T) {
 		{"default limit, just over half", `{}`, 15.01, "yellow"},
 		{"default limit, exactly the limit", `{}`, 30, "yellow"},
 		{"default limit, just over", `{}`, 30.01, "red"},
-		{"set limit, exactly half", `{"gocrap": {"limit": 8}}`, 4, "green"},
-		{"set limit, just over half", `{"gocrap": {"limit": 8}}`, 4.01, "yellow"},
-		{"set limit, exactly the limit", `{"gocrap": {"limit": 8}}`, 8, "yellow"},
-		{"set limit, just over", `{"gocrap": {"limit": 8}}`, 8.01, "red"},
-		{"limit of 0, score of 0", `{"gocrap": {"limit": 0}}`, 0, "green"},
-		{"limit of 0, any score", `{"gocrap": {"limit": 0}}`, 1, "red"},
+		{"set limit, exactly half", `{"rules": {"crap": {"limit": 8}}}`, 4, "green"},
+		{"set limit, just over half", `{"rules": {"crap": {"limit": 8}}}`, 4.01, "yellow"},
+		{"set limit, exactly the limit", `{"rules": {"crap": {"limit": 8}}}`, 8, "yellow"},
+		{"set limit, just over", `{"rules": {"crap": {"limit": 8}}}`, 8.01, "red"},
+		{"limit of 0, score of 0", `{"rules": {"crap": {"limit": 0}}}`, 0, "green"},
+		{"limit of 0, any score", `{"rules": {"crap": {"limit": 0}}}`, 1, "red"},
 		{"sharedLimit, exactly half", shared, 4, "green"},
 		{"sharedLimit, just over half", shared, 4.01, "yellow"},
 		{"sharedLimit, exactly the limit", shared, 8, "yellow"},
 		{"sharedLimit, just over", shared, 8.01, "red"},
-		{"sharedLimit of 0", `{"shared": ["a/**"], "gocrap": {"sharedLimit": 0}}`, 1, "red"},
-		{"sharedLimit left out", `{"shared": ["a/**"], "gocrap": {"limit": 8}}`, 8.01, "red"},
-		{"sharedLimit on other code", `{"shared": ["b/**"], "gocrap": {"limit": 100, "sharedLimit": 8}}`, 8.01, "green"},
+		{"sharedLimit of 0", `{"shared": ["a/**"], "rules": {"crap": {"sharedLimit": 0}}}`, 1, "red"},
+		{"sharedLimit left out", `{"shared": ["a/**"], "rules": {"crap": {"limit": 8}}}`, 8.01, "red"},
+		{"sharedLimit on other code", `{"shared": ["b/**"], "rules": {"crap": {"limit": 100, "sharedLimit": 8}}}`, 8.01, "green"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -111,7 +109,7 @@ func TestSharedLimitAppliesPerFileNotPerClass(t *testing.T) {
 		"go.mod":    goMod,
 		"a/one.go":  "package a\n\nfunc One() {}\n",
 		"a/two.go":  "package a\n\nfunc Two() {}\n",
-		".goalierc": `{"shared": ["a/one.go"], "gocrap": {"limit": 100, "sharedLimit": 8}}`,
+		".goalierc": `{"shared": ["a/one.go"], "rules": {"crap": {"limit": 100, "sharedLimit": 8}}}`,
 		"crap.json": crapReport(crapRow("a/one.go", 3, "One", 9), crapRow("a/two.go", 3, "Two", 9)),
 	})
 	got := readModel[gradedModel](t, dir, "--crap-report", "crap.json")
@@ -127,7 +125,7 @@ func TestTheSharedFlagChoosesWhichCodeTakesSharedLimit(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod":    goMod,
 		"a/a.go":    "package a\n\nfunc F() {}\n",
-		".goalierc": `{"gocrap": {"limit": 100, "sharedLimit": 8}}`,
+		".goalierc": `{"rules": {"crap": {"limit": 100, "sharedLimit": 8}}}`,
 		"crap.json": crapReport(crapRow("a/a.go", 3, "F", 9)),
 	})
 	if got := readModel[gradedModel](t, dir, "--crap-report", "crap.json", "--shared", "a/**").op(t, "F").Grade; got != "red" {
@@ -150,9 +148,10 @@ func TestAnOpMissingFromTheReportIsRedAndHasNoScores(t *testing.T) {
 
 func TestAnIgnoredFunctionHasNoGradeAndDoesNotCountAsMissing(t *testing.T) {
 	dir := writeTree(t, map[string]string{
-		"go.mod":    goMod,
-		"a/a.go":    "package a\n\n//gocrap:ignore generated\nfunc F() {}\n\n// Other words.\n//gocrap:ignore\nfunc NoReason() {}\n",
-		"b/b.go":    "package b\n\n//godry:ignore copied\nfunc G() {}\n",
+		"go.mod": goMod,
+		"a/a.go": "package a\n\n//goalie:ignore crap generated\nfunc F() {}\n\n// Other words.\n//goalie:ignore dup,crap\nfunc NoReason() {}\n",
+		"b/b.go": "package b\n\n//goalie:ignore dup copied\nfunc G() {}\n\n//gocrap:ignore generated\nfunc Old() {}\n\n" +
+			"//goalie:ignore crapper generated\nfunc Longer() {}\n",
 		"crap.json": crapReport(),
 	})
 	got := readModel[gradedModel](t, dir, "--crap-report", "crap.json")
@@ -161,15 +160,17 @@ func TestAnIgnoredFunctionHasNoGradeAndDoesNotCountAsMissing(t *testing.T) {
 			t.Errorf("%s = %+v, want ignored with no grade", name, op)
 		}
 	}
-	if op := got.op(t, "G"); op.Grade != "red" || op.Ignored {
-		t.Errorf("G = %+v, want red: only gocrap's own directive excuses a function", op)
+	for _, name := range []string{"G", "Old", "Longer"} {
+		if op := got.op(t, name); op.Grade != "red" || op.Ignored {
+			t.Errorf("%s = %+v, want red: only //goalie:ignore that names crap excuses a function", name, op)
+		}
 	}
 	wantClassGrades(t, got, map[string]string{"a": "", "b": "red"})
 	wantBoxGrades(t, got, map[string]string{"a": "", "b": "red"})
 }
 
 func TestAnIgnoredFunctionIsMarkedWithNoReport(t *testing.T) {
-	dir := writeTree(t, map[string]string{"go.mod": goMod, "a/a.go": "package a\n\n//gocrap:ignore generated\nfunc F() {}\n"})
+	dir := writeTree(t, map[string]string{"go.mod": goMod, "a/a.go": "package a\n\n//goalie:ignore crap generated\nfunc F() {}\n"})
 	if op := readModel[gradedModel](t, dir).op(t, "F"); !op.Ignored {
 		t.Errorf("F = %+v, want ignored", op)
 	}
@@ -208,7 +209,7 @@ func TestAFunctionWithNoBodyTakesNoRow(t *testing.T) {
 	if strings.Contains(stdout, `"crap"`) {
 		t.Errorf("stdout = %s; want no scores", stdout)
 	}
-	if !strings.Contains(stderr, "gocrap rows with no function: 1") {
+	if !strings.Contains(stderr, "crap rows with no function: 1") {
 		t.Errorf("stderr = %q; want the row counted", stderr)
 	}
 }
@@ -244,7 +245,7 @@ func TestTheSharedBoxesTakeTheGradeOfSharedCode(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod":     goMod,
 		"lib/log.go": "package lib\n\nfunc Log() {}\n",
-		".goalierc":  `{"shared": ["lib/**"], "gocrap": {"sharedLimit": 8}}`,
+		".goalierc":  `{"shared": ["lib/**"], "rules": {"crap": {"sharedLimit": 8}}}`,
 		"crap.json":  crapReport(crapRow("lib/log.go", 3, "Log", 9)),
 	})
 	wantBoxGrades(t, readModel[gradedModel](t, dir, "--crap-report", "crap.json"), map[string]string{":shared": "red", ":shared/lib": "red"})

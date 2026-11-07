@@ -65,6 +65,7 @@ func TestABadCrapReportIsAnError(t *testing.T) {
 		{"wrong type", `{"findings": [{"file": "a/a.go", "line": "3"}]}`},
 		{"a godry report", `{"findings": [{"score": 0.9, "left": {"file": "a/a.go", "startLine": 3}}]}`},
 		{"a row with no line", `{"findings": [{"file": "a/a.go", "score": 1}]}`},
+		{"a partial report", partialReport},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -72,6 +73,16 @@ func TestABadCrapReportIsAnError(t *testing.T) {
 			wantError(t, dir, "crap.json", "--format", "json", "--crap-report", "crap.json")
 		})
 	}
+}
+
+// partialReport is what goalie check crap --all --partial --format json writes.
+const partialReport = `{"findings": [{"rule": "crap", "mode": "warn", "value": 10, "limit": 0,
+	"file": "a/a.go", "line": 3, "function": "F", "complexity": 10, "canPass": true, "neededCoverage": 0.42}]}`
+
+func TestAPartialCrapReportNamesTheCommandThatScores(t *testing.T) {
+	dir := writeTree(t, map[string]string{"go.mod": goMod, "a/a.go": "package a\n\nfunc F() {}\n", "crap.json": partialReport})
+	wantError(t, dir, "finding 0 has no score: run goalie check crap without --partial",
+		"--format", "json", "--crap-report", "crap.json")
 }
 
 func TestAMissingCrapReportIsAnError(t *testing.T) {
@@ -118,7 +129,7 @@ func TestRowsThatMatchNoOpGiveOneWarningWithTheCount(t *testing.T) {
 		),
 	})
 	_, stderr := run(t, dir, 0, "--format", "json", "--crap-report", "crap.json")
-	if want := "godeps: gocrap rows with no function: 2\n"; stderr != want {
+	if want := "godeps: crap rows with no function: 2\n"; stderr != want {
 		t.Errorf("stderr = %q, want %q", stderr, want)
 	}
 }
@@ -140,7 +151,7 @@ func TestARowOfAnOmittedClassCountsAsMatchingNothing(t *testing.T) {
 		"crap.json": crapReport(crapRow("gen/g.go", 3, "G", 1)),
 	})
 	_, stderr := run(t, dir, 0, "--format", "json", "--crap-report", "crap.json")
-	if !strings.Contains(stderr, "gocrap rows with no function: 1") {
+	if !strings.Contains(stderr, "crap rows with no function: 1") {
 		t.Errorf("stderr = %q; want the row counted", stderr)
 	}
 }

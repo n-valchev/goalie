@@ -1,70 +1,82 @@
 {
   "findings": [
     {
-      "score": 1,
-      "literals": 1,
       "anchors": 0,
       "case": "across-products",
       "left": {
+        "endLine": 22,
         "file": "billing/invoice/invoice.go",
         "function": "Add",
-        "startLine": 7,
-        "endLine": 22,
+        "new": false,
         "nodes": 54,
-        "new": false
+        "startLine": 7
       },
+      "limit": 0.82,
+      "literals": 1,
+      "mode": "warn",
       "right": {
+        "endLine": 18,
         "file": "gen/gen.go",
         "function": "Gen",
-        "startLine": 3,
-        "endLine": 18,
+        "new": false,
         "nodes": 54,
-        "new": false
-      }
+        "startLine": 3
+      },
+      "rule": "dup",
+      "score": 1,
+      "value": 1
     },
     {
-      "score": 1,
-      "literals": 1,
       "anchors": 0,
       "case": "across-products",
       "left": {
+        "endLine": 22,
         "file": "billing/invoice/invoice.go",
         "function": "Add",
-        "startLine": 7,
-        "endLine": 22,
+        "new": false,
         "nodes": 54,
-        "new": false
+        "startLine": 7
       },
+      "limit": 0.82,
+      "literals": 1,
+      "mode": "warn",
       "right": {
+        "endLine": 32,
         "file": "web/cart/cart.go",
         "function": "Sum",
-        "startLine": 17,
-        "endLine": 32,
+        "new": false,
         "nodes": 54,
-        "new": false
-      }
+        "startLine": 17
+      },
+      "rule": "dup",
+      "score": 1,
+      "value": 1
     },
     {
-      "score": 1,
-      "literals": 1,
       "anchors": 0,
       "case": "across-products",
       "left": {
+        "endLine": 18,
         "file": "gen/gen.go",
         "function": "Gen",
-        "startLine": 3,
-        "endLine": 18,
+        "new": false,
         "nodes": 54,
-        "new": false
+        "startLine": 3
       },
+      "limit": 0.82,
+      "literals": 1,
+      "mode": "warn",
       "right": {
+        "endLine": 32,
         "file": "web/cart/cart.go",
         "function": "Sum",
-        "startLine": 17,
-        "endLine": 32,
+        "new": false,
         "nodes": 54,
-        "new": false
-      }
+        "startLine": 17
+      },
+      "rule": "dup",
+      "score": 1,
+      "value": 1
     }
   ]
 }

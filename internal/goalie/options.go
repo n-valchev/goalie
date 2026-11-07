@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 
 	"github.com/n-valchev/goalie/internal/check"
 	"github.com/n-valchev/goalie/internal/cliflags"
@@ -15,6 +16,7 @@ const usage = `goalie checks Go code against one set of rules.
 
 Usage:
   goalie check [rules] [--base <rev>] [--all] [--partial] [--format <format>]
+  goalie check <rule> [--limit <n>] [--shared-limit <n>] [--warn-only] ...
 
 Rules:
   dup   Reports functions with the same structure as another function.
@@ -32,6 +34,11 @@ Flags:
                      no revision is needed. Each rule still follows its mode.
   --partial          Run no tests and read no coverage. See "Partial check".
   --format <format>  text or json. The default is text.
+  --limit <n>        Use this limit for the one rule that you name, in place of
+                     .goalierc. The limit of dup is its threshold, from 0 to 1.
+  --shared-limit <n> Use this sharedLimit for crap, in place of .goalierc.
+  --warn-only        Run the one rule that you name in warn mode, so that its
+                     results never exit with 1. An error still exits with 2.
   --help             Print this help.
 
 Results:
@@ -84,17 +91,21 @@ Exit codes:
   0  No fail result.
   1  At least one fail result.
   2  Any error, including a missing revision, an unknown rule name, an unknown
-     mode or scope, or a failed coverage command. If the tests fail, goalie
+     mode or scope, --limit, --shared-limit, or --warn-only with no rule name
+     or with several, or a failed coverage command. If the tests fail, goalie
      reports the other rules, skips crap, and prints the failure on stderr.
 `
 
 type options struct {
-	base      string
-	ruleNames []string
-	all       bool
-	partial   bool
-	format    check.Format
-	help      bool
+	base        string
+	ruleNames   []string
+	all         bool
+	partial     bool
+	format      check.Format
+	limit       *float64
+	sharedLimit *float64
+	warnOnly    bool
+	help        bool
 }
 
 func parseCheck(args []string) (options, error) {
@@ -114,8 +125,11 @@ func parseCheck(args []string) (options, error) {
 		opts.format = check.Format(value)
 		return opts.format.Validate()
 	})
+	flags.Func("limit", "", limitFlag(&opts.limit))
+	flags.Func("shared-limit", "", limitFlag(&opts.sharedLimit))
 	flags.BoolVar(&opts.all, "all", false, "")
 	flags.BoolVar(&opts.partial, "partial", false, "")
+	flags.BoolVar(&opts.warnOnly, "warn-only", false, "")
 	parsed, err := cliflags.Parse(flags, args)
 	if err != nil {
 		return opts, err
@@ -127,5 +141,40 @@ func parseCheck(args []string) (options, error) {
 			return opts, fmt.Errorf("unknown rule %q", name)
 		}
 	}
-	return opts, nil
+	return opts, opts.checkOneRuleFlags(parsed.Set)
+}
+
+func limitFlag(target **float64) func(string) error {
+	return func(value string) error {
+		limit, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return errors.New("must be a number")
+		}
+		// Written so that NaN, which fails every comparison, is rejected too.
+		if !(limit >= 0) {
+			return errors.New("must not be negative")
+		}
+		*target = &limit
+		return nil
+	}
+}
+
+// checkOneRuleFlags allows these flags on one rule alone, because each rule reads its limit in its own
+// way, and a limit for crap would make no sense as a threshold for dup.
+func (o options) checkOneRuleFlags(set map[string]bool) error {
+	for _, name := range []string{"limit", "shared-limit", "warn-only"} {
+		if set[name] && len(o.ruleNames) != 1 {
+			return fmt.Errorf("--%s needs exactly one rule name", name)
+		}
+	}
+	if len(o.ruleNames) != 1 || o.ruleNames[0] != check.DupRule {
+		return nil
+	}
+	if o.sharedLimit != nil {
+		return fmt.Errorf("--shared-limit works only with %s", check.CrapRule)
+	}
+	if o.limit != nil && *o.limit > 1 {
+		return errors.New("--limit for dup must be between 0 and 1")
+	}
+	return nil
 }

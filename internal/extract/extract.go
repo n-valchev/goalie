@@ -160,14 +160,18 @@ func ReceiverType(fn *ast.FuncDecl) string {
 	}
 }
 
-// HasDirective accepts a directive with no reason, because that error belongs to the tool that owns
-// the directive, and a reader of it has no check to fail.
-func HasDirective(fn *ast.FuncDecl, directive string) bool {
+// IgnoreDirective is followed by rule names and a reason: //goalie:ignore crap,dup <reason>.
+const IgnoreDirective = "//goalie:ignore"
+
+// Excuses accepts a directive with no reason, because that error belongs to goalie check, and a
+// reader of the directive has no check to fail.
+func Excuses(fn *ast.FuncDecl, rule string) bool {
 	if fn.Doc == nil {
 		return false
 	}
 	return slices.ContainsFunc(fn.Doc.List, func(comment *ast.Comment) bool {
-		return strings.Fields(comment.Text)[0] == directive
+		words := strings.Fields(comment.Text)
+		return words[0] == IgnoreDirective && len(words) > 1 && slices.Contains(strings.Split(words[1], ","), rule)
 	})
 }
 

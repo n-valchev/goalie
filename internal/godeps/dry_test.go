@@ -1,15 +1,11 @@
 package godeps_test
 
 import (
-	"bytes"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/n-valchev/goalie/internal/godry"
 )
 
 const dryFixture = "testdata/godry"
@@ -58,7 +54,7 @@ func (m dryModel) op(t *testing.T, class, name string) dryOp {
 }
 
 func TestAnOpInTwoPairsGetsADuplicateForEachOtherSide(t *testing.T) {
-	result := readModel[dryModel](t, dryFixture, "--dry-report", "dry.json", "--editor-url", "idea://open?file={file}&line={line}")
+	result := readModel[dryModel](t, dryFixture, "--dup-report", "dup.json", "--editor-url", "idea://open?file={file}&line={line}")
 	got := result.op(t, "example.com/shop/billing/invoice", "Total").Duplicates
 	want := []duplicate{
 		{"example.com/shop/orders", "Order.Sum", "orders/order.go", 5, "idea://open?file=testdata/godry/orders/order.go&line=5", 1},
@@ -70,7 +66,7 @@ func TestAnOpInTwoPairsGetsADuplicateForEachOtherSide(t *testing.T) {
 }
 
 func TestADuplicateLinkUsesTheDefaultEditorURL(t *testing.T) {
-	result := readModel[dryModel](t, dryFixture, "--dry-report", "dry.json")
+	result := readModel[dryModel](t, dryFixture, "--dup-report", "dup.json")
 	got := result.op(t, "example.com/shop/orders", "Order.Sum").Duplicates[0].URL
 	if want := "file://testdata/godry/billing/invoice/total.go"; got != want {
 		t.Errorf("url = %q, want %q", got, want)
@@ -113,7 +109,7 @@ func dryTree(t *testing.T, extra map[string]string) string {
 }
 
 func TestAnOpInTwoPairsCountsOnce(t *testing.T) {
-	result := readModel[dryModel](t, dryFixture, "--dry-report", "dry.json")
+	result := readModel[dryModel](t, dryFixture, "--dup-report", "dup.json")
 	for _, class := range result.Classes {
 		wantCount(t, class.ID, class.DuplicateCount, 1)
 	}
@@ -124,8 +120,8 @@ func TestAnOpInTwoPairsCountsOnce(t *testing.T) {
 }
 
 func TestDuplicateCountAddsUpAtAnyDepthAndShowsZero(t *testing.T) {
-	dir := dryTree(t, map[string]string{"dry.json": pairReport("a/b/one.go", "a/two.go")})
-	result := readModel[dryModel](t, dir, "--dry-report", "dry.json")
+	dir := dryTree(t, map[string]string{"dup.json": pairReport("a/b/one.go", "a/two.go")})
+	result := readModel[dryModel](t, dir, "--dup-report", "dup.json")
 	want := map[string]int{"a": 2, "a/b": 1, "c": 0}
 	for _, box := range result.Packages {
 		wantCount(t, box.ID, box.DuplicateCount, want[box.ID])
@@ -137,8 +133,8 @@ func TestDuplicateCountAddsUpAtAnyDepthAndShowsZero(t *testing.T) {
 }
 
 func TestDuplicateCountReachesTheSharedBox(t *testing.T) {
-	dir := dryTree(t, map[string]string{"dry.json": pairReport("a/b/one.go", "root.go")})
-	result := readModel[dryModel](t, dir, "--dry-report", "dry.json", "--shared", "a/**")
+	dir := dryTree(t, map[string]string{"dup.json": pairReport("a/b/one.go", "root.go")})
+	result := readModel[dryModel](t, dir, "--dup-report", "dup.json", "--shared", "a/**")
 	want := map[string]int{":shared": 1, ":shared/a": 1, ":shared/a/b": 1, "c": 0}
 	for _, box := range result.Packages {
 		wantCount(t, box.ID, box.DuplicateCount, want[box.ID])
@@ -150,9 +146,9 @@ func TestAForeignClassHasNoDuplicateCount(t *testing.T) {
 		"go.mod":    goMod,
 		"a/a.go":    "package a\n\nimport _ \"example.com/lib\"\n",
 		".goalierc": `{"godeps": {"foreign": ["example.com/lib"]}}`,
-		"dry.json":  `{"findings": []}`,
+		"dup.json":  `{"findings": []}`,
 	})
-	for _, class := range readModel[dryModel](t, dir, "--dry-report", "dry.json").Classes {
+	for _, class := range readModel[dryModel](t, dir, "--dup-report", "dup.json").Classes {
 		if class.ID == "example.com/lib" && class.DuplicateCount != nil {
 			t.Errorf("foreign class duplicateCount = %d, want none", *class.DuplicateCount)
 		}
@@ -169,7 +165,7 @@ func TestWithNoDryReportTheModelHasNoDuplicateData(t *testing.T) {
 }
 
 func TestAMissingDryReportFails(t *testing.T) {
-	_, stderr := run(t, dryTree(t, nil), 2, "--format", "json", "--dry-report", "nowhere.json")
+	_, stderr := run(t, dryTree(t, nil), 2, "--format", "json", "--dup-report", "nowhere.json")
 	if !strings.Contains(stderr, "nowhere.json") {
 		t.Errorf("stderr = %q, want the path named", stderr)
 	}
@@ -185,9 +181,9 @@ func TestAnInvalidDryReportFails(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			dir := dryTree(t, map[string]string{"dry.json": test.content})
-			_, stderr := run(t, dir, 2, "--format", "json", "--dry-report", "dry.json")
-			if !strings.Contains(stderr, "dry.json") {
+			dir := dryTree(t, map[string]string{"dup.json": test.content})
+			_, stderr := run(t, dir, 2, "--format", "json", "--dup-report", "dup.json")
+			if !strings.Contains(stderr, "dup.json") {
 				t.Errorf("stderr = %q, want the path named", stderr)
 			}
 		})
@@ -196,21 +192,21 @@ func TestAnInvalidDryReportFails(t *testing.T) {
 
 func TestTheDryReportComesFromTheSettingUnlessTheFlagReplacesIt(t *testing.T) {
 	dir := dryTree(t, map[string]string{
-		".goalierc": `{"godeps": {"dryReport": "dry.json"}}`,
-		"dry.json":  pairReport("a/b/one.go", "a/two.go"),
+		".goalierc": `{"godeps": {"dupReport": "dup.json"}}`,
+		"dup.json":  pairReport("a/b/one.go", "a/two.go"),
 		"none.json": `{"findings": []}`,
 	})
 	if got := readModel[dryModel](t, dir).op(t, "example.com/shop/a", "G").Duplicates; len(got) != 1 {
 		t.Errorf("from the setting: duplicates = %+v, want one", got)
 	}
-	if got := readModel[dryModel](t, dir, "--dry-report", "none.json").op(t, "example.com/shop/a", "G").Duplicates; len(got) != 0 {
+	if got := readModel[dryModel](t, dir, "--dup-report", "none.json").op(t, "example.com/shop/a", "G").Duplicates; len(got) != 0 {
 		t.Errorf("from the flag: duplicates = %+v, want none", got)
 	}
 }
 
 func TestAnAbsoluteDryReportPathIsUsedAsItIs(t *testing.T) {
-	report := filepath.Join(writeTree(t, map[string]string{"dry.json": pairReport("a/b/one.go", "a/two.go")}), "dry.json")
-	if got := readModel[dryModel](t, dryTree(t, nil), "--dry-report", report).op(t, "example.com/shop/a", "G").Duplicates; len(got) != 1 {
+	report := filepath.Join(writeTree(t, map[string]string{"dup.json": pairReport("a/b/one.go", "a/two.go")}), "dup.json")
+	if got := readModel[dryModel](t, dryTree(t, nil), "--dup-report", report).op(t, "example.com/shop/a", "G").Duplicates; len(got) != 1 {
 		t.Errorf("duplicates = %+v, want one", got)
 	}
 }
@@ -220,27 +216,27 @@ func TestSidesThatMatchNoOpWarnOnceWithTheCount(t *testing.T) {
 		{"score": 0.9, "left": {"file": "gone.go", "function": "F", "startLine": 3}, "right": {"file": "gone.go", "function": "G", "startLine": 9}},
 		{"score": 0.9, "left": {"file": "a/two.go", "function": "G", "startLine": 99}, "right": {"file": "a/two_test.go", "function": "H", "startLine": 3}}
 	]}`
-	dir := dryTree(t, map[string]string{"dry.json": report})
-	_, stderr := run(t, dir, 0, "--format", "json", "--dry-report", "dry.json")
-	if want := "godeps: godry report sides with no function: 4\n"; stderr != want {
+	dir := dryTree(t, map[string]string{"dup.json": report})
+	_, stderr := run(t, dir, 0, "--format", "json", "--dup-report", "dup.json")
+	if want := "godeps: dup report sides with no function: 4\n"; stderr != want {
 		t.Errorf("stderr = %q, want %q", stderr, want)
 	}
 }
 
 func TestAReportThatMatchesPrintsNoWarning(t *testing.T) {
-	if _, stderr := run(t, dryFixture, 0, "--format", "json", "--dry-report", "dry.json"); stderr != "" {
+	if _, stderr := run(t, dryFixture, 0, "--format", "json", "--dup-report", "dup.json"); stderr != "" {
 		t.Errorf("stderr = %q, want nothing", stderr)
 	}
 }
 
 func TestAnOpKeepsItsMarkWhenTheOtherSideIsOffTheMap(t *testing.T) {
 	dir := dryTree(t, map[string]string{
-		"dry.json":   pairReport("a/two.go", "gen/gen.go"),
+		"dup.json":   pairReport("a/two.go", "gen/gen.go"),
 		"gen/gen.go": "package gen\n\n" + strings.ReplaceAll(repeated, "%NAME%", "G"),
 		".goalierc":  `{"godeps": {"omit": ["gen"]}}`,
 	})
-	stdout, stderr := run(t, dir, 0, "--format", "json", "--dry-report", "dry.json", "--editor-url", "x:{line}")
-	if want := "godeps: godry report sides with no function: 1\n"; stderr != want {
+	stdout, stderr := run(t, dir, 0, "--format", "json", "--dup-report", "dup.json", "--editor-url", "x:{line}")
+	if want := "godeps: dup report sides with no function: 1\n"; stderr != want {
 		t.Errorf("stderr = %q, want %q", stderr, want)
 	}
 	if strings.Contains(stdout, `"id": ""`) {
@@ -257,20 +253,6 @@ func TestAnOpKeepsItsMarkWhenTheOtherSideIsOffTheMap(t *testing.T) {
 	}
 }
 
-func TestTheFixtureIsWhatGodryPrints(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	if code := godry.Run([]string{"--format", "json", "--warn-only"}, dryFixture, &stdout, &stderr); code != 0 {
-		t.Fatalf("godry exit code = %d, stderr = %q", code, stderr.String())
-	}
-	want, err := os.ReadFile(filepath.Join(dryFixture, "dry.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stdout.String() != string(want) {
-		t.Errorf("godry prints %s\nfixture holds %s", stdout.String(), want)
-	}
-}
-
 func TestADuplicateOnALineWithTwoFunctionsGoesToTheNamedOne(t *testing.T) {
 	tests := []struct{ left, right, leftOp, rightOp, leftOther, rightOther string }{
 		{"F", "H", "F", "T.H", "G", "T.M"},
@@ -282,11 +264,11 @@ func TestADuplicateOnALineWithTwoFunctionsGoesToTheNamedOne(t *testing.T) {
 				"go.mod": goMod,
 				"a/a.go": "package a\n\nfunc F() {}; func G() {}\n",
 				"b/b.go": "package b\n\ntype T struct{}\n\nfunc (T) H() {}; func (T) M() {}\n",
-				"dry.json": `{"findings": [{"score": 0.9,
+				"dup.json": `{"findings": [{"score": 0.9,
 					"left": {"file": "a/a.go", "function": "` + test.left + `", "startLine": 3},
 					"right": {"file": "b/b.go", "function": "` + test.right + `", "startLine": 5}}]}`,
 			})
-			got := readModel[dryModel](t, dir, "--dry-report", "dry.json")
+			got := readModel[dryModel](t, dir, "--dup-report", "dup.json")
 			left := got.op(t, "example.com/shop/a", test.leftOp).Duplicates
 			if len(left) != 1 || left[0].Name != test.rightOp || left[0].ID != "example.com/shop/b" {
 				t.Errorf("%s duplicates = %+v, want %s in b", test.leftOp, left, test.rightOp)
@@ -310,11 +292,11 @@ func TestOneFunctionKeepsEveryPairOnItsLine(t *testing.T) {
 		"go.mod": goMod,
 		"a/a.go": "package a\n\nfunc F() {}; func G() {}\n",
 		"b/b.go": "package b\n\nfunc H() {}\n\nfunc M() {}\n",
-		"dry.json": `{"findings": [
+		"dup.json": `{"findings": [
 			{"score": 0.9, "left": {"file": "a/a.go", "function": "F", "startLine": 3}, "right": {"file": "b/b.go", "function": "H", "startLine": 3}},
 			{"score": 0.8, "left": {"file": "a/a.go", "function": "F", "startLine": 3}, "right": {"file": "b/b.go", "function": "M", "startLine": 5}}]}`,
 	})
-	got := readModel[dryModel](t, dir, "--dry-report", "dry.json")
+	got := readModel[dryModel](t, dir, "--dup-report", "dup.json")
 	if duplicates := got.op(t, "example.com/shop/a", "F").Duplicates; len(duplicates) != 2 {
 		t.Errorf("F duplicates = %+v, want two", duplicates)
 	}

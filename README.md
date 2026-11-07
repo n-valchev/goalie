@@ -410,7 +410,7 @@ To make a map of the module in the current folder:
 godeps > map.html
 ```
 
-godeps checks nothing. arch-go stays your rule check in CI, and gocrap and godry stay your other checks. godeps only shows their reports on the map. Each report is optional.
+godeps checks nothing. arch-go stays your rule check in CI, and `goalie check` stays your other check. godeps only shows their reports on the map. Each report is optional.
 
 ### Read the map
 
@@ -433,11 +433,11 @@ The first screen shows one box for each product and one box for the shared code.
 | Oval | A module that you listed in `foreign` |
 | Green box | The worst function is at or below half its limit |
 | Yellow box | The worst function is at or below its limit |
-| Red, dashed box, marked `!` | The worst function is above its limit, or the gocrap report left it out |
-| Grey box | You gave no gocrap report |
-| `2 duplicated functions` | Two functions in the box have a duplicate. With a godry report, `0` prints too. Boxes at the edge of an opened box show this count only in their tooltip |
+| Red, dashed box, marked `!` | The worst function is above its limit, or the crap report left it out |
+| Grey box | You gave no crap report |
+| `2 duplicated functions` | Two functions in the box have a duplicate. With a dup report, `0` prints too. Boxes at the edge of an opened box show this count only in their tooltip |
 
-A function that the gocrap report leaves out is red, so that unmeasured code does not look safe. A function with `//gocrap:ignore` has no grade, because its author excused it, and its card shows `Ignored by gocrap`. An assembly stub has no grade, because gocrap can't score it.
+A function that the crap report leaves out is red, so that unmeasured code does not look safe. A function with `//goalie:ignore crap <reason>` has no grade, because its author excused it, and its card shows `Excused from crap by //goalie:ignore`. A directive that names only other rules, such as `//goalie:ignore dup`, doesn't excuse it from a grade. An assembly stub has no grade, because the crap rule can't score it.
 
 ### Add the reports
 
@@ -445,21 +445,22 @@ Run these commands from the repo root. godeps expects the paths in the reports t
 
 ```sh
 arch-go --json || true
-gocrap --limit 0 --shared-limit 0 --warn-only --format json > crap.json
-godry --format json --warn-only > dry.json
-godeps --arch-go-report .arch-go/report.json --crap-report crap.json --dry-report dry.json > map.html
+goalie check crap --all --limit 0 --shared-limit 0 --warn-only --format json > crap.json
+goalie check dup --all --warn-only --format json > dup.json
+godeps --arch-go-report .arch-go/report.json --crap-report crap.json --dup-report dup.json > map.html
 ```
 
 | Command part | Why you need it |
 | --- | --- |
 | `\|\| true` after `arch-go` | arch-go exits with `1` when it finds a break, and it still writes the report. A script that stops on errors would otherwise never reach godeps. Keep your own arch-go step in CI as the gate |
-| `--limit 0` | Without it, gocrap reports only functions above the limit, and godeps shows all the others as red |
-| `--shared-limit 0` | Without it, shared functions keep their `sharedLimit` and drop out of the report. Leave this flag out if you set no `shared` patterns, because gocrap then rejects it |
-| `--warn-only` | Without it, gocrap and godry exit with `1` when they report anything |
+| `--all` | Without it, a rule with scope `changes` reports only on code changed since `base`. The crap rule then leaves out every other function, and godeps shows them as red. The dup rule leaves out duplicates in old code, and they show no mark |
+| `--limit 0` | Without it, the crap rule reports only functions above the limit, and godeps shows all the others as red |
+| `--shared-limit 0` | Without it, shared functions keep their `sharedLimit` and drop out of the report. Leave this flag out if you set no `shared` patterns, because goalie then rejects it |
+| `--warn-only` | Without it, goalie exits with `1` when a rule in `fail` mode reports anything |
 
-**Don't set `base` in `.goalierc` for a map.** A `base` setting in the `gocrap` or `godry` object limits that report to new code, and no flag turns it off. With gocrap, every other function then shows as red. With godry, duplicates in old code show no mark. To check new code, pass `--base` on the command line instead.
+Don't use `--partial` for a map. A partial check scores no function, so godeps exits with `2` on its report.
 
-godeps takes the limits from `limit` and `sharedLimit` in the `gocrap` object of `.goalierc`, or `30` if you set no `limit`. It ignores the limit in the report, which is `0` in this run. godeps checks these two values as gocrap does. It exits with `2` on a negative `limit` or `sharedLimit`, and on a `sharedLimit` with no `shared` patterns.
+godeps takes the limits from `limit` and `sharedLimit` in `rules.crap` in `.goalierc`, or `30` if you set no `limit`. It ignores the limit in the report, which is `0` in this run. godeps checks these two values as goalie does. It exits with `2` on a negative `limit` or `sharedLimit`, and on a `sharedLimit` with no `shared` patterns.
 
 To read `.arch-go/report.json`, godeps takes the imported package from the quoted text after `imported package` in each line. This depends on the message text of arch-go v2.
 
@@ -469,8 +470,8 @@ To read `.arch-go/report.json`, godeps takes the imported package from the quote
 | --- | --- | --- | --- |
 | `--format F` | `format` | `html` | Output format: `html` or `json` |
 | `--arch-go-report <file>` | `archGoReport` | None | Mark the arrows that this arch-go report flags |
-| `--crap-report <file>` | `crapReport` | None | Grade functions and boxes from this gocrap report |
-| `--dry-report <file>` | `dryReport` | None | Mark functions from this godry report |
+| `--crap-report <file>` | `crapReport` | None | Grade functions and boxes from this crap report |
+| `--dup-report <file>` | `dupReport` | None | Mark functions from this dup report |
 | `--editor-url <template>` | `editorURL` | `file://{file}` | Link format for source lines |
 | `--title <text>` | `title` | The module path | Title of the map |
 | None | `foreign` | None | List of outside module paths to show as ovals |
@@ -487,12 +488,12 @@ This example shows a map with two outside modules and a fixed order:
 ```json
 {
   "shared": ["pkg/**"],
-  "gocrap": { "limit": 30, "sharedLimit": 15 },
+  "rules": { "crap": { "limit": 30, "sharedLimit": 15 } },
   "godeps": {
     "title": "Shop",
     "archGoReport": ".arch-go/report.json",
     "crapReport": "crap.json",
-    "dryReport": "dry.json",
+    "dupReport": "dup.json",
     "editorURL": "idea://open?file={file}&line={line}",
     "foreign": ["github.com/stripe/stripe-go", "go.uber.org/zap"],
     "omit": ["internal/gen/**"],
@@ -525,16 +526,16 @@ These errors exit with `2`:
 - A missing `go.mod`, or a `go.mod` with no `module` line.
 - A path outside the run directory.
 - A report path that is set but missing, or a report that isn't valid JSON.
-- A gocrap report with no `findings` array, or a row with no file or line.
-- A godry report with no `findings` array, or a finding with no `left` or `right` file.
+- A crap report with no `findings` array, or a finding with no file, line, or `score`. A report from `goalie check crap --partial` has no `score`.
+- A dup report with no `findings` array, or a finding with no `left` or `right` file.
 - An arch-go report with no `compliance` object.
 
 These warnings go to stderr and don't change the exit code:
 
 | Warning | What to do |
 | --- | --- |
-| `gocrap rows with no function: N` | Check that the report is from this code. Rows for omitted packages also count |
-| `godry report sides with no function: N` | Check that the report is from this code. Sides in omitted packages or test files also count |
+| `crap rows with no function: N` | Check that the report is from this code. Rows for omitted packages also count |
+| `dup report sides with no function: N` | Check that the report is from this code. Sides in omitted packages or test files also count |
 | `arch-go lines with no imported package: N` | Check your arch-go version, because the message text may have changed |
 | `arch-go breaks with no edge: N` | The map has one or more red arrows too few. The import is in the standard library, in an outside module that is not in `foreign`, or in an omitted package |
 | `order name "x" matches no top-level box` | Correct the name in `order` |
@@ -678,8 +679,8 @@ In the model, a **class** is one Go package, and a **package** is a folder box t
 | `packages[].parent` | String | Id of the box above. Left out at the top level |
 | `packages[].shared` | Boolean | `true` for shared code. Left out otherwise |
 | `packages[].packageCount` | Number | Classes at any depth below this box |
-| `packages[].duplicateCount` | Number | Functions at any depth with a duplicate. `0` with a godry report, if there are none. Left out with no report |
-| `packages[].grade` | String | `green`, `yellow`, or `red`: the worst function at any depth. Left out with no gocrap report, or with no graded function |
+| `packages[].duplicateCount` | Number | Functions at any depth with a duplicate. `0` with a dup report, if there are none. Left out with no report |
+| `packages[].grade` | String | `green`, `yellow`, or `red`: the worst function at any depth. Left out with no crap report, or with no graded function |
 | `classes[].id` | String | Full import path, sorted |
 | `classes[].name` | String | The package clause. A foreign class has its full module path. If a folder holds two clauses, the first one that isn't `main` |
 | `classes[].path` | String | Folder from the run directory. `.` is the root. Left out for a foreign class |
@@ -696,23 +697,23 @@ In the model, a **class** is one Go package, and a **package** is a folder box t
 | `classes[].types[].fields[].type` | String | Field type as written in the source |
 | `classes[].types[].methods[].name` | String | Method name. An embedded interface or a constraint has its source text here |
 | `classes[].types[].methods[].signature` | String | Parameters and results. Left out for an embedded interface or a constraint |
-| `classes[].ops[].name` | String | `Name` for a function, `Type.Name` for a method, as in gocrap |
+| `classes[].ops[].name` | String | `Name` for a function, `Type.Name` for a method, as in `goalie check crap` |
 | `classes[].ops[].file` | String | File from the run directory |
 | `classes[].ops[].line` | Number | Line of the `func` keyword |
 | `classes[].ops[].endLine` | Number | Last line of the function |
 | `classes[].ops[].exported` | Boolean | Whether the function or method name is exported |
 | `classes[].ops[].url` | String | Editor link |
-| `classes[].ops[].crap` | Number | gocrap score. Left out if the report has no row for this function |
+| `classes[].ops[].crap` | Number | crap score. Left out if the report has no row for this function |
 | `classes[].ops[].complexity` | Number | Cyclomatic complexity. Left out with `crap` |
 | `classes[].ops[].coverage` | Number | A fraction from `0` to `1`. Left out with `crap` |
-| `classes[].ops[].grade` | String | `green`, `yellow`, or `red`. `red` if the gocrap report has no row for it. Left out with no report, for an assembly stub, and for a function with `//gocrap:ignore` that the report has no row for |
-| `classes[].ops[].ignored` | Boolean | `true` for a function with `//gocrap:ignore`. Left out otherwise |
+| `classes[].ops[].grade` | String | `green`, `yellow`, or `red`. `red` if the crap report has no row for it. Left out with no report, for an assembly stub, and for a function with `//goalie:ignore crap` that the report has no row for |
+| `classes[].ops[].ignored` | Boolean | `true` for a function with `//goalie:ignore crap`. Left out otherwise |
 | `classes[].ops[].duplicates[].id` | String | Class of the other function. Left out when it is not on the map, as with an omitted package or a test file |
 | `classes[].ops[].duplicates[].name` | String | Name of the other function |
 | `classes[].ops[].duplicates[].file` | String | File of the other function |
 | `classes[].ops[].duplicates[].line` | Number | Line of the other function |
 | `classes[].ops[].duplicates[].url` | String | Editor link |
-| `classes[].ops[].duplicates[].score` | Number | godry score |
+| `classes[].ops[].duplicates[].score` | Number | dup score |
 | `edges[].from` | String | Id of the class that imports. Sorted by `from`, `to`, and `kind` |
 | `edges[].to` | String | Id of the class that is imported |
 | `edges[].kind` | String | `dependency` for an import. `composition` for a struct that embeds a type from another class of the module |
@@ -758,7 +759,7 @@ Open `/tmp/map.html` and follow these steps:
 3. Click the same arrow and move the pointer away. The panel stays and the arrow is marked. Press Esc. The panel closes, and the level doesn't change.
 4. Double-click `billing`. The box opens, `infra` stays at the edge, and the arrow between `invoice` and `tax` is marked `loop`. Hover over the `infra` box at the edge. Its tooltip says `0 duplicated functions`.
 5. Reload the page. The same level shows. Press Esc. The first screen shows again.
-6. Double-click `web`, and then `cart`. The card lists the types, and the functions with their scores. `Sum` shows `CRAP 6.6`, `Skipped` shows `Ignored by gocrap`, and `Stub` shows no score. The duplicate mark of `Sum` names `Add` with its score, and `Gen` as not on the map.
+6. Double-click `web`, and then `cart`. The card lists the types, and the functions with their scores. `Sum` shows `CRAP 6.6`, `Skipped` shows `Excused from crap by //goalie:ignore`, and `Stub` shows no score. The duplicate mark of `Sum` names `Add` with its score, and `Gen` as not on the map.
 7. Click the link of `Sum`. The file opens. Click its `web/cart/cart.go:17` text. The whole text is selected.
 8. Click a link under Imports on the card. That card opens. Click a level in the breadcrumb. The card closes and that level shows.
 9. Turn off the network and reload the page. Nothing changes.
@@ -773,7 +774,7 @@ To rebuild the reports after you change the module, run these commands in `inter
 
 ```sh
 arch-go --json || true
-godry --format json --warn-only > dry.json
+goalie check dup --all --warn-only --format json > dup.json
 ```
 
 ## Credits

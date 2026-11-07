@@ -149,7 +149,7 @@ func TestGodepsAcceptsTheSettingsOfGoalie(t *testing.T) {
 
 func TestEveryGodepsSettingIsAccepted(t *testing.T) {
 	config := `{"godeps": {
-		"format": "json", "archGoReport": "", "crapReport": "", "dryReport": "",
+		"format": "json", "archGoReport": "", "crapReport": "", "dupReport": "",
 		"editorURL": "idea://open?file={file}&line={line}", "title": "Shop",
 		"foreign": ["example.com/lib"], "omit": ["gen/**"], "order": ["a"]
 	}}`
@@ -159,10 +159,10 @@ func TestEveryGodepsSettingIsAccepted(t *testing.T) {
 func TestEveryFlagIsAccepted(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod, "a/a.go": "package a\n",
-		"arch.json": "{\"compliance\": {}}\n", "crap.json": "{\"findings\": []}\n", "dry.json": "{\"findings\": []}\n",
+		"arch.json": "{\"compliance\": {}}\n", "crap.json": "{\"findings\": []}\n", "dup.json": "{\"findings\": []}\n",
 	})
 	run(t, dir, 0, "--format", "json", "--arch-go-report", "arch.json", "--crap-report", "crap.json",
-		"--dry-report", "dry.json", "--editor-url", "file://{file}", "--title", "Shop",
+		"--dup-report", "dup.json", "--editor-url", "file://{file}", "--title", "Shop",
 		"--skip-files", "x.go", "--skip-tags", "x", "--shared", "a/**")
 }
 
@@ -215,7 +215,7 @@ func TestTheIgnoreFileApplies(t *testing.T) {
 func TestHelpPrintsTheFlagsAndExitsCleanly(t *testing.T) {
 	stdout, _ := run(t, t.TempDir(), 0, "--help")
 	for _, want := range []string{
-		"--format", "--arch-go-report", "--crap-report", "--dry-report", "--editor-url", "--title",
+		"--format", "--arch-go-report", "--crap-report", "--dup-report", "--editor-url", "--title",
 		"--skip-files", "--skip-tags", "--shared", ".goalierc", "Exit codes",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -230,9 +230,9 @@ func TestHelpWorksWithABadConfig(t *testing.T) {
 
 func TestLimitsThatGocrapRejectsAreErrors(t *testing.T) {
 	tests := []struct{ name, config, want string }{
-		{"negative limit", `{"gocrap": {"limit": -1}}`, "limit"},
-		{"negative shared limit", `{"shared": ["a/**"], "gocrap": {"sharedLimit": -1}}`, "limit"},
-		{"shared limit with no patterns", `{"gocrap": {"sharedLimit": 5}}`, "shared patterns"},
+		{"negative limit", `{"rules": {"crap": {"limit": -1}}}`, "limit"},
+		{"negative shared limit", `{"shared": ["a/**"], "rules": {"crap": {"sharedLimit": -1}}}`, "limit"},
+		{"shared limit with no patterns", `{"rules": {"crap": {"sharedLimit": 5}}}`, "shared patterns"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -242,9 +242,9 @@ func TestLimitsThatGocrapRejectsAreErrors(t *testing.T) {
 }
 
 func TestASharedLimitCanTakeItsPatternsFromTheFlag(t *testing.T) {
-	run(t, smallTree(t, `{"gocrap": {"sharedLimit": 5}}`), 0, "--format", "json", "--shared", "a/**")
+	run(t, smallTree(t, `{"rules": {"crap": {"sharedLimit": 5}}}`), 0, "--format", "json", "--shared", "a/**")
 }
 
 func TestALimitOfZeroIsAccepted(t *testing.T) {
-	run(t, smallTree(t, `{"shared": ["a/**"], "gocrap": {"limit": 0, "sharedLimit": 0}}`), 0, "--format", "json")
+	run(t, smallTree(t, `{"shared": ["a/**"], "rules": {"crap": {"limit": 0, "sharedLimit": 0}}}`), 0, "--format", "json")
 }

@@ -26,7 +26,8 @@ func readJSON(dir, file string, report any) error {
 
 // readFindings is strict about the shape, because any JSON decodes into this struct. A report of
 // the wrong tool would otherwise turn every function red or hide every duplicate, with no error.
-func readFindings[T any](dir, file, tool, needs string, complete func(T) bool) ([]T, error) {
+// missing names what a finding lacks, or returns "" for a complete one.
+func readFindings[T any](dir, file, tool string, missing func(T) string) ([]T, error) {
 	var report struct {
 		Findings []T `json:"findings"`
 	}
@@ -37,8 +38,8 @@ func readFindings[T any](dir, file, tool, needs string, complete func(T) bool) (
 		return nil, fmt.Errorf("%s: not a %s report: no findings", file, tool)
 	}
 	for i, finding := range report.Findings {
-		if !complete(finding) {
-			return nil, fmt.Errorf("%s: not a %s report: finding %d has no %s", file, tool, i, needs)
+		if lacks := missing(finding); lacks != "" {
+			return nil, fmt.Errorf("%s: not a %s report: finding %d has no %s", file, tool, i, lacks)
 		}
 	}
 	return report.Findings, nil

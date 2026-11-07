@@ -1,76 +1,100 @@
 {
   "findings": [
     {
-      "file": "billing/billing.go",
-      "line": 39,
-      "function": "Untested",
-      "score": 6,
       "complexity": 2,
       "coverage": 0,
-      "limit": 0
+      "file": "billing/billing.go",
+      "function": "Untested",
+      "limit": 0,
+      "line": 39,
+      "mode": "warn",
+      "rule": "crap",
+      "score": 6,
+      "value": 6
     },
     {
-      "file": "billing/billing.go",
-      "line": 26,
-      "function": "Size",
-      "score": 4,
       "complexity": 4,
       "coverage": 1,
-      "limit": 0
+      "file": "billing/billing.go",
+      "function": "Size",
+      "limit": 0,
+      "line": 26,
+      "mode": "warn",
+      "rule": "crap",
+      "score": 4,
+      "value": 4
     },
     {
+      "complexity": 3,
+      "coverage": 1,
       "file": "billing/billing.go",
-      "line": 16,
       "function": "Band",
+      "limit": 0,
+      "line": 16,
+      "mode": "warn",
+      "rule": "crap",
       "score": 3,
-      "complexity": 3,
-      "coverage": 1,
-      "limit": 0
+      "value": 3
     },
     {
+      "complexity": 3,
+      "coverage": 1,
       "file": "lib/text/text.go",
-      "line": 14,
       "function": "Bounded",
+      "limit": 0,
+      "line": 14,
+      "mode": "warn",
+      "rule": "crap",
       "score": 3,
-      "complexity": 3,
-      "coverage": 1,
-      "limit": 0
+      "value": 3
     },
     {
+      "complexity": 2,
+      "coverage": 1,
       "file": "billing/billing.go",
-      "line": 9,
       "function": "Sign",
+      "limit": 0,
+      "line": 9,
+      "mode": "warn",
+      "rule": "crap",
       "score": 2,
-      "complexity": 2,
-      "coverage": 1,
-      "limit": 0
+      "value": 2
     },
     {
+      "complexity": 2,
+      "coverage": 1,
       "file": "lib/text/text.go",
-      "line": 7,
       "function": "OrDash",
+      "limit": 0,
+      "line": 7,
+      "mode": "warn",
+      "rule": "crap",
       "score": 2,
-      "complexity": 2,
-      "coverage": 1,
-      "limit": 0
+      "value": 2
     },
     {
+      "complexity": 1,
+      "coverage": 1,
       "file": "billing/billing.go",
-      "line": 5,
       "function": "Invoice.Paid",
+      "limit": 0,
+      "line": 5,
+      "mode": "warn",
+      "rule": "crap",
       "score": 1,
-      "complexity": 1,
-      "coverage": 1,
-      "limit": 0
+      "value": 1
     },
     {
-      "file": "lib/text/text.go",
-      "line": 3,
-      "function": "Plain",
-      "score": 1,
       "complexity": 1,
       "coverage": 1,
-      "limit": 0
+      "file": "lib/text/text.go",
+      "function": "Plain",
+      "limit": 0,
+      "line": 3,
+      "mode": "warn",
+      "rule": "crap",
+      "score": 1,
+      "value": 1
     }
   ]
 }

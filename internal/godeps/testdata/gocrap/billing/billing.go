@@ -43,7 +43,7 @@ func Untested(n int) int {
 	return n
 }
 
-//gocrap:ignore the fixture needs a function that the report leaves out
+//goalie:ignore crap the fixture needs a function that the report leaves out
 func Ignored() int {
 	return 1
 }

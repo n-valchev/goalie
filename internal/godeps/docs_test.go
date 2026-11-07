@@ -19,7 +19,7 @@ var (
 
 var everySetting = []string{
 	"paths", "skipTags", "skipFiles", "shared",
-	"format", "archGoReport", "crapReport", "dryReport", "editorURL", "title", "foreign", "omit", "order",
+	"format", "archGoReport", "crapReport", "dupReport", "editorURL", "title", "foreign", "omit", "order",
 }
 
 func between(t *testing.T, text, heading string) string {
@@ -108,16 +108,16 @@ func TestTheREADMEStatesTheCommandsThatReachGodeps(t *testing.T) {
 	section := readmeSection(t)
 	for _, want := range []string{
 		"arch-go --json || true",
-		"gocrap --limit 0 --shared-limit 0 --warn-only --format json > crap.json",
-		"godry --format json --warn-only > dry.json",
+		"goalie " + strings.Join(crapCommand, " ") + " > crap.json",
+		"goalie " + strings.Join(dupCommand, " ") + " > dup.json",
 		"idea://", "zed://", "subl://", "txmt://", "mvim://", "Neovim",
 	} {
 		if !strings.Contains(section, want) {
 			t.Errorf("the README section does not state %q", want)
 		}
 	}
-	if strings.Contains(section, "gocrap --limit 0 --warn-only") {
-		t.Error("the README section has the gocrap command that drops shared functions")
+	if strings.Contains(section, "--limit 0 --warn-only") {
+		t.Error("the README section has the crap command that drops shared functions")
 	}
 }
 

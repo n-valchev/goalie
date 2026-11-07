@@ -93,7 +93,7 @@ type selectedRule struct {
 }
 
 func ignoreDirective() extract.Directive {
-	directive := extract.Directive{Name: "//goalie:ignore"}
+	directive := extract.Directive{Name: extract.IgnoreDirective}
 	for _, entry := range allRules {
 		directive.Rules = append(directive.Rules, entry.name)
 	}
@@ -114,6 +114,9 @@ func selectRules(file config.Settings, opts options) ([]selectedRule, error) {
 				continue
 			}
 			// A maintainer names a rule that is off to try its limit on real code, without failing a build.
+			mode = config.ModeWarn
+		}
+		if opts.warnOnly {
 			mode = config.ModeWarn
 		}
 		built, err := entry.build(file, opts, parser)
@@ -169,6 +172,9 @@ func newDup(file config.Settings, opts options, parser *extract.Parser) (rule, e
 		return nil, err
 	}
 	dup.ApplyRule(ruleSettings)
+	if opts.limit != nil {
+		dup.Threshold = *opts.limit
+	}
 	if err := dup.Apply(file, nil); err != nil {
 		return nil, err
 	}
@@ -188,6 +194,12 @@ func newCrap(file config.Settings, opts options, parser *extract.Parser) (rule, 
 		return nil, err
 	}
 	crap.ApplyRule(ruleSettings)
+	if opts.limit != nil {
+		crap.Limits.Limit = *opts.limit
+	}
+	if opts.sharedLimit != nil {
+		crap.Limits.SharedLimit = opts.sharedLimit
+	}
 	if err := crap.Apply(file, nil); err != nil {
 		return nil, err
 	}

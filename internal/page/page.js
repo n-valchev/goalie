@@ -352,7 +352,7 @@
     return node.kind === "foreign" ? "outside module" : "package";
   }
 
-  // A count of 0 still prints: it tells a clean box from a run with no godry report.
+  // A count of 0 still prints: it tells a clean box from a run with no dup report.
   function duplicatesText(node) {
     if (node.duplicates === undefined) return "";
     return `${node.duplicates} duplicated ${node.duplicates === 1 ? "function" : "functions"}`;
@@ -523,8 +523,8 @@
       const coverage = (op.coverage * 100).toFixed(1);
       return `CRAP ${op.crap.toFixed(1)}, complexity ${op.complexity}, coverage ${coverage}%`;
     }
-    if (op.ignored) return "Ignored by gocrap";
-    return op.grade ? "No gocrap score, so this counts as high risk" : "";
+    if (op.ignored) return "Excused from crap by //goalie:ignore";
+    return op.grade ? "No crap score, so this counts as high risk" : "";
   }
 
   function duplicateEntry(duplicate) {

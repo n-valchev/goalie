@@ -1,0 +1,79 @@
+{
+  "findings": [
+    {
+      "anchors": 0,
+      "left": {
+        "endLine": 15,
+        "file": "billing/invoice/total.go",
+        "function": "Total",
+        "new": false,
+        "nodes": 39,
+        "startLine": 3
+      },
+      "limit": 0.82,
+      "literals": null,
+      "mode": "warn",
+      "right": {
+        "endLine": 17,
+        "file": "orders/order.go",
+        "function": "Sum",
+        "new": false,
+        "nodes": 39,
+        "startLine": 5
+      },
+      "rule": "dup",
+      "score": 1,
+      "value": 1
+    },
+    {
+      "anchors": 0,
+      "left": {
+        "endLine": 15,
+        "file": "billing/invoice/total.go",
+        "function": "Total",
+        "new": false,
+        "nodes": 39,
+        "startLine": 3
+      },
+      "limit": 0.82,
+      "literals": null,
+      "mode": "warn",
+      "right": {
+        "endLine": 15,
+        "file": "web/cart/cart.go",
+        "function": "Subtotal",
+        "new": false,
+        "nodes": 39,
+        "startLine": 3
+      },
+      "rule": "dup",
+      "score": 1,
+      "value": 1
+    },
+    {
+      "anchors": 0,
+      "left": {
+        "endLine": 17,
+        "file": "orders/order.go",
+        "function": "Sum",
+        "new": false,
+        "nodes": 39,
+        "startLine": 5
+      },
+      "limit": 0.82,
+      "literals": null,
+      "mode": "warn",
+      "right": {
+        "endLine": 15,
+        "file": "web/cart/cart.go",
+        "function": "Subtotal",
+        "new": false,
+        "nodes": 39,
+        "startLine": 3
+      },
+      "rule": "dup",
+      "score": 1,
+      "value": 1
+    }
+  ]
+}

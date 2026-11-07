@@ -23,15 +23,15 @@ Flags:
   --format F               Output format: html or json (default html).
   --arch-go-report <file>  Mark the edges that this arch-go report flags. Run
                            arch-go --json || true to write .arch-go/report.json.
-  --crap-report <file>     Grade each function, class, and box from this gocrap
+  --crap-report <file>     Grade each function, class, and box from this crap
                            report, with the limits in .goalierc. A function that
                            the report leaves out is red. To score every
-                           function, run gocrap --limit 0 --shared-limit 0
-                           --warn-only --format json. Leave out --shared-limit
-                           if you set no shared patterns.
-  --dry-report <file>      Mark each function that this godry report pairs with
-                           another. To make the report, run godry --format json
-                           --warn-only.
+                           function, run goalie check crap --all --limit 0
+                           --shared-limit 0 --warn-only --format json. Leave out
+                           --shared-limit if you set no shared patterns.
+  --dup-report <file>      Mark each function that this dup report pairs with
+                           another. To make the report, run goalie check dup
+                           --all --warn-only --format json.
   --editor-url <template>  Link to source with {file} and {line}
                            (default file://{file}).
   --title <text>           Title of the map (default: the module path).
@@ -45,7 +45,7 @@ Settings file:
   godeps reads .goalierc from the current directory only. These settings at the
   top level apply to all goalie tools: paths, skipTags, skipFiles, shared. These
   settings go in the "godeps" object: format, archGoReport, crapReport,
-  dryReport, editorURL, title, foreign, omit, order.
+  dupReport, editorURL, title, foreign, omit, order.
 
   foreign  Module paths outside this module. Each one that is imported shows as
            one class, which takes every import at or below that path.
@@ -62,19 +62,20 @@ Settings file:
   current directory, so run godeps and the tools that write the reports from the
   repo root.
 
-  limit and sharedLimit in the "gocrap" object set the grades: green at or below
-  half the limit, yellow at or below it, and red above it. godeps ignores the
-  limit in the report.
+  limit and sharedLimit in "rules.crap" set the grades: green at or below half
+  the limit, yellow at or below it, and red above it. godeps ignores the limit in
+  the report.
 
-  A base setting in the "gocrap" or "godry" object limits that report to new code.
-  With gocrap, every other function then shows as red. With godry, duplicates in
-  old code show no mark. Pass --base on the command line instead.
+  Run both goalie commands with --all. Without it, a rule with scope changes
+  reports only on code changed since base. With crap, every other function then
+  shows as red. With dup, duplicates in old code show no mark.
 
 Exit codes:
   0  The output was written.
   2  Any error: a bad flag or setting, a Go file that doesn't parse, a missing
-     go.mod, a report path that is set but missing, or a report that isn't valid
-     JSON or lacks its findings or compliance object.
+     go.mod, a report path that is set but missing, a report that isn't valid
+     JSON or lacks its findings or compliance object, or a crap report with no
+     score, which is what goalie check crap --partial writes.
 
 godeps has no exit code 1, because it checks nothing. Warnings go to stderr and
 do not change the exit code. The README documents the JSON model.
@@ -92,7 +93,7 @@ type options struct {
 	format       string
 	archGoReport string
 	crapReport   string
-	dryReport    string
+	dupReport    string
 	editorURL    string
 	title        string
 	foreign      []string
@@ -111,7 +112,7 @@ func parseOptions(args []string) (options, error) {
 	flags.StringVar(&opts.format, "format", formatHTML, "")
 	flags.StringVar(&opts.archGoReport, "arch-go-report", "", "")
 	flags.StringVar(&opts.crapReport, "crap-report", "", "")
-	flags.StringVar(&opts.dryReport, "dry-report", "", "")
+	flags.StringVar(&opts.dupReport, "dup-report", "", "")
 	flags.StringVar(&opts.editorURL, "editor-url", "", "")
 	flags.StringVar(&opts.title, "title", "", "")
 	opts.AddFlags(flags)

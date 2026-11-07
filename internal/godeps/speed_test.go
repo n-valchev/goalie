@@ -101,7 +101,7 @@ func syntheticModule(t *testing.T) (dir string, fileCount int) {
 	}
 	fileCount = len(files) - 1
 	files["crap.json"] = toJSON(t, rows)
-	files["dry.json"] = toJSON(t, pairs)
+	files["dup.json"] = toJSON(t, pairs)
 	return writeTree(t, files), fileCount
 }
 
@@ -109,7 +109,7 @@ func TestAModuleOfFourThousandFilesMapsWithinBudget(t *testing.T) {
 	dir, fileCount := syntheticModule(t)
 
 	start := time.Now()
-	stdout, stderr := run(t, dir, 0, "--crap-report", "crap.json", "--dry-report", "dry.json")
+	stdout, stderr := run(t, dir, 0, "--crap-report", "crap.json", "--dup-report", "dup.json")
 	elapsed := time.Since(start)
 
 	t.Logf("%d files, %d MB page, %v", fileCount, len(stdout)>>20, elapsed)

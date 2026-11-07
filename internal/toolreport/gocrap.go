@@ -11,8 +11,30 @@ type CrapRow struct {
 	Coverage   float64 `json:"coverage"`
 }
 
+// crapFinding takes the score from CrapRow, because only a pointer shows that a score is missing.
+type crapFinding struct {
+	CrapRow
+	Score *float64 `json:"score"`
+}
+
 func ReadGocrap(dir, file string) ([]CrapRow, error) {
-	return readFindings(dir, file, "gocrap", "file or line", func(row CrapRow) bool {
-		return row.File != "" && row.Line > 0
+	findings, err := readFindings(dir, file, "crap", func(found crapFinding) string {
+		switch {
+		case found.File == "" || found.Line <= 0:
+			return "file or line"
+		// A partial check scores nothing, and a score of 0 would grade every function green.
+		case found.Score == nil:
+			return "score: run goalie check crap without --partial"
+		}
+		return ""
 	})
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]CrapRow, len(findings))
+	for i, found := range findings {
+		rows[i] = found.CrapRow
+		rows[i].Score = *found.Score
+	}
+	return rows, nil
 }

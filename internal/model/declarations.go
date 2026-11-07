@@ -4,7 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 
-	"github.com/n-valchev/goalie/internal/crap"
+	"github.com/n-valchev/goalie/internal/check"
 	"github.com/n-valchev/goalie/internal/extract"
 )
 
@@ -86,7 +86,7 @@ func (r fileReader) ops(parsed *ast.File) []Op {
 				Exported: fn.Name.IsExported(),
 				URL:      r.link(r.file, line),
 				NoBody:   fn.Body == nil,
-				Ignored:  extract.HasDirective(fn, crap.IgnoreDirective),
+				Ignored:  extract.Excuses(fn, check.CrapRule),
 			})
 		}
 	}
