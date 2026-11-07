@@ -12,7 +12,7 @@ import (
 	"github.com/n-valchev/goalie/internal/coverage"
 )
 
-const coverDirVariable = "GOCRAP_COVER_DIR"
+const coverDirVariable = "GOALIE_COVER_DIR"
 
 var globEscaper = strings.NewReplacer(`\`, `\\`, `*`, `\*`, `?`, `\?`, `[`, `\[`)
 
@@ -37,7 +37,7 @@ func (c Crap) gather(dir string, stderr io.Writer) (coverage.Profile, error) {
 		return profile.Local(dir)
 	}
 	// An empty folder of our own, so that a profile from an earlier run can never affect a score.
-	coverDir, err := os.MkdirTemp("", c.Tool)
+	coverDir, err := os.MkdirTemp("", tool)
 	if err != nil {
 		return nil, err
 	}

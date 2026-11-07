@@ -36,8 +36,11 @@ Flags:
                            (default file://{file}).
   --title <text>           Title of the map (default: the module path).
   --skip-tags a,b          Skip files that can only build with these tags.
-  --skip-files a,b         Skip files that match these patterns, with the rules
-                           of godry --skip-files.
+  --skip-files a,b         Skip files that match these patterns. A pattern with
+                           no slash matches the file name in any folder. A
+                           pattern with a slash matches the path from the
+                           current directory. * does not cross folders. **
+                           matches any number of folders.
   --shared a,b             These patterns name your shared code.
   --help                   Print this help.
 

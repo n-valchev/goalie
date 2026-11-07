@@ -26,7 +26,6 @@ func TestEachDupSettingApplies(t *testing.T) {
 		{"default includeTests", `{}`, "b_test.go", copied, 0},
 		{"includeTests", `{"rules": {"dup": {"includeTests": true}}}`, "b_test.go", copied, 1},
 		{"null means not set", `{"rules": {"dup": {"mode": null, "scope": null, "minLines": null}}}`, "b.go", copied, 1},
-		{"the godry section has no effect", `{"godry": {"minLines": 13, "warnOnly": true}}`, "b.go", copied, 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -91,6 +90,25 @@ func TestABadRuleSettingExitsWithTwo(t *testing.T) {
 			}
 			if !strings.Contains(stderr, tc.want) {
 				t.Errorf("stderr = %q, want it to hold %s", stderr, tc.want)
+			}
+		})
+	}
+}
+
+// The error names the new place before the strict decoder could name another unknown field, so
+// that a section of a removed command can't vanish without a word.
+func TestASectionOfARemovedCommandNamesTheRuleThatTookIt(t *testing.T) {
+	cases := []struct{ name, settings, want string }{
+		{"the dup section", `{"godry": {"minLines": 13}}`, `goalie: .goalierc: move "godry" settings to "rules.dup"`},
+		{"the crap section", `{"gocrap": {"limit": 8}}`, `goalie: .goalierc: move "gocrap" settings to "rules.crap"`},
+		{"an empty section", `{"gocrap": {}}`, `"rules.crap"`},
+		{"beside an unknown setting", `{"weakLabels": 1, "godry": {}}`, `"rules.dup"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, stdout, stderr := runGoalie(t, repoWithNewCopy(t, tc.settings), "check", "--base", "HEAD")
+			if code != 2 || stdout != "" || !strings.Contains(stderr, tc.want) {
+				t.Errorf("exit code = %d, stdout = %q, stderr = %q; want exit 2 with %s", code, stdout, stderr, tc.want)
 			}
 		})
 	}

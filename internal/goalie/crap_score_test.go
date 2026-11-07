@@ -1,4 +1,4 @@
-package gocrap_test
+package goalie_test
 
 import "testing"
 
@@ -8,27 +8,27 @@ func TestAnUncoveredComplexFunctionFails(t *testing.T) {
 		"a.go":   decideFile,
 		"p.out":  "mode: set\nexample.com/m/a.go:4.2,4.10 1 0\n",
 	})
-	stdout, _ := run(t, dir, 1, "--cover-profiles", "p.out")
-	wantStdout(t, stdout, "a.go:3: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 30)\n")
+	stdout, _ := runCrapWith(t, dir, 1, `"coverProfiles": ["p.out"]`)
+	wantStdout(t, stdout, "a.go:3: fail crap: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 30)\n")
 }
 
 func TestCoverageLowersTheScore(t *testing.T) {
 	// 6² × (1 - 0.5)³ + 6 = 10.5.
 	dir := writeTree(t, map[string]string{"go.mod": goMod, "a.go": decideFile, "p.out": halfCovered})
-	stdout, _ := run(t, dir, 1, "--cover-profiles", "p.out", "--limit", "10")
-	wantStdout(t, stdout, "a.go:3: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n")
+	stdout, _ := runCrapWith(t, dir, 1, `"coverProfiles": ["p.out"]`, "--limit", "10")
+	wantStdout(t, stdout, "a.go:3: fail crap: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n")
 }
 
 func TestAScoreAtTheLimitPasses(t *testing.T) {
 	dir := writeTree(t, map[string]string{"go.mod": goMod, "a.go": decideFile, "p.out": halfCovered})
-	stdout, _ := run(t, dir, 0, "--cover-profiles", "p.out", "--limit", "10.5")
-	wantStdout(t, stdout, "No functions over the limit.\n")
+	stdout, _ := runCrapWith(t, dir, 0, `"coverProfiles": ["p.out"]`, "--limit", "10.5")
+	wantStdout(t, stdout, "")
 }
 
 func TestAFunctionInNoProfileCountsAsUntested(t *testing.T) {
 	dir := writeTree(t, map[string]string{"go.mod": goMod, "a.go": decideFile, "p.out": "mode: set\n"})
-	stdout, _ := run(t, dir, 1, "--cover-profiles", "p.out")
-	wantStdout(t, stdout, "a.go:3: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 30)\n")
+	stdout, _ := runCrapWith(t, dir, 1, `"coverProfiles": ["p.out"]`)
+	wantStdout(t, stdout, "a.go:3: fail crap: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 30)\n")
 }
 
 func TestABlockCoveredInAnyProfileCounts(t *testing.T) {
@@ -39,8 +39,8 @@ func TestABlockCoveredInAnyProfileCounts(t *testing.T) {
 		"unit.out": "mode: set\nexample.com/m/a.go:4.2,4.10 1 1\nexample.com/m/a.go:7.2,7.10 1 0\n",
 		"e2e.out":  "mode: count\nexample.com/m/a.go:4.2,4.10 1 0\nexample.com/m/a.go:7.2,7.10 1 3\n",
 	})
-	stdout, _ := run(t, dir, 0, "--cover-profiles", "unit.out,e2e.out", "--limit", "6")
-	wantStdout(t, stdout, "No functions over the limit.\n")
+	stdout, _ := runCrapWith(t, dir, 0, `"coverProfiles": ["unit.out", "e2e.out"]`, "--limit", "6")
+	wantStdout(t, stdout, "")
 }
 
 func TestStatementsWeightTheCoverage(t *testing.T) {
@@ -50,8 +50,8 @@ func TestStatementsWeightTheCoverage(t *testing.T) {
 		"a.go":   decideFile,
 		"p.out":  "mode: set\nexample.com/m/a.go:4.2,4.10 3 1\nexample.com/m/a.go:7.2,7.10 1 0\n",
 	})
-	stdout, _ := run(t, dir, 1, "--cover-profiles", "p.out", "--limit", "6")
-	wantStdout(t, stdout, "a.go:3: Decide scores 6.6 (complexity 6, coverage 75.0%, limit 6)\n")
+	stdout, _ := runCrapWith(t, dir, 1, `"coverProfiles": ["p.out"]`, "--limit", "6")
+	wantStdout(t, stdout, "a.go:3: fail crap: Decide scores 6.6 (complexity 6, coverage 75.0%, limit 6)\n")
 }
 
 func TestFindingsAreSortedWorstFirst(t *testing.T) {
@@ -61,9 +61,9 @@ func TestFindingsAreSortedWorstFirst(t *testing.T) {
 		"b.go":   decideFile,
 		"p.out":  "mode: set\n",
 	})
-	stdout, _ := run(t, dir, 1, "--cover-profiles", "p.out", "--limit", "0")
-	wantStdout(t, stdout, "b.go:3: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 0)\n"+
-		"a.go:3: Small scores 6.0 (complexity 2, coverage 0.0%, limit 0)\n")
+	stdout, _ := runCrapWith(t, dir, 1, `"coverProfiles": ["p.out"]`, "--limit", "0")
+	wantStdout(t, stdout, "b.go:3: fail crap: Decide scores 42.0 (complexity 6, coverage 0.0%, limit 0)\n"+
+		"a.go:3: fail crap: Small scores 6.0 (complexity 2, coverage 0.0%, limit 0)\n")
 }
 
 func TestAMethodNamesItsReceiver(t *testing.T) {
@@ -72,8 +72,8 @@ func TestAMethodNamesItsReceiver(t *testing.T) {
 		"a.go":   "package m\n\ntype T struct{}\n\nfunc (t *T) Run() {}\n",
 		"p.out":  "mode: set\n",
 	})
-	stdout, _ := run(t, dir, 1, "--cover-profiles", "p.out", "--limit", "0")
-	wantStdout(t, stdout, "a.go:5: T.Run scores 2.0 (complexity 1, coverage 0.0%, limit 0)\n")
+	stdout, _ := runCrapWith(t, dir, 1, `"coverProfiles": ["p.out"]`, "--limit", "0")
+	wantStdout(t, stdout, "a.go:5: fail crap: T.Run scores 2.0 (complexity 1, coverage 0.0%, limit 0)\n")
 }
 
 func TestComplexityCountsEachBranchKind(t *testing.T) {
@@ -100,14 +100,17 @@ func Branches(c chan int, values []int) {
 }
 `
 	dir := writeTree(t, map[string]string{"go.mod": goMod, "a.go": source, "p.out": "mode: set\n"})
-	stdout, _ := run(t, dir, 1, "--cover-profiles", "p.out", "--limit", "0")
-	wantStdout(t, stdout, "a.go:3: Branches scores 56.0 (complexity 7, coverage 0.0%, limit 0)\n")
+	stdout, _ := runCrapWith(t, dir, 1, `"coverProfiles": ["p.out"]`, "--limit", "0")
+	wantStdout(t, stdout, "a.go:3: fail crap: Branches scores 56.0 (complexity 7, coverage 0.0%, limit 0)\n")
 }
 
 func TestTestFilesAreNotScored(t *testing.T) {
 	dir := writeTree(t, map[string]string{"go.mod": goMod, "a_test.go": decideFile, "p.out": "mode: set\n"})
-	stdout, _ := run(t, dir, 0, "--cover-profiles", "p.out")
-	wantStdout(t, stdout, "No Go files found.\n")
+	stdout, stderr := runCrapWith(t, dir, 0, `"coverProfiles": ["p.out"]`)
+	wantStdout(t, stdout, "")
+	if stderr != "goalie: crap: No Go files found.\n" {
+		t.Errorf("stderr = %q", stderr)
+	}
 }
 
 func TestASubfolderRunMapsProfilePathsFromTheModuleRoot(t *testing.T) {
@@ -116,8 +119,8 @@ func TestASubfolderRunMapsProfilePathsFromTheModuleRoot(t *testing.T) {
 		"pkg/a.go":  decideFile,
 		"pkg/p.out": "mode: set\nexample.com/m/pkg/a.go:4.2,4.10 1 1\n",
 	})
-	stdout, _ := run(t, dir+"/pkg", 0, "--cover-profiles", "p.out")
-	wantStdout(t, stdout, "No functions over the limit.\n")
+	stdout, _ := runCrapWith(t, dir+"/pkg", 0, `"coverProfiles": ["p.out"]`)
+	wantStdout(t, stdout, "")
 }
 
 func TestProfileErrors(t *testing.T) {
@@ -131,7 +134,7 @@ func TestProfileErrors(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			dir := writeTree(t, map[string]string{"go.mod": goMod, "a.go": decideFile, "p.out": test.profile})
-			stdout, _ := run(t, dir, 2, "--cover-profiles", "p.out", "--warn-only")
+			stdout, _ := runCrapWith(t, dir, 2, `"coverProfiles": ["p.out"]`, "--warn-only")
 			wantStdout(t, stdout, "")
 		})
 	}
@@ -139,10 +142,10 @@ func TestProfileErrors(t *testing.T) {
 
 func TestAMissingProfileIsAnError(t *testing.T) {
 	dir := writeTree(t, map[string]string{"go.mod": goMod, "a.go": decideFile})
-	run(t, dir, 2, "--cover-profiles", "missing.out")
+	runCrapWith(t, dir, 2, `"coverProfiles": ["missing.out"]`)
 }
 
 func TestAMissingGoModIsAnError(t *testing.T) {
 	dir := writeTree(t, map[string]string{"a.go": decideFile, "p.out": "mode: set\n"})
-	run(t, dir, 2, "--cover-profiles", "p.out")
+	runCrapWith(t, dir, 2, `"coverProfiles": ["p.out"]`)
 }

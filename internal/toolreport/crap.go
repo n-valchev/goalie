@@ -17,7 +17,7 @@ type crapFinding struct {
 	Score *float64 `json:"score"`
 }
 
-func ReadGocrap(dir, file string) ([]CrapRow, error) {
+func ReadCrap(dir, file string) ([]CrapRow, error) {
 	findings, err := readFindings(dir, file, "crap", func(found crapFinding) string {
 		switch {
 		case found.File == "" || found.Line <= 0:

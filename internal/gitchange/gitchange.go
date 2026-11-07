@@ -282,7 +282,7 @@ func environment(env []string) []string {
 }
 
 func git(dir string, args ...string) (string, error) {
-	// godry writes no files, and each setting stops a different write. autoRefreshIndex covers the
+	// goalie writes no files, and each setting stops a different write. autoRefreshIndex covers the
 	// index of this repo. It doesn't reach the git status that git diff runs in each submodule, and
 	// GIT_OPTIONAL_LOCKS covers only that one.
 	settings := []string{"-c", "core.quotePath=true", "-c", "diff.autoRefreshIndex=false"}

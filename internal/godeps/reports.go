@@ -30,7 +30,7 @@ func joinReports(dir string, opts options, result *model.Model, source model.Sou
 	if err != nil {
 		return err
 	}
-	return joinReport(dir, opts.crapReport, toolreport.ReadGocrap, func(rows []toolreport.CrapRow) {
+	return joinReport(dir, opts.crapReport, toolreport.ReadCrap, func(rows []toolreport.CrapRow) {
 		warn("crap rows with no function", model.JoinCrap(result, rows, opts.limits))
 	})
 }

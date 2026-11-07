@@ -1,4 +1,4 @@
-package godry_test
+package goalie_test
 
 import (
 	"bytes"
@@ -8,10 +8,11 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/n-valchev/goalie/internal/godry"
+	"github.com/n-valchev/goalie/internal/goalie"
 )
 
 type jsonReport struct {
@@ -30,7 +31,7 @@ func decodeReport(t *testing.T, stdout string) jsonReport {
 func TestCleanJSONScanHasAnEmptyFindingsArray(t *testing.T) {
 	dir := writeTree(t, map[string]string{"a.go": "package a\n\n" + sumFunc("Sum")})
 
-	code, stdout, stderr := runGodry(t, dir, "--format", "json")
+	code, stdout, stderr := runDup(t, dir, "--format", "json")
 
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)
@@ -51,28 +52,28 @@ func assertEmptyFindings(t *testing.T, stdout string) {
 }
 
 func TestNoGoFilesInJSONKeepsStdoutParseable(t *testing.T) {
-	code, stdout, stderr := runGodry(t, t.TempDir(), "--format", "json")
+	code, stdout, stderr := runDup(t, t.TempDir(), "--format", "json")
 
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
 	}
 	assertEmptyFindings(t, stdout)
-	if stderr != "No Go files found.\n" {
+	if stderr != "goalie: dup: No Go files found.\n" {
 		t.Errorf("stderr = %q", stderr)
 	}
 }
 
-func TestNoGoFilesInTextGoesToStdout(t *testing.T) {
-	code, stdout, stderr := runGodry(t, t.TempDir())
+func TestNoGoFilesInTextGoesToStderr(t *testing.T) {
+	code, stdout, stderr := runDup(t, t.TempDir())
 
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
 	}
-	if stdout != "No Go files found.\n" {
-		t.Errorf("stdout = %q", stdout)
+	if stdout != "" {
+		t.Errorf("stdout = %q, want nothing", stdout)
 	}
-	if stderr != "" {
-		t.Errorf("stderr = %q, want nothing", stderr)
+	if stderr != "goalie: dup: No Go files found.\n" {
+		t.Errorf("stderr = %q", stderr)
 	}
 }
 
@@ -82,7 +83,7 @@ func TestJSONReportsEveryFieldOfAFinding(t *testing.T) {
 		"pkg/b.go": "package a\n\nvar limit = 1\n\n" + sumFunc("Two"),
 	})
 
-	code, stdout, stderr := runGodry(t, dir, "--format", "json")
+	code, stdout, stderr := runDup(t, dir, "--format", "json")
 
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
@@ -97,6 +98,7 @@ func TestJSONReportsEveryFieldOfAFinding(t *testing.T) {
 		t.Errorf("left nodes = %v, want a positive number", nodes)
 	}
 	want := map[string]any{
+		"rule": "dup", "mode": "fail", "value": 1.0, "limit": 0.82,
 		"score": 1.0, "literals": 1.0, "anchors": 0.0,
 		"left": map[string]any{
 			"file": "pkg/a.go", "function": "One", "startLine": 3.0, "endLine": 14.0,
@@ -119,10 +121,10 @@ func TestTextLineHasTwoDecimalScore(t *testing.T) {
 		"internal/b.go": "package a\n\n" + edited,
 	})
 
-	_, stdout, _ := runGodry(t, dir, "--threshold", "0.5")
+	_, stdout, _ := runDup(t, dir, "--limit", "0.5")
 
 	// The exact score belongs to normalization. This pins the line's format.
-	line := regexp.MustCompile(`^internal/a\.go:3: duplicates internal/b\.go:3 \(score 0\.\d\d, literals 0\.50, anchors 0\)\n$`)
+	line := regexp.MustCompile(`^internal/a\.go:3: fail dup: duplicates internal/b\.go:3 \(score 0\.\d\d, limit 0\.5, literals 0\.50, anchors 0\)\n$`)
 	if !line.MatchString(stdout) {
 		t.Errorf("stdout = %q", stdout)
 	}
@@ -133,11 +135,12 @@ func TestPathsAreRelativeToTheRunDirectory(t *testing.T) {
 		"pkg/sub/a.go": "package a\n\n" + sumFunc("One"),
 		"pkg/sub/b.go": "package a\n\n" + sumFunc("Two"),
 	})
-	want := "pkg/sub/a.go:3: duplicates pkg/sub/b.go:3 (score 1.00, literals 1.00, anchors 0)\n"
+	want := "pkg/sub/a.go:3: fail dup: duplicates pkg/sub/b.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"
 
 	for _, path := range []string{"pkg", "./pkg/sub/", filepath.Join(dir, "pkg")} {
 		t.Run(path, func(t *testing.T) {
-			_, stdout, stderr := runGodry(t, dir, path)
+			write(t, dir, ".goalierc", `{"paths": [`+strconv.Quote(path)+`]}`)
+			_, stdout, stderr := runDup(t, dir)
 			if stdout != want {
 				t.Errorf("stdout = %q, want %q; stderr: %s", stdout, want, stderr)
 			}
@@ -154,9 +157,9 @@ func TestHigherScoreComesFirstWhateverThePaths(t *testing.T) {
 		"z2.go": "package a\n\n" + joinFunc("Three"),
 	})
 
-	_, stdout, _ := runGodry(t, dir, "--threshold", "0.6")
+	_, stdout, _ := runDup(t, dir, "--limit", "0.6")
 
-	order := regexp.MustCompile(`^z1\.go:3: duplicates z2\.go:3 \(score 1\.00, literals 1\.00, anchors 3\)\na1\.go:3: duplicates a2\.go:3 \(score 0\.\d\d, literals 0\.50, anchors 0\)\n$`)
+	order := regexp.MustCompile(`^z1\.go:3: fail dup: duplicates z2\.go:3 \(score 1\.00, limit 0\.6, literals 1\.00, anchors 3\)\na1\.go:3: fail dup: duplicates a2\.go:3 \(score 0\.\d\d, limit 0\.6, literals 0\.50, anchors 0\)\n$`)
 	if !order.MatchString(stdout) {
 		t.Errorf("stdout = %q", stdout)
 	}
@@ -169,14 +172,14 @@ func TestEqualScoresSortByFirstThenSecondLocation(t *testing.T) {
 		"b.go": "package a\n\n" + sumFunc("Three") + "\n" + sumFunc("Four"),
 	})
 
-	_, stdout, _ := runGodry(t, dir)
+	_, stdout, _ := runDup(t, dir)
 
-	want := "a.go:3: duplicates a.go:16 (score 1.00, literals 1.00, anchors 0)\n" +
-		"a.go:3: duplicates b.go:3 (score 1.00, literals 1.00, anchors 0)\n" +
-		"a.go:3: duplicates b.go:16 (score 1.00, literals 1.00, anchors 0)\n" +
-		"a.go:16: duplicates b.go:3 (score 1.00, literals 1.00, anchors 0)\n" +
-		"a.go:16: duplicates b.go:16 (score 1.00, literals 1.00, anchors 0)\n" +
-		"b.go:3: duplicates b.go:16 (score 1.00, literals 1.00, anchors 0)\n"
+	want := "a.go:3: fail dup: duplicates a.go:16 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n" +
+		"a.go:3: fail dup: duplicates b.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n" +
+		"a.go:3: fail dup: duplicates b.go:16 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n" +
+		"a.go:16: fail dup: duplicates b.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n" +
+		"a.go:16: fail dup: duplicates b.go:16 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n" +
+		"b.go:3: fail dup: duplicates b.go:16 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"
 	if stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
@@ -191,9 +194,9 @@ func TestRepeatedRunsGiveIdenticalOutput(t *testing.T) {
 
 	for _, format := range []string{"text", "json"} {
 		t.Run(format, func(t *testing.T) {
-			_, first, _ := runGodry(t, dir, "--format", format)
+			_, first, _ := runDup(t, dir, "--format", format)
 			for range 10 {
-				if _, again, _ := runGodry(t, dir, "--format", format); again != first {
+				if _, again, _ := runDup(t, dir, "--format", format); again != first {
 					t.Fatalf("output changed:\n%s\nthen:\n%s", first, again)
 				}
 			}
@@ -207,7 +210,7 @@ func TestJSONFindingsUseTheSameOrderAsText(t *testing.T) {
 		"b.go": "package a\n\n" + sumFunc("Three"),
 	})
 
-	_, stdout, _ := runGodry(t, dir, "--format", "json")
+	_, stdout, _ := runDup(t, dir, "--format", "json")
 
 	var got []string
 	for _, finding := range decodeReport(t, stdout).Findings {
@@ -225,7 +228,7 @@ func TestWarnOnlyStillReportsFindingsInJSON(t *testing.T) {
 		"b.go": "package a\n\n" + sumFunc("Two"),
 	})
 
-	code, stdout, _ := runGodry(t, dir, "--format", "json", "--warn-only")
+	code, stdout, _ := runDup(t, dir, "--format", "json", "--warn-only")
 
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
@@ -238,7 +241,7 @@ func TestWarnOnlyStillReportsFindingsInJSON(t *testing.T) {
 func TestErrorUnderJSONLeavesStdoutEmpty(t *testing.T) {
 	dir := writeTree(t, map[string]string{"bad.go": "package a\n\nfunc broken( {\n"})
 
-	code, stdout, stderr := runGodry(t, dir, "--format", "json")
+	code, stdout, stderr := runDup(t, dir, "--format", "json")
 
 	if code != 2 {
 		t.Errorf("exit code = %d, want 2", code)
@@ -259,7 +262,7 @@ func TestInvalidFormatExitsTwoEvenWithFindings(t *testing.T) {
 
 	for _, format := range []string{"xml", "JSON", ""} {
 		t.Run(format, func(t *testing.T) {
-			code, stdout, stderr := runGodry(t, dir, "--format", format)
+			code, stdout, stderr := runDup(t, dir, "--format", format)
 			if code != 2 {
 				t.Errorf("exit code = %d, want 2", code)
 			}
@@ -273,8 +276,8 @@ func TestInvalidFormatExitsTwoEvenWithFindings(t *testing.T) {
 	}
 }
 
-func TestHelpListsModesFlagsSkipRulesAndExitCodes(t *testing.T) {
-	code, stdout, stderr := runGodry(t, t.TempDir(), "--help")
+func TestHelpListsFlagsSettingsSkipRulesAndExitCodes(t *testing.T) {
+	code, stdout, stderr := runDup(t, t.TempDir(), "--help")
 
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
@@ -283,19 +286,18 @@ func TestHelpListsModesFlagsSkipRulesAndExitCodes(t *testing.T) {
 		t.Errorf("stderr = %q, want nothing", stderr)
 	}
 	sections := map[string][]string{
-		"modes": {"godry [paths]", "godry --base <rev> [paths]"},
-		"flags": {
-			"--base <rev>", "--threshold N", "default 0.82", "--min-lines N", "default 9",
-			"--min-nodes N", "default 20", "--format F", "text or json", "--warn-only",
-			"--include-tests", "--skip-tags a,b", "--help",
+		"usage": {"goalie check [rules]", "--all"},
+		"flags": {"--base <rev>", "--limit <n>", "--format <format>", "text or json", "--warn-only", "--help"},
+		"settings": {
+			"threshold (default 0.82)", "minLines (default 9)", "minNodes (default 20)",
+			"includeTests", "skipTags",
 		},
 		"skip rules": {
-			"vendor", "testdata", "node_modules", "start with . or _", "*_test.go",
+			"vendor", "testdata", "node_modules", "start\n    with . or _", "*_test.go",
 			"Code generated ... DO NOT EDIT.", "ignore build constraint", "same function name",
-			"//godry:ignore <reason>",
 		},
 		"exit codes": {
-			"0  No duplicates", "1  Duplicates exist", "2  Any error",
+			"0  No fail result", "1  At least one fail result", "2  Any error",
 		},
 	}
 	for section, phrases := range sections {
@@ -310,7 +312,7 @@ func TestHelpListsModesFlagsSkipRulesAndExitCodes(t *testing.T) {
 func TestHelpDoesNotScan(t *testing.T) {
 	dir := writeTree(t, map[string]string{"bad.go": "package a\n\nfunc broken( {\n"})
 
-	code, stdout, _ := runGodry(t, dir, "--help")
+	code, stdout, _ := runDup(t, dir, "--help")
 
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
@@ -336,7 +338,7 @@ func TestFailedWriteOfTheReportExitsTwo(t *testing.T) {
 	for _, format := range []string{"text", "json"} {
 		t.Run(format, func(t *testing.T) {
 			var stderr bytes.Buffer
-			code := godry.Run([]string{"--format", format, "--warn-only"}, dir, failingWriter{}, &stderr)
+			code := goalie.Run([]string{"check", "dup", "--all", "--format", format, "--warn-only"}, dir, strings.NewReader(""), failingWriter{}, &stderr)
 			if code != 2 {
 				t.Errorf("exit code = %d, want 2", code)
 			}
@@ -347,14 +349,14 @@ func TestFailedWriteOfTheReportExitsTwo(t *testing.T) {
 	}
 }
 
-// evidenceLine runs godry on two functions, with limits low enough for short examples.
+// evidenceLine runs the dup rule on two functions, with limits low enough for short examples.
 func evidenceLine(t *testing.T, left, right string) string {
 	t.Helper()
 	dir := writeTree(t, map[string]string{
 		"a.go": "package a\n\n" + left,
 		"b.go": "package a\n\n" + right,
 	})
-	code, stdout, stderr := runGodry(t, dir, "--min-lines", "1", "--min-nodes", "1", "--threshold", "0.1")
+	code, stdout, stderr := runDupWith(t, dir, `"minLines": 1, "minNodes": 1, "threshold": 0.1`)
 	if code != 1 {
 		t.Fatalf("exit code = %d, stdout = %q, stderr = %q; want a finding", code, stdout, stderr)
 	}
@@ -413,14 +415,14 @@ const loadOrder = `func loadOrder(ctx context.Context, id string) (*Order, error
 `
 
 func TestAMappingPairShowsLowLiteralsAndNoAnchors(t *testing.T) {
-	want := "a.go:3: duplicates b.go:3 (score 1.00, literals 0.20, anchors 0)\n"
+	want := "a.go:3: fail dup: duplicates b.go:3 (score 1.00, limit 0.1, literals 0.20, anchors 0)\n"
 	if line := evidenceLine(t, operationName, outcome); line != want {
 		t.Errorf("line = %q, want %q", line, want)
 	}
 }
 
 func TestACopyWithNewDataStaysReportedWithItsAnchors(t *testing.T) {
-	want := "a.go:3: duplicates b.go:3 (score 1.00, literals 0.00, anchors 3)\n"
+	want := "a.go:3: fail dup: duplicates b.go:3 (score 1.00, limit 0.1, literals 0.00, anchors 3)\n"
 	if line := evidenceLine(t, loadUser, loadOrder); line != want {
 		t.Errorf("line = %q, want %q", line, want)
 	}
@@ -487,7 +489,7 @@ func TestJSONHasLiteralsAndAnchors(t *testing.T) {
 	}
 	run := func(left, right string) (finding, string) {
 		dir := writeTree(t, map[string]string{"a.go": "package a\n\n" + left, "b.go": "package a\n\n" + right})
-		_, stdout, _ := runGodry(t, dir, "--format", "json", "--min-lines", "1", "--min-nodes", "1")
+		_, stdout, _ := runDupWith(t, dir, `"minLines": 1, "minNodes": 1`, "--format", "json")
 		var parsed struct {
 			Findings []finding `json:"findings"`
 		}
@@ -516,18 +518,18 @@ func mappingTree(t *testing.T) string {
 }
 
 func TestWeakFindingsStayByDefault(t *testing.T) {
-	code, stdout, stderr := runGodry(t, mappingTree(t))
+	code, stdout, stderr := runDup(t, mappingTree(t))
 	if code != 1 || !strings.Contains(stdout, "literals 0.20, anchors 0") || stderr != "" {
 		t.Errorf("exit code = %d, stdout = %q, stderr = %q; want the finding", code, stdout, stderr)
 	}
 }
 
 func TestAWeakFindingIsDroppedAndCounted(t *testing.T) {
-	code, stdout, stderr := runGodry(t, mappingTree(t), "--weak-anchors", "1")
-	if code != 0 || stdout != "No duplicates found.\n" {
+	code, stdout, stderr := runDupWith(t, mappingTree(t), `"weakAnchors": 1`)
+	if code != 0 || stdout != "" {
 		t.Errorf("exit code = %d, stdout = %q; want a clean result", code, stdout)
 	}
-	if want := "godry: 1 weak finding dropped\n"; stderr != want {
+	if want := "goalie: 1 weak finding dropped\n"; stderr != want {
 		t.Errorf("stderr = %q, want %q", stderr, want)
 	}
 }
@@ -540,13 +542,13 @@ func TestDroppingKeepsStrongFindingsAndCountsTheRest(t *testing.T) {
 		"d.go": "package a\n\n" + joinFunc("One"),
 		"e.go": "package a\n\n" + joinFunc("Two"),
 	})
-	code, stdout, stderr := runGodry(t, dir, "--weak-anchors", "1", "--weak-literals", "0.3")
-	want := "d.go:3: duplicates e.go:3 (score 1.00, literals 1.00, anchors 3)\n" +
-		"b.go:3: duplicates c.go:3 (score 1.00, literals 1.00, anchors 0)\n"
+	code, stdout, stderr := runDupWith(t, dir, `"weakAnchors": 1, "weakLiterals": 0.3`)
+	want := "d.go:3: fail dup: duplicates e.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 3)\n" +
+		"b.go:3: fail dup: duplicates c.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"
 	if code != 1 || !sameLines(stdout, want) {
 		t.Errorf("exit code = %d, stdout = %q, want these lines: %q", code, stdout, want)
 	}
-	if want := "godry: 2 weak findings dropped\n"; stderr != want {
+	if want := "goalie: 2 weak findings dropped\n"; stderr != want {
 		t.Errorf("stderr = %q, want %q", stderr, want)
 	}
 }
@@ -571,24 +573,23 @@ func TestTheDropRuleNeedsBothNumbersToBeLow(t *testing.T) {
 	}
 	tests := []struct {
 		name, left, right string
-		args              []string
+		weak              string
 		dropped           bool
 	}{
-		{"shared calls keep different data", loadUser, loadOrder, []string{"--weak-anchors", "1"}, false},
-		{"same literals keep a pair with no calls", operationName, sameMapping, []string{"--weak-anchors", "1"}, false},
-		{"no literals to compare keeps the pair", noLiterals("one"), noLiterals("two"), []string{"--weak-anchors", "1"}, false},
-		{"anchors equal to the limit are not weak", calls("one", "f", "g", "h"), calls("two", "f", "g", "h"), []string{"--weak-anchors", "3"}, false},
-		{"anchors below the limit are weak", calls("one", "f", "g", "h"), calls("two", "f", "g", "h"), []string{"--weak-anchors", "4"}, true},
-		{"literals equal to the limit are not weak", literals("one", "7", "8"), literals("two", "7", "9"), []string{"--weak-anchors", "1", "--weak-literals", "0.3333333333333333"}, false},
-		{"literals below the limit are weak", literals("one", "7", "8"), literals("two", "7", "9"), []string{"--weak-anchors", "1", "--weak-literals", "0.34"}, true},
-		{"a low limit keeps the pair", operationName, outcome, []string{"--weak-anchors", "1", "--weak-literals", "0.2"}, false},
+		{"shared calls keep different data", loadUser, loadOrder, `"weakAnchors": 1`, false},
+		{"same literals keep a pair with no calls", operationName, sameMapping, `"weakAnchors": 1`, false},
+		{"no literals to compare keeps the pair", noLiterals("one"), noLiterals("two"), `"weakAnchors": 1`, false},
+		{"anchors equal to the limit are not weak", calls("one", "f", "g", "h"), calls("two", "f", "g", "h"), `"weakAnchors": 3`, false},
+		{"anchors below the limit are weak", calls("one", "f", "g", "h"), calls("two", "f", "g", "h"), `"weakAnchors": 4`, true},
+		{"literals equal to the limit are not weak", literals("one", "7", "8"), literals("two", "7", "9"), `"weakAnchors": 1, "weakLiterals": 0.3333333333333333`, false},
+		{"literals below the limit are weak", literals("one", "7", "8"), literals("two", "7", "9"), `"weakAnchors": 1, "weakLiterals": 0.34`, true},
+		{"a low limit keeps the pair", operationName, outcome, `"weakAnchors": 1, "weakLiterals": 0.2`, false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			dir := writeTree(t, map[string]string{"a.go": "package a\n\n" + test.left, "b.go": "package a\n\n" + test.right})
-			args := append([]string{"--min-lines", "1", "--min-nodes", "1"}, test.args...)
-			code, stdout, stderr := runGodry(t, dir, args...)
-			if test.dropped && (code != 0 || stderr != "godry: 1 weak finding dropped\n") {
+			code, stdout, stderr := runDupWith(t, dir, `"minLines": 1, "minNodes": 1, `+test.weak)
+			if test.dropped && (code != 0 || stderr != "goalie: 1 weak finding dropped\n") {
 				t.Errorf("exit code = %d, stdout = %q, stderr = %q; want the finding dropped", code, stdout, stderr)
 			}
 			if !test.dropped && (code != 1 || stderr != "") {
@@ -599,11 +600,11 @@ func TestTheDropRuleNeedsBothNumbersToBeLow(t *testing.T) {
 }
 
 func TestDroppingWorksWithJSON(t *testing.T) {
-	code, stdout, stderr := runGodry(t, mappingTree(t), "--format", "json", "--weak-anchors", "1")
+	code, stdout, stderr := runDupWith(t, mappingTree(t), `"weakAnchors": 1`, "--format", "json")
 	if findings := decodeReport(t, stdout).Findings; code != 0 || len(findings) != 0 {
 		t.Errorf("exit code = %d, findings = %v; want none", code, findings)
 	}
-	if want := "godry: 1 weak finding dropped\n"; stderr != want {
+	if want := "goalie: 1 weak finding dropped\n"; stderr != want {
 		t.Errorf("stderr = %q, want %q", stderr, want)
 	}
 }
@@ -612,31 +613,31 @@ func TestDroppingWorksInNewCodeMode(t *testing.T) {
 	dir := gitRepo(t, map[string]string{"old.go": "package a\n\n" + operationName})
 	write(t, dir, "new.go", "package a\n\n"+outcome)
 
-	wantReport(t, dir, 1, "new.go:3: duplicates old.go:3 (score 1.00, literals 0.20, anchors 0)\n", "--base", "main")
-	wantReport(t, dir, 0, "No duplicates found.\n", "--base", "main", "--weak-anchors", "1")
+	wantReport(t, dir, 1, "new.go:3: fail dup: duplicates old.go:3 (score 1.00, limit 0.82, literals 0.20, anchors 0)\n", "--base", "main")
+	write(t, dir, ".goalierc", `{"rules": {"dup": {"weakAnchors": 1}}}`)
+	wantReport(t, dir, 0, "", "--base", "main")
 }
 
 func TestInvalidWeakLimitsAreErrors(t *testing.T) {
-	tests := [][]string{
-		{"--weak-anchors", "-1"},
-		{"--weak-anchors", "many"},
-		{"--weak-literals", "-0.1"},
-		{"--weak-literals", "1.1"},
-		{"--weak-literals", "NaN"},
+	tests := []struct{ name, setting string }{
+		{"weakAnchors", `"weakAnchors": -1`},
+		{"weakAnchors", `"weakAnchors": "many"`},
+		{"weakLiterals", `"weakLiterals": -0.1`},
+		{"weakLiterals", `"weakLiterals": 1.1`},
 	}
-	for _, args := range tests {
-		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			code, stdout, stderr := runGodry(t, mappingTree(t), append(args, "--warn-only")...)
-			if code != 2 || stdout != "" || !strings.Contains(stderr, strings.TrimPrefix(args[0], "--")) {
-				t.Errorf("exit code = %d, stdout = %q, stderr = %q; want exit 2 naming the flag", code, stdout, stderr)
+	for _, test := range tests {
+		t.Run(test.setting, func(t *testing.T) {
+			code, stdout, stderr := runDupWith(t, mappingTree(t), test.setting, "--warn-only")
+			if code != 2 || stdout != "" || !strings.Contains(stderr, test.name) {
+				t.Errorf("exit code = %d, stdout = %q, stderr = %q; want exit 2 naming the setting", code, stdout, stderr)
 			}
 		})
 	}
 }
 
 func TestHelpListsTheWeakLimits(t *testing.T) {
-	_, stdout, _ := runGodry(t, t.TempDir(), "--help")
-	for _, flag := range []string{"--weak-anchors", "--weak-literals"} {
+	_, stdout, _ := runDup(t, t.TempDir(), "--help")
+	for _, flag := range []string{"weakAnchors", "weakLiterals"} {
 		if !strings.Contains(stdout, flag) {
 			t.Errorf("stdout = %q; want %s listed", stdout, flag)
 		}

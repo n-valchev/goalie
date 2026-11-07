@@ -1,19 +1,10 @@
-package godry_test
+package goalie_test
 
 import (
 	"fmt"
 	"strings"
 	"testing"
 )
-
-// linesFunc has exactly the given number of lines, and the same structure for a given count.
-func linesFunc(name string, lines int) string {
-	var body strings.Builder
-	for i := 0; i < lines-3; i++ {
-		fmt.Fprintf(&body, "\ttotal += compute(total, %d)\n", i)
-	}
-	return fmt.Sprintf("func %s(total int) int {\n%s\treturn total\n}\n", name, body.String())
-}
 
 func TestDefaultMinimumLinesIsNine(t *testing.T) {
 	tests := []struct {
@@ -30,7 +21,7 @@ func TestDefaultMinimumLinesIsNine(t *testing.T) {
 				"b.go": "package a\n\n" + linesFunc("Two", test.lines),
 			})
 
-			code, _, _ := runGodry(t, dir)
+			code, _, _ := runDup(t, dir)
 
 			if code != test.code {
 				t.Errorf("exit code = %d, want %d", code, test.code)
@@ -46,14 +37,14 @@ func TestDocCommentDoesNotCountTowardLines(t *testing.T) {
 		"b.go": "package a\n\n" + comment + linesFunc("Two", 8),
 	})
 
-	code, _, _ := runGodry(t, dir)
+	code, _, _ := runDup(t, dir)
 
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
 	}
 }
 
-func TestMinLinesFlagChangesTheLimit(t *testing.T) {
+func TestMinLinesChangesTheLimit(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"a.go": "package a\n\n" + linesFunc("One", 6),
 		"b.go": "package a\n\n" + linesFunc("Two", 6),
@@ -61,14 +52,16 @@ func TestMinLinesFlagChangesTheLimit(t *testing.T) {
 		"d.go": "package a\n\n" + sumFunc("Four"),
 	})
 
-	_, stdout, _ := runGodry(t, dir, "--min-lines", "6")
-	if want := "a.go:3: duplicates b.go:3 (score 1.00, literals 1.00, anchors 1)\nc.go:3: duplicates d.go:3 (score 1.00, literals 1.00, anchors 0)\n"; stdout != want {
-		t.Errorf("--min-lines 6: stdout = %q, want %q", stdout, want)
+	write(t, dir, ".goalierc", `{"rules": {"dup": {"minLines": 6}}}`)
+	_, stdout, _ := runDup(t, dir)
+	if want := "a.go:3: fail dup: duplicates b.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 1)\nc.go:3: fail dup: duplicates d.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"; stdout != want {
+		t.Errorf("minLines 6: stdout = %q, want %q", stdout, want)
 	}
 
-	_, stdout, _ = runGodry(t, dir, "--min-lines", "13")
-	if want := "No duplicates found.\n"; stdout != want {
-		t.Errorf("--min-lines 13: stdout = %q, want %q", stdout, want)
+	write(t, dir, ".goalierc", `{"rules": {"dup": {"minLines": 13}}}`)
+	_, stdout, _ = runDup(t, dir)
+	if want := ""; stdout != want {
+		t.Errorf("minLines 13: stdout = %q, want %q", stdout, want)
 	}
 }
 
@@ -81,44 +74,48 @@ func TestDefaultMinimumNodesFiltersThinFunctions(t *testing.T) {
 		"b.go": "package a\n\n" + thin("Two"),
 	})
 
-	code, _, _ := runGodry(t, dir)
+	code, _, _ := runDup(t, dir)
 	if code != 0 {
 		t.Errorf("default limit: exit code = %d, want 0", code)
 	}
 
-	code, _, _ = runGodry(t, dir, "--min-nodes", "0")
+	write(t, dir, ".goalierc", `{"rules": {"dup": {"minNodes": 0}}}`)
+	code, _, _ = runDup(t, dir)
 	if code != 1 {
-		t.Errorf("--min-nodes 0: exit code = %d, want 1", code)
+		t.Errorf("minNodes 0: exit code = %d, want 1", code)
 	}
 }
 
-func TestMinNodesFlagRaisesTheLimit(t *testing.T) {
+func TestMinNodesRaisesTheLimit(t *testing.T) {
 	dir := writeTree(t, map[string]string{
-		"a.go": "package a\n\n" + sumFunc("One"),
-		"b.go": "package a\n\n" + sumFunc("Two"),
+		"a.go":      "package a\n\n" + sumFunc("One"),
+		"b.go":      "package a\n\n" + sumFunc("Two"),
+		".goalierc": `{"rules": {"dup": {"minNodes": 1000}}}`,
 	})
 
-	code, _, _ := runGodry(t, dir, "--min-nodes", "1000")
+	code, _, _ := runDup(t, dir)
 
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
 	}
 }
 
-func TestThresholdFlagChangesTheLimit(t *testing.T) {
+func TestThresholdChangesTheLimit(t *testing.T) {
 	near := strings.Replace(sumFunc("Two"), "return total\n", "total++\n\treturn total\n", 1)
 	dir := writeTree(t, map[string]string{
 		"a.go": "package a\n\n" + sumFunc("One"),
 		"b.go": "package a\n\n" + near,
 	})
 
-	code, stdout, _ := runGodry(t, dir, "--threshold", "0.5")
-	if code != 1 || !strings.HasPrefix(stdout, "a.go:3: duplicates b.go:3 (score 0.") {
-		t.Errorf("--threshold 0.5: exit code = %d, stdout = %q", code, stdout)
+	write(t, dir, ".goalierc", `{"rules": {"dup": {"threshold": 0.5}}}`)
+	code, stdout, _ := runDup(t, dir)
+	if code != 1 || !strings.HasPrefix(stdout, "a.go:3: fail dup: duplicates b.go:3 (score 0.") {
+		t.Errorf("threshold 0.5: exit code = %d, stdout = %q", code, stdout)
 	}
 
-	code, _, _ = runGodry(t, dir, "--threshold", "1")
+	write(t, dir, ".goalierc", `{"rules": {"dup": {"threshold": 1}}}`)
+	code, _, _ = runDup(t, dir)
 	if code != 0 {
-		t.Errorf("--threshold 1: exit code = %d, want 0", code)
+		t.Errorf("threshold 1: exit code = %d, want 0", code)
 	}
 }

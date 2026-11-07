@@ -15,8 +15,8 @@ import (
 const Name = ".goalierc"
 
 // Settings holds what describes the repo at the top level, what belongs to one rule in Rules, and
-// what belongs to one tool in that tool's section. Every tool decodes every section, so a
-// misspelled setting fails in any tool.
+// what belongs to godeps in its own section. goalie and godeps both decode every section, so a
+// misspelled setting fails in either.
 type Settings struct {
 	Base      string   `json:"base"`
 	Paths     []string `json:"paths"`
@@ -24,36 +24,11 @@ type Settings struct {
 	SkipFiles []string `json:"skipFiles"`
 	Shared    []string `json:"shared"`
 	Rules     Rules    `json:"rules"`
-	Godry     Godry    `json:"godry"`
-	Gocrap    Gocrap   `json:"gocrap"`
 	Godeps    Godeps   `json:"godeps"`
 }
 
-// Godry holds pointers because a setting of 0 or false must replace a default, and only a setting
+// Godeps holds pointers because a setting of 0 or false must replace a default, and only a setting
 // that the file leaves out must not.
-type Godry struct {
-	Base         *string  `json:"base"`
-	Threshold    *float64 `json:"threshold"`
-	MinLines     *int     `json:"minLines"`
-	MinNodes     *int     `json:"minNodes"`
-	WeakAnchors  *int     `json:"weakAnchors"`
-	WeakLiterals *float64 `json:"weakLiterals"`
-	Format       *string  `json:"format"`
-	WarnOnly     *bool    `json:"warnOnly"`
-	IncludeTests *bool    `json:"includeTests"`
-}
-
-// Gocrap holds pointers for the same reason as Godry.
-type Gocrap struct {
-	Cover
-	Base        *string  `json:"base"`
-	Limit       *float64 `json:"limit"`
-	SharedLimit *float64 `json:"sharedLimit"`
-	Format      *string  `json:"format"`
-	WarnOnly    *bool    `json:"warnOnly"`
-}
-
-// Godeps holds pointers for the same reason as Godry.
 type Godeps struct {
 	Format       *string  `json:"format"`
 	ArchGoReport *string  `json:"archGoReport"`
@@ -77,6 +52,9 @@ func Read(dir string) (Settings, error) {
 	if err != nil {
 		return result, err
 	}
+	if err := checkRemovedSections(content); err != nil {
+		return result, err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(content))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&result); err != nil {
@@ -89,6 +67,23 @@ func Read(dir string) (Settings, error) {
 		return result, fmt.Errorf("%s: extra content after the JSON object", Name)
 	}
 	return result, nil
+}
+
+var removedSections = []struct{ section, rule string }{{"godry", "dup"}, {"gocrap", "crap"}}
+
+// checkRemovedSections runs before the strict decode, whose unknown-field error would not say where
+// the settings went. Content that doesn't decode here gets its error from the strict decode.
+func checkRemovedSections(content []byte) error {
+	var sections map[string]json.RawMessage
+	if json.Unmarshal(content, &sections) != nil {
+		return nil
+	}
+	for _, removed := range removedSections {
+		if _, ok := sections[removed.section]; ok {
+			return fmt.Errorf("%s: move %q settings to \"rules.%s\"", Name, removed.section, removed.rule)
+		}
+	}
+	return nil
 }
 
 func locate(content []byte, err error) error {

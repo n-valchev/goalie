@@ -1,4 +1,4 @@
-// Package check holds the one implementation of each rule, for every command that runs it.
+// Package check holds the implementation of each rule that goalie check runs.
 package check
 
 import (
@@ -13,46 +13,11 @@ import (
 	"github.com/n-valchev/goalie/internal/report"
 )
 
-const (
-	DupRule         = "dup"
-	ignoreDirective = "//godry:ignore"
-)
-
-type Format string
-
-const (
-	FormatText Format = "text"
-	FormatJSON Format = "json"
-)
-
-func (f Format) Validate() error {
-	if f != FormatText && f != FormatJSON {
-		return fmt.Errorf("invalid --format %q: must be text or json", string(f))
-	}
-	return nil
-}
-
-func (f Format) write(w io.Writer, pairs []compare.Pair) error {
-	if f == FormatJSON {
-		return report.JSON(w, pairs)
-	}
-	return report.Text(w, pairs)
-}
-
-func (f Format) reportEmpty(message string, stdout, stderr io.Writer, writeEmpty func() error) error {
-	if f == FormatJSON {
-		// A reader of --format json must always be able to parse stdout.
-		fmt.Fprintln(stderr, message)
-		return writeEmpty()
-	}
-	fmt.Fprintln(stdout, message)
-	return nil
-}
+const DupRule = "dup"
 
 // Dup finds functions with the same structure. An empty Base compares the whole repo.
 type Dup struct {
 	config.Repo
-	Tool         string // Starts each line on stderr, so that a reader can see which command wrote it.
 	Parser       *extract.Parser
 	Base         string
 	Threshold    float64
@@ -60,20 +25,16 @@ type Dup struct {
 	MinNodes     int
 	WeakAnchors  int
 	WeakLiterals float64
-	Format       Format
 	IncludeTests bool
 }
 
-// NewDup holds the default values, so that every command that runs the rule starts from the same limits.
-func NewDup(tool string) Dup {
+func NewDup(parser *extract.Parser) Dup {
 	return Dup{
-		Tool:         tool,
-		Parser:       extract.NewParser(extract.Directive{Name: ignoreDirective, Implied: DupRule}),
+		Parser:       parser,
 		Threshold:    0.82,
 		MinLines:     9,
 		MinNodes:     20,
 		WeakLiterals: 0.5,
-		Format:       FormatText,
 	}
 }
 
@@ -95,35 +56,21 @@ func fill[T any](target, value *T) {
 func (d Dup) Validate() error {
 	// Written so that NaN, which fails every comparison, is rejected too.
 	if !(d.Threshold >= 0 && d.Threshold <= 1) {
-		return fmt.Errorf("invalid --threshold %v: must be between 0 and 1", d.Threshold)
+		return fmt.Errorf("invalid threshold %v: must be between 0 and 1", d.Threshold)
 	}
 	if d.MinLines < 0 {
-		return fmt.Errorf("invalid --min-lines %d: must not be negative", d.MinLines)
+		return fmt.Errorf("invalid minLines %d: must not be negative", d.MinLines)
 	}
 	if d.MinNodes < 0 {
-		return fmt.Errorf("invalid --min-nodes %d: must not be negative", d.MinNodes)
+		return fmt.Errorf("invalid minNodes %d: must not be negative", d.MinNodes)
 	}
 	if d.WeakAnchors < 0 {
-		return fmt.Errorf("invalid --weak-anchors %d: must not be negative", d.WeakAnchors)
+		return fmt.Errorf("invalid weakAnchors %d: must not be negative", d.WeakAnchors)
 	}
 	if !(d.WeakLiterals >= 0 && d.WeakLiterals <= 1) {
-		return fmt.Errorf("invalid --weak-literals %v: must be between 0 and 1", d.WeakLiterals)
+		return fmt.Errorf("invalid weakLiterals %v: must be between 0 and 1", d.WeakLiterals)
 	}
-	return d.Format.Validate()
-}
-
-func (d Dup) Run(dir string, stdout, stderr io.Writer) (found bool, err error) {
-	pairs, notice, err := d.pairs(dir, stderr)
-	if err != nil {
-		return false, err
-	}
-	if notice != "" {
-		return false, d.nothingToCompare(notice, stdout, stderr)
-	}
-	if err := d.Format.write(stdout, pairs); err != nil {
-		return false, err
-	}
-	return len(pairs) > 0, nil
+	return nil
 }
 
 func (d Dup) Results(dir string, stderr io.Writer) ([]Result, error) {
@@ -132,7 +79,7 @@ func (d Dup) Results(dir string, stderr io.Writer) ([]Result, error) {
 		return nil, err
 	}
 	if notice != "" {
-		noResults(stderr, d.Tool, DupRule, notice)
+		noResults(stderr, DupRule, notice)
 		return nil, nil
 	}
 	results := make([]Result, 0, len(pairs))
@@ -161,7 +108,7 @@ func (d Dup) pairs(dir string, stderr io.Writer) (pairs []compare.Pair, notice s
 	if len(paths) == 0 {
 		return nil, "No Go files found.", nil
 	}
-	d.WarnUnmatched(stderr, d.Tool, paths)
+	d.WarnUnmatched(stderr, tool, paths)
 	functions, err := d.Parser.Parse(dir, paths, DupRule)
 	if err != nil {
 		return nil, "", err
@@ -182,17 +129,11 @@ func (d Dup) pairs(dir string, stderr io.Writer) (pairs []compare.Pair, notice s
 	// On stderr, so that stdout stays the same shape for anything that reads it.
 	switch {
 	case dropped == 1:
-		fmt.Fprintf(stderr, "%s: 1 weak finding dropped\n", d.Tool)
+		fmt.Fprintf(stderr, "%s: 1 weak finding dropped\n", tool)
 	case dropped > 1:
-		fmt.Fprintf(stderr, "%s: %d weak findings dropped\n", d.Tool, dropped)
+		fmt.Fprintf(stderr, "%s: %d weak findings dropped\n", tool, dropped)
 	}
 	return pairs, "", nil
-}
-
-func (d Dup) nothingToCompare(message string, stdout, stderr io.Writer) error {
-	return d.Format.reportEmpty(message, stdout, stderr, func() error {
-		return report.JSON(stdout, nil)
-	})
 }
 
 func (d Dup) candidates(functions []extract.Function) []compare.Candidate {

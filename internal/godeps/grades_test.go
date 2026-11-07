@@ -30,8 +30,8 @@ func wantBoxGrades(t *testing.T, got gradedModel, want map[string]string) {
 }
 
 // The fixture is real goalie check output: see TestTheFixtureReportsAreWhatGoalieCheckPrints.
-func TestARealGocrapReportGradesEveryOp(t *testing.T) {
-	const dir = "testdata/gocrap"
+func TestARealCrapReportGradesEveryOp(t *testing.T) {
+	const dir = crapFixture
 	stdout, stderr := run(t, dir, 0, "--format", "json", "--crap-report", "crap.json")
 	if stderr != "" {
 		t.Errorf("stderr = %q, want nothing", stderr)
@@ -46,7 +46,7 @@ func TestARealGocrapReportGradesEveryOp(t *testing.T) {
 		"Band":         "yellow", // Score 3.
 		"Size":         "yellow", // Score 4: exactly the limit.
 		"Untested":     "red",    // Score 6.
-		"Ignored":      "",       // gocrap:ignore keeps it out of the report and excuses it.
+		"Ignored":      "",       // goalie:ignore keeps it out of the report and excuses it.
 		"Plain":        "green",  // Score 1: exactly half the shared limit of 2.
 		"OrDash":       "yellow", // Score 2: exactly the shared limit.
 		"Bounded":      "red",    // Score 3, which `limit` alone would make yellow.
@@ -150,7 +150,7 @@ func TestAnIgnoredFunctionHasNoGradeAndDoesNotCountAsMissing(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod,
 		"a/a.go": "package a\n\n//goalie:ignore crap generated\nfunc F() {}\n\n// Other words.\n//goalie:ignore dup,crap\nfunc NoReason() {}\n",
-		"b/b.go": "package b\n\n//goalie:ignore dup copied\nfunc G() {}\n\n//gocrap:ignore generated\nfunc Old() {}\n\n" +
+		"b/b.go": "package b\n\n//goalie:ignore dup copied\nfunc G() {}\n\n" +
 			"//goalie:ignore crapper generated\nfunc Longer() {}\n",
 		"crap.json": crapReport(),
 	})
@@ -160,7 +160,7 @@ func TestAnIgnoredFunctionHasNoGradeAndDoesNotCountAsMissing(t *testing.T) {
 			t.Errorf("%s = %+v, want ignored with no grade", name, op)
 		}
 	}
-	for _, name := range []string{"G", "Old", "Longer"} {
+	for _, name := range []string{"G", "Longer"} {
 		if op := got.op(t, name); op.Grade != "red" || op.Ignored {
 			t.Errorf("%s = %+v, want red: only //goalie:ignore that names crap excuses a function", name, op)
 		}

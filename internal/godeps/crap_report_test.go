@@ -57,13 +57,13 @@ func crapReport(rows ...string) string {
 func TestABadCrapReportIsAnError(t *testing.T) {
 	tests := []struct{ name, report string }{
 		{"empty file", ""},
-		{"text output of gocrap", "a/a.go:3: F scores 2.0 (complexity 1, coverage 0.0%, limit 0)\n"},
+		{"text output of goalie check crap", "a/a.go:3: warn crap: F scores 2.0 (complexity 1, coverage 0.0%, limit 0)\n"},
 		{"cut short", `{"findings": [`},
 		{"no findings", `{}`},
 		{"null findings", `{"findings": null}`},
 		{"not an object", `[]`},
 		{"wrong type", `{"findings": [{"file": "a/a.go", "line": "3"}]}`},
-		{"a godry report", `{"findings": [{"score": 0.9, "left": {"file": "a/a.go", "startLine": 3}}]}`},
+		{"a dup report", `{"findings": [{"score": 0.9, "left": {"file": "a/a.go", "startLine": 3}}]}`},
 		{"a row with no line", `{"findings": [{"file": "a/a.go", "score": 1}]}`},
 		{"a partial report", partialReport},
 	}

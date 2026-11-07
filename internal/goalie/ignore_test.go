@@ -41,8 +41,7 @@ func TestGoalieIgnoreExcusesAFunctionFromTheRulesItNames(t *testing.T) {
 		{"two rules", []string{"//goalie:ignore crap,dup Generated code."}, false, false},
 		{"two directives", []string{"//goalie:ignore crap The table needs every branch.", "//goalie:ignore dup Wiring repeats on purpose."}, false, false},
 		{"under a doc comment", []string{"// Decide picks a number.", "//goalie:ignore crap The table needs every branch."}, false, true},
-		{"the old crap directive does nothing", []string{"//gocrap:ignore Old."}, true, true},
-		{"the old dup directive does nothing", []string{"//godry:ignore Old."}, true, true},
+		{"another tool's directive does nothing", []string{"//lint:ignore crap,dup Other tool."}, true, true},
 	}
 	for _, tc := range cases {
 		for _, scope := range [][]string{{"--base", "HEAD"}, {"--all"}} {

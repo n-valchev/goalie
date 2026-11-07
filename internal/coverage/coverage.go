@@ -93,7 +93,7 @@ func (p Profile) Local(dir string) (Profile, error) {
 	for name, blocks := range p {
 		inModule, ok := strings.CutPrefix(name, module+"/")
 		if !ok {
-			return nil, fmt.Errorf("coverage for %s is outside module %s; gocrap supports one module", name, module)
+			return nil, fmt.Errorf("coverage for %s is outside module %s; the crap rule supports one module", name, module)
 		}
 		rel, err := filepath.Rel(dir, filepath.Join(root, filepath.FromSlash(inModule)))
 		if err != nil {
@@ -115,7 +115,7 @@ func findModule(dir string) (root, module string, err error) {
 			return "", "", err
 		}
 		if root == filepath.Dir(root) {
-			return "", "", fmt.Errorf("no go.mod in %s or above it; gocrap needs a Go module", dir)
+			return "", "", fmt.Errorf("no go.mod in %s or above it; the crap rule needs a Go module", dir)
 		}
 	}
 }

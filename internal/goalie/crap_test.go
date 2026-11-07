@@ -197,7 +197,6 @@ func TestCrapTakesItsRevisionFromTheFlagThenTheFile(t *testing.T) {
 }
 
 func TestTheCoverCommandSuppliesCoverage(t *testing.T) {
-	writeHalf := `printf 'mode: set\nexample.com/m/a.go:4.2,4.10 1 1\nexample.com/m/a.go:7.2,7.10 1 0\n' > \"$GOCRAP_COVER_DIR/unit.out\"`
 	dir := repoWithNewFunction(t, `{"rules": {"crap": {"limit": 10, "coverCommand": "`+writeHalf+`"}}}`, emptyProfile)
 	code, stdout, stderr := runGoalie(t, dir, "check", "crap", "--base", "HEAD")
 	if code != 1 {

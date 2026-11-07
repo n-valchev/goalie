@@ -2,7 +2,6 @@ package check
 
 import (
 	"cmp"
-	"encoding/json"
 	"fmt"
 	"io"
 	"slices"
@@ -19,23 +18,19 @@ const CrapRule = "crap"
 // Crap finds functions that are complex and poorly tested. An empty Base scores the whole repo.
 type Crap struct {
 	config.Repo
-	Tool          string
-	Partial       bool // Only Results reads this, because only goalie has a partial check.
+	Partial       bool
 	Parser        *extract.Parser
 	Base          string
 	Limits        crap.Limits
 	CoverCommand  string
 	CoverProfiles []string
-	Format        Format
 }
 
-func NewCrap(tool string) Crap {
+func NewCrap(parser *extract.Parser) Crap {
 	return Crap{
-		Tool:         tool,
-		Parser:       extract.NewParser(extract.Directive{Name: crap.IgnoreDirective, Implied: CrapRule}),
+		Parser:       parser,
 		Limits:       crap.Limits{Limit: crap.DefaultLimit},
 		CoverCommand: DefaultCoverCommand,
-		Format:       FormatText,
 	}
 }
 
@@ -55,31 +50,13 @@ func (c *Crap) Apply(file config.Settings, fromFlags map[string]bool) error {
 	return nil
 }
 
-func (c Crap) Run(dir string, stdout, stderr io.Writer) (found bool, err error) {
-	functions, notice, err := c.functions(dir, stderr)
-	if err != nil {
-		return false, err
-	}
-	if notice != "" {
-		return false, c.nothingToScore(notice, stdout, stderr)
-	}
-	findings, err := c.findings(dir, functions, stderr)
-	if err != nil {
-		return false, err
-	}
-	if err := c.write(stdout, findings); err != nil {
-		return false, err
-	}
-	return len(findings) > 0, nil
-}
-
 func (c Crap) Results(dir string, stderr io.Writer) ([]Result, error) {
 	functions, notice, err := c.functions(dir, stderr)
 	if err != nil {
 		return nil, err
 	}
 	if notice != "" {
-		noResults(stderr, c.Tool, CrapRule, notice)
+		noResults(stderr, CrapRule, notice)
 		return nil, nil
 	}
 	if c.Partial {
@@ -114,7 +91,7 @@ func (c Crap) functions(dir string, stderr io.Writer) (functions []extract.Funct
 	if len(paths) == 0 {
 		return nil, "No Go files found.", nil
 	}
-	c.WarnUnmatched(stderr, c.Tool, paths)
+	c.WarnUnmatched(stderr, tool, paths)
 	var changed gitchange.Changes
 	if c.Base != "" {
 		changed = changes.For(dir, paths)
@@ -181,33 +158,7 @@ func name(fn extract.Function) string {
 	return fn.Name
 }
 
-func (c Crap) write(w io.Writer, findings []finding) error {
-	if c.Format == FormatJSON {
-		encoder := json.NewEncoder(w)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(struct {
-			Findings []finding `json:"findings"`
-		}{findings})
-	}
-	if len(findings) == 0 {
-		_, err := fmt.Fprintln(w, "No functions over the limit.")
-		return err
-	}
-	for _, found := range findings {
-		if _, err := fmt.Fprintf(w, "%s:%d: %s\n", found.File, found.Line, found.message()); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (f finding) message() string {
 	return fmt.Sprintf("%s scores %.1f (complexity %d, coverage %.1f%%, limit %g)",
 		f.Function, f.Score, f.Complexity, f.Coverage*100, f.Limit)
-}
-
-func (c Crap) nothingToScore(message string, stdout, stderr io.Writer) error {
-	return c.Format.reportEmpty(message, stdout, stderr, func() error {
-		return c.write(stdout, []finding{})
-	})
 }

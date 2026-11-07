@@ -43,7 +43,7 @@ func caseOf(left, right string, shared []string) Case {
 	return AcrossProducts
 }
 
-// product is the first folder of a path from the run directory. Godry takes no list of products,
+// product is the first folder of a path from the run directory. goalie takes no list of products,
 // so that it works with any repo layout. A file above the run directory has no first folder to use.
 func product(file string) string {
 	first, _, nested := strings.Cut(file, "/")

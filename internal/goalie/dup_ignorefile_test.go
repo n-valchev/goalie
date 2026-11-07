@@ -1,4 +1,4 @@
-package godry_test
+package goalie_test
 
 import (
 	"os"
@@ -50,7 +50,7 @@ func TestIgnoreFileAndSkipFilesBothApply(t *testing.T) {
 		"two.go":        "package a\n\n" + sumFunc("Two"),
 		"kept.go":       "package a\n\n" + sumFunc("Kept"),
 	})
-	assertSkipped(t, dir, "--skip-files", "two.go")
+	assertSkipped(t, withSkipFiles(t, dir, "two.go"))
 }
 
 func TestIgnoreFileIsReadOnlyFromTheRunDirectory(t *testing.T) {
@@ -77,7 +77,7 @@ func TestIgnoreFileAppliesToNewCodeMode(t *testing.T) {
 
 func TestABadIgnoreFilePatternNamesItsLine(t *testing.T) {
 	dir := ignoreTree(t, "copy.go", "# Comment.\npackages.go\n[\n")
-	code, stdout, stderr := runGodry(t, dir, "--warn-only")
+	code, stdout, stderr := runDup(t, dir, "--warn-only")
 	if code != 2 || stdout != "" || !strings.Contains(stderr, ".goalieignore:3:") {
 		t.Errorf("exit code = %d, stdout = %q, stderr = %q; want exit 2 at .goalieignore:3", code, stdout, stderr)
 	}
@@ -87,11 +87,11 @@ func TestUnsupportedPatternsAreErrors(t *testing.T) {
 	for _, pattern := range []string{"!keep.go", "internal/generated/", "internal/a**b/packages.go", "**.go", "[a/b].go"} {
 		t.Run(pattern, func(t *testing.T) {
 			dir := ignoreTree(t, "copy.go", pattern+"\n")
-			if code, _, stderr := runGodry(t, dir); code != 2 || !strings.Contains(stderr, ".goalieignore:1:") {
+			if code, _, stderr := runDup(t, dir); code != 2 || !strings.Contains(stderr, ".goalieignore:1:") {
 				t.Errorf("exit code = %d, stderr = %q; want exit 2 at .goalieignore:1", code, stderr)
 			}
-			flagDir := copyTree(t, "copy.go", "")
-			if code, _, stderr := runGodry(t, flagDir, "--skip-files", pattern); code != 2 || !strings.Contains(stderr, pattern) {
+			settingDir := withSkipFiles(t, copyTree(t, "copy.go", ""), pattern)
+			if code, _, stderr := runDup(t, settingDir); code != 2 || !strings.Contains(stderr, pattern) {
 				t.Errorf("exit code = %d, stderr = %q; want exit 2 naming the pattern", code, stderr)
 			}
 		})
@@ -103,13 +103,13 @@ func TestAnUnreadableIgnoreFileIsAnError(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dir, ".goalieignore"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if code, _, stderr := runGodry(t, dir); code != 2 || !strings.Contains(stderr, ".goalieignore") {
+	if code, _, stderr := runDup(t, dir); code != 2 || !strings.Contains(stderr, ".goalieignore") {
 		t.Errorf("exit code = %d, stderr = %q; want exit 2 naming the file", code, stderr)
 	}
 }
 
 func TestHelpListsTheIgnoreFile(t *testing.T) {
-	_, stdout, _ := runGodry(t, t.TempDir(), "--help")
+	_, stdout, _ := runDup(t, t.TempDir(), "--help")
 	if !strings.Contains(stdout, ".goalieignore") {
 		t.Errorf("stdout = %q; want .goalieignore listed", stdout)
 	}
@@ -117,7 +117,7 @@ func TestHelpListsTheIgnoreFile(t *testing.T) {
 
 func TestATrailingSlashErrorSuggestsTheFolderPattern(t *testing.T) {
 	dir := ignoreTree(t, "copy.go", "internal/generated/\n")
-	if code, _, stderr := runGodry(t, dir); code != 2 || !strings.Contains(stderr, "internal/generated/**") {
+	if code, _, stderr := runDup(t, dir); code != 2 || !strings.Contains(stderr, "internal/generated/**") {
 		t.Errorf("exit code = %d, stderr = %q; want exit 2 suggesting internal/generated/**", code, stderr)
 	}
 }

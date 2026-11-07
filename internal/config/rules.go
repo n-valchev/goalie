@@ -19,7 +19,7 @@ type Control struct {
 	Scope Scope `json:"scope"`
 }
 
-// DupRule holds pointers for the same reason as Godry.
+// DupRule holds pointers for the same reason as Godeps.
 type DupRule struct {
 	Control
 	Threshold    *float64 `json:"threshold"`
@@ -30,7 +30,7 @@ type DupRule struct {
 	IncludeTests *bool    `json:"includeTests"`
 }
 
-// CrapRule holds pointers for the same reason as Godry.
+// CrapRule holds pointers for the same reason as Godeps.
 type CrapRule struct {
 	Control
 	Cover
@@ -62,7 +62,7 @@ const (
 	ModeFail Mode = "fail"
 )
 
-// UnmarshalJSON checks the value here, so that a misspelled mode fails in every tool.
+// UnmarshalJSON checks the value here, so that a misspelled mode fails in every command that reads the file.
 func (m *Mode) UnmarshalJSON(data []byte) error {
 	return decodeChoice(m, data, "mode", ModeOff, ModeWarn, ModeFail)
 }

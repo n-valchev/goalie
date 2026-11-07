@@ -1,4 +1,4 @@
-package godry_test
+package goalie_test
 
 import (
 	"os"
@@ -41,7 +41,7 @@ func TestUntrackedDecomposedNameIsNew(t *testing.T) {
 			dir := precomposeRepo(t, value, map[string]string{"a_old.go": "package a\n\n" + sumFunc("Old")})
 			write(t, dir, decomposed+".go", "package a\n\n"+sumFunc("Copy"))
 
-			wantReport(t, dir, 1, decomposed+".go:3: duplicates a_old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
+			wantReport(t, dir, 1, decomposed+".go:3: fail dup: duplicates a_old.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n", "--base", "main")
 		})
 	}
 }
@@ -54,7 +54,7 @@ func TestCommittedDecomposedNameIsNew(t *testing.T) {
 			write(t, dir, decomposed+".go", "package a\n\n"+sumFunc("Copy"))
 			commitAll(t, dir, "copy")
 
-			wantReport(t, dir, 1, decomposed+".go:3: duplicates a_old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
+			wantReport(t, dir, 1, decomposed+".go:3: fail dup: duplicates a_old.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n", "--base", "main")
 		})
 	}
 }
@@ -65,7 +65,7 @@ func TestDecomposedFolderIsNew(t *testing.T) {
 			dir := precomposeRepo(t, value, map[string]string{"a_old.go": "package a\n\n" + sumFunc("Old")})
 			write(t, dir, decomposed+"/copy.go", "package a\n\n"+sumFunc("Copy"))
 
-			wantReport(t, dir, 1, decomposed+"/copy.go:3: duplicates a_old.go:3 (score 1.00, literals 1.00, anchors 0)\n", "--base", "main")
+			wantReport(t, dir, 1, decomposed+"/copy.go:3: fail dup: duplicates a_old.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n", "--base", "main")
 		})
 	}
 }
@@ -117,7 +117,7 @@ func TestAnEditIsFoundWhateverFormTheNameHas(t *testing.T) {
 		edited := strings.Replace(sumFunc("Edit"), "return 100", "return 200", 1)
 		write(t, dir, onDisk+".go", "package a\n\n"+keep+edited)
 
-		wantReport(t, dir, 1, onDisk+".go:14: duplicates a_old.go:3 (score 1.00, literals 0.50, anchors 0)\n", "--base", "main")
+		wantReport(t, dir, 1, onDisk+".go:14: fail dup: duplicates a_old.go:3 (score 1.00, limit 0.82, literals 0.50, anchors 0)\n", "--base", "main")
 	})
 }
 
@@ -133,7 +133,7 @@ func TestAScanFromAFolderWhoseNameHasTheOtherForm(t *testing.T) {
 			edited := strings.Replace(sumFunc("Work"), "return 100", "return 200", 1)
 			write(t, dir, decomposed+"/work.go", "package a\n\n"+edited)
 
-			wantReport(t, filepath.Join(dir, decomposed), 1, "work.go:3: duplicates a_old.go:3 (score 1.00, literals 0.50, anchors 0)\n", "--base", "main")
+			wantReport(t, filepath.Join(dir, decomposed), 1, "work.go:3: fail dup: duplicates a_old.go:3 (score 1.00, limit 0.82, literals 0.50, anchors 0)\n", "--base", "main")
 		})
 	}
 }

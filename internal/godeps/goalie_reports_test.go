@@ -11,7 +11,7 @@ import (
 	"github.com/n-valchev/goalie/internal/goalie"
 )
 
-const crapFixture = "testdata/gocrap"
+const crapFixture = "testdata/crap"
 
 // The README test reads these too, so that the commands it gives are the ones tested here.
 var (
@@ -35,7 +35,7 @@ func TestTheFixtureReportsAreWhatGoalieCheckPrints(t *testing.T) {
 		args        []string
 	}{
 		{crapFixture, "crap.json", crapCommand},
-		{dryFixture, "dup.json", dupCommand},
+		{dupFixture, "dup.json", dupCommand},
 		// The page has no crap case, because its module holds an import loop that go test can't build.
 		{fixtureDir, "dup.json", dupCommand},
 	}

@@ -43,7 +43,7 @@ func ReadArchGo(dir, file string) (ArchGo, error) {
 	if err := readJSON(dir, file, &report); err != nil {
 		return ArchGo{}, err
 	}
-	// Any JSON decodes into archGoFile, so a gocrap or godry report would pass as one with no breaks.
+	// Any JSON decodes into archGoFile, so a crap or dup report would pass as one with no breaks.
 	if report.Compliance == nil {
 		return ArchGo{}, fmt.Errorf("%s: not an arch-go report: no compliance", file)
 	}

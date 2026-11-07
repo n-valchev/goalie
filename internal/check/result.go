@@ -10,6 +10,24 @@ import (
 	"github.com/n-valchev/goalie/internal/config"
 )
 
+// tool starts each line on stderr, so that a reader can tell goalie's lines from the test output
+// that a coverage command writes there.
+const tool = "goalie"
+
+type Format string
+
+const (
+	FormatText Format = "text"
+	FormatJSON Format = "json"
+)
+
+func (f Format) Validate() error {
+	if f != FormatText && f != FormatJSON {
+		return fmt.Errorf("invalid --format %q: must be text or json", string(f))
+	}
+	return nil
+}
+
 type Result struct {
 	Rule    string
 	Mode    config.Mode // Empty means that the mode of the rule decides.
@@ -78,6 +96,6 @@ func WriteResults(w io.Writer, format Format, results []Result) error {
 }
 
 // noResults writes to stderr, because stdout holds only results when several rules share it.
-func noResults(stderr io.Writer, tool, rule, message string) {
+func noResults(stderr io.Writer, rule, message string) {
 	fmt.Fprintf(stderr, "%s: %s: %s\n", tool, rule, message)
 }

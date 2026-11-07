@@ -21,7 +21,8 @@ Usage:
 Rules:
   dup   Reports functions with the same structure as another function.
   crap  Reports functions that are complex and poorly tested. It runs your
-        tests to get coverage, unless you use --partial.
+        tests to get coverage, unless you use --partial. The score is
+        CC^2 x (1 - coverage)^3 + CC, where CC is cyclomatic complexity.
 
 With no rule names, goalie runs every rule that isn't off. A rule that you name
 runs even if it is off, and then it reports as warn.
@@ -65,17 +66,49 @@ Settings file:
   scope  changes: only changed code. all: the whole code base. The default is
          changes.
 
-  The dup rule also takes threshold, minLines, minNodes, weakAnchors,
-  weakLiterals, and includeTests. The crap rule also takes limit, sharedLimit,
-  coverCommand, and coverProfiles. A limit of 0 doesn't turn a rule off.
+  The dup rule also takes threshold (default 0.82), minLines (default 9),
+  minNodes (default 20), weakAnchors (default 0), weakLiterals (default 0.5),
+  and includeTests. A result with fewer anchors than weakAnchors and literals
+  below weakLiterals is dropped, so the default drops nothing. A result whose
+  literals are - is never dropped. The crap rule also takes limit (default 30),
+  sharedLimit, coverCommand, and coverProfiles. A limit of 0 doesn't turn a
+  rule off.
+
+Files:
+  goalie checks the Go files below the current directory, or in paths. It
+  skips:
+  - Folders named vendor, testdata, or node_modules, and names that start
+    with . or _.
+  - *_test.go files, unless dup sets includeTests. crap never scores them.
+  - Files with the header "Code generated ... DO NOT EDIT."
+  - Files with an ignore build constraint, and files that can only build with
+    a tag in skipTags. Other build constraints have no effect.
+  - Files that match a pattern in skipFiles or in .goalieignore.
+  dup also skips a pair in one package with the same function name and the
+  same receiver type.
+
+  A pattern with no slash matches the file name in any folder. A pattern with
+  a slash matches the path from the current directory. * does not cross
+  folders. ** matches any number of folders. .goalieignore holds one pattern
+  per line, and goalie reads it from the current directory only. Lines that
+  start with # are comments. ! and a trailing / are errors.
+
+  The patterns in shared name your shared code. Every other first folder
+  counts as a product. Each dup result then names its case:
+    copies-shared    One function is shared, one is in a product.
+    across-products  The functions are in two products.
+    same-product     Both functions are in one product.
+    within-shared    Both functions are shared.
 
 Coverage:
   Set coverCommand or coverProfiles, not both. Each entry in coverProfiles is a
   path or a glob. goalie reads those files and runs no command. Otherwise it
   runs coverCommand through sh, from the current directory. It sets
-  GOCRAP_COVER_DIR to an empty folder, and the command must write one or more
+  GOALIE_COVER_DIR to an empty folder, and the command must write one or more
   text coverage profiles there. The default command is:
     ` + check.DefaultCoverCommand + `
+  A block counts as covered if any profile covers it. A function in no profile
+  has 0% coverage. goalie supports one Go module.
 
 Partial check:
   The dup rule gives the same result as in a full check. The crap rule looks

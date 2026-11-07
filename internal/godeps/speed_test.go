@@ -79,7 +79,7 @@ func toJSON(t *testing.T, findings any) string {
 	return string(text)
 }
 
-// syntheticModule writes one gocrap row for every function and one godry pair for every file, so
+// syntheticModule writes one crap row for every function and one dup pair for every file, so
 // that the run pays for both joins.
 func syntheticModule(t *testing.T) (dir string, fileCount int) {
 	t.Helper()

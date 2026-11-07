@@ -1,52 +1,48 @@
-package gocrap_test
+package goalie_test
 
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
 
 // writeHalf is a coverCommand that writes one profile with 50% coverage of Decide.
-const writeHalf = `printf 'mode: set\nexample.com/m/a.go:4.2,4.10 1 1\nexample.com/m/a.go:7.2,7.10 1 0\n' > \"$GOCRAP_COVER_DIR/unit.out\"`
+const writeHalf = `printf 'mode: set\nexample.com/m/a.go:4.2,4.10 1 1\nexample.com/m/a.go:7.2,7.10 1 0\n' > \"$GOALIE_COVER_DIR/unit.out\"`
 
 func commandTree(t *testing.T, command string) string {
 	t.Helper()
 	return writeTree(t, map[string]string{
 		"go.mod":    goMod,
 		"a.go":      decideFile,
-		".goalierc": `{"gocrap": {"limit": 10, "coverCommand": "` + command + `"}}`,
+		".goalierc": `{"rules": {"crap": {"limit": 10, "coverCommand": "` + command + `"}}}`,
 	})
 }
 
-func TestTheCoverCommandSuppliesCoverage(t *testing.T) {
-	stdout, _ := run(t, commandTree(t, writeHalf), 1)
-	wantStdout(t, stdout, "a.go:3: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n")
-}
-
 func TestTheCoverCommandCanWriteSeveralProfiles(t *testing.T) {
-	second := `printf 'mode: set\nexample.com/m/a.go:7.2,7.10 1 1\n' > \"$GOCRAP_COVER_DIR/e2e.out\"`
-	stdout, _ := run(t, commandTree(t, writeHalf+"; "+second), 0)
-	wantStdout(t, stdout, "No functions over the limit.\n")
+	second := `printf 'mode: set\nexample.com/m/a.go:7.2,7.10 1 1\n' > \"$GOALIE_COVER_DIR/e2e.out\"`
+	stdout, _ := runCrap(t, commandTree(t, writeHalf+"; "+second), 0)
+	wantStdout(t, stdout, "")
 }
 
 func TestTheCoverCommandRunsInTheRunDirectory(t *testing.T) {
 	dir := commandTree(t, `pwd > ran-here; `+writeHalf)
-	run(t, dir, 1)
+	runCrap(t, dir, 1)
 	if _, err := os.Stat(filepath.Join(dir, "ran-here")); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestTheCoverCommandOutputStaysOffStdout(t *testing.T) {
-	stdout, stderr := run(t, commandTree(t, `echo running tests; `+writeHalf), 1)
+	stdout, stderr := runCrap(t, commandTree(t, `echo running tests; `+writeHalf), 1)
 	if strings.Contains(stdout, "running tests") || !strings.Contains(stderr, "running tests") {
 		t.Errorf("stdout = %q, stderr = %q; want the command's output on stderr", stdout, stderr)
 	}
 }
 
 func TestAFailedCoverCommandGivesNoScores(t *testing.T) {
-	stdout, stderr := run(t, commandTree(t, writeHalf+`; exit 3`), 2, "--warn-only")
+	stdout, stderr := runCrap(t, commandTree(t, writeHalf+`; exit 3`), 2, "--warn-only")
 	wantStdout(t, stdout, "")
 	if !strings.Contains(stderr, "coverage command failed") {
 		t.Errorf("stderr = %q; want the failure named", stderr)
@@ -54,21 +50,15 @@ func TestAFailedCoverCommandGivesNoScores(t *testing.T) {
 }
 
 func TestACoverCommandThatWritesNoProfileIsAnError(t *testing.T) {
-	_, stderr := run(t, commandTree(t, `true`), 2)
-	if !strings.Contains(stderr, "GOCRAP_COVER_DIR") {
+	_, stderr := runCrap(t, commandTree(t, `true`), 2)
+	if !strings.Contains(stderr, "GOALIE_COVER_DIR") {
 		t.Errorf("stderr = %q; want the folder named", stderr)
 	}
 }
 
 func TestACoverCommandFolderHoldsOnlyProfilesAtItsTopLevel(t *testing.T) {
-	stdout, _ := run(t, commandTree(t, `mkdir \"$GOCRAP_COVER_DIR/raw\"; touch \"$GOCRAP_COVER_DIR/raw/covmeta\"; `+writeHalf), 1)
-	wantStdout(t, stdout, "a.go:3: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n")
-}
-
-func TestTheCoverProfilesFlagSkipsTheCommand(t *testing.T) {
-	dir := commandTree(t, `exit 3`)
-	write(t, dir, "p.out", halfCovered)
-	run(t, dir, 1, "--cover-profiles", "p.out")
+	stdout, _ := runCrap(t, commandTree(t, `mkdir \"$GOALIE_COVER_DIR/raw\"; touch \"$GOALIE_COVER_DIR/raw/covmeta\"; `+writeHalf), 1)
+	wantStdout(t, stdout, "a.go:3: fail crap: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n")
 }
 
 func TestConfigCoverProfilesAreRead(t *testing.T) {
@@ -76,9 +66,9 @@ func TestConfigCoverProfilesAreRead(t *testing.T) {
 		"go.mod":    goMod,
 		"a.go":      decideFile,
 		"p.out":     halfCovered,
-		".goalierc": `{"gocrap": {"limit": 10, "coverProfiles": ["p.out"]}}`,
+		".goalierc": `{"rules": {"crap": {"limit": 10, "coverProfiles": ["p.out"]}}}`,
 	})
-	run(t, dir, 1)
+	runCrap(t, dir, 1)
 }
 
 func TestSettingBothCoverSourcesIsAnError(t *testing.T) {
@@ -86,16 +76,16 @@ func TestSettingBothCoverSourcesIsAnError(t *testing.T) {
 		"go.mod":    goMod,
 		"a.go":      decideFile,
 		"p.out":     halfCovered,
-		".goalierc": `{"gocrap": {"coverCommand": "true", "coverProfiles": ["p.out"]}}`,
+		".goalierc": `{"rules": {"crap": {"coverCommand": "true", "coverProfiles": ["p.out"]}}}`,
 	})
-	_, stderr := run(t, dir, 2, "--cover-profiles", "p.out")
+	_, stderr := runCrap(t, dir, 2)
 	if !strings.Contains(stderr, ".goalierc") {
 		t.Errorf("stderr = %q; want the file named", stderr)
 	}
 }
 
 func TestAnEmptyCoverCommandIsAnError(t *testing.T) {
-	run(t, commandTree(t, ``), 2)
+	runCrap(t, commandTree(t, ``), 2)
 }
 
 // The real toolchain, so that the default command and the import-path mapping are tested together.
@@ -115,9 +105,9 @@ func TestSmall(t *testing.T) {
 `,
 	})
 	t.Setenv("GOFLAGS", "")
-	stdout, _ := run(t, dir, 1, "--limit", "1")
-	wantStdout(t, stdout, "other/b.go:3: Untested scores 6.0 (complexity 2, coverage 0.0%, limit 1)\n"+
-		"a.go:3: Small scores 2.0 (complexity 2, coverage 100.0%, limit 1)\n")
+	stdout, _ := runCrap(t, dir, 1, "--limit", "1")
+	wantStdout(t, stdout, "other/b.go:3: fail crap: Untested scores 6.0 (complexity 2, coverage 0.0%, limit 1)\n"+
+		"a.go:3: fail crap: Small scores 2.0 (complexity 2, coverage 100.0%, limit 1)\n")
 }
 
 func globTree(t *testing.T) string {
@@ -132,33 +122,33 @@ func globTree(t *testing.T) string {
 }
 
 func TestACoverProfilesGlobReadsEveryMatchAndSkipsFolders(t *testing.T) {
-	stdout, _ := run(t, globTree(t), 0, "--cover-profiles", "cov/*", "--limit", "6")
-	wantStdout(t, stdout, "No functions over the limit.\n")
+	stdout, _ := runCrapWith(t, globTree(t), 0, `"coverProfiles": ["cov/*"]`, "--limit", "6")
+	wantStdout(t, stdout, "")
 }
 
 func TestAnAbsoluteCoverProfilesGlobWorks(t *testing.T) {
 	dir := globTree(t)
-	run(t, dir, 0, "--cover-profiles", filepath.Join(dir, "cov", "*.out"), "--limit", "6")
+	runCrapWith(t, dir, 0, `"coverProfiles": [`+strconv.Quote(filepath.Join(dir, "cov", "*.out"))+`]`, "--limit", "6")
 }
 
 func TestAFileMatchedTwiceMergesTheSameAsOnce(t *testing.T) {
 	dir := globTree(t)
-	stdout, _ := run(t, dir, 1, "--cover-profiles", "other/more.out,other/*.out", "--limit", "0")
-	once, _ := run(t, dir, 1, "--cover-profiles", "other/more.out", "--limit", "0")
+	stdout, _ := runCrapWith(t, dir, 1, `"coverProfiles": ["other/more.out", "other/*.out"]`, "--limit", "0")
+	once, _ := runCrapWith(t, dir, 1, `"coverProfiles": ["other/more.out"]`, "--limit", "0")
 	if stdout != once {
 		t.Errorf("stdout = %q; want %q", stdout, once)
 	}
 }
 
 func TestAGlobWithNoMatchIsAnErrorThatNamesThePattern(t *testing.T) {
-	_, stderr := run(t, globTree(t), 2, "--cover-profiles", "cov/*.xyz")
+	_, stderr := runCrapWith(t, globTree(t), 2, `"coverProfiles": ["cov/*.xyz"]`)
 	if !strings.Contains(stderr, "cov/*.xyz") {
 		t.Errorf("stderr = %q; want the pattern named", stderr)
 	}
 }
 
 func TestAMalformedCoverProfilesGlobIsAnError(t *testing.T) {
-	run(t, globTree(t), 2, "--cover-profiles", "cov/[")
+	runCrapWith(t, globTree(t), 2, `"coverProfiles": ["cov/["]`)
 }
 
 func TestGlobCharactersInTheRunDirectoryAreNotAPattern(t *testing.T) {
@@ -167,7 +157,7 @@ func TestGlobCharactersInTheRunDirectoryAreNotAPattern(t *testing.T) {
 		write(t, dir, name, content)
 	}
 	for _, entry := range []string{"cov/p.out", "cov/*.out"} {
-		stdout, _ := run(t, dir, 1, "--cover-profiles", entry, "--limit", "10")
-		wantStdout(t, stdout, "a.go:3: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n")
+		stdout, _ := runCrapWith(t, dir, 1, `"coverProfiles": ["`+entry+`"]`, "--limit", "10")
+		wantStdout(t, stdout, "a.go:3: fail crap: Decide scores 10.5 (complexity 6, coverage 50.0%, limit 10)\n")
 	}
 }

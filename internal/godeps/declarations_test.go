@@ -76,7 +76,7 @@ func wantTypes(t *testing.T, got declarations, want ...typeDecl) {
 	}
 }
 
-func TestOpsUseTheNamesOfGocrap(t *testing.T) {
+func TestOpsUseTheNamesOfTheCrapRule(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"go.mod": goMod,
 		"a/a.go": `package a

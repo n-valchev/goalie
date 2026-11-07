@@ -1,9 +1,21 @@
-package godry_test
+package goalie_test
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
+
+// withSkipFiles writes a skipFiles setting with these comma-separated patterns.
+func withSkipFiles(t *testing.T, dir, patterns string) string {
+	t.Helper()
+	var quoted []string
+	for _, pattern := range strings.Split(patterns, ",") {
+		quoted = append(quoted, strconv.Quote(pattern))
+	}
+	write(t, dir, ".goalierc", `{"skipFiles": [`+strings.Join(quoted, ", ")+`]}`)
+	return dir
+}
 
 func TestSkipFilesSkipsMatchingFiles(t *testing.T) {
 	tests := []struct {
@@ -27,7 +39,7 @@ func TestSkipFilesSkipsMatchingFiles(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assertSkipped(t, copyTree(t, test.path, ""), "--skip-files", test.patterns)
+			assertSkipped(t, withSkipFiles(t, copyTree(t, test.path, ""), test.patterns))
 		})
 	}
 }
@@ -45,23 +57,24 @@ func TestSkipFilesLeavesOtherFilesScanned(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assertScanned(t, copyTree(t, test.path, ""), test.path, "--skip-files", test.patterns)
+			assertScanned(t, withSkipFiles(t, copyTree(t, test.path, ""), test.patterns), test.path)
 		})
 	}
 }
 
-func TestSkipFilesCanBeRepeated(t *testing.T) {
+func TestSkipFilesTakesSeveralPatterns(t *testing.T) {
 	dir := writeTree(t, map[string]string{
 		"one.go":  "package a\n\n" + sumFunc("One"),
 		"two.go":  "package a\n\n" + sumFunc("Two"),
 		"kept.go": "package a\n\n" + sumFunc("Kept"),
 	})
-	assertSkipped(t, dir, "--skip-files", "one.go", "--skip-files", "two.go")
+	assertSkipped(t, withSkipFiles(t, dir, "one.go,two.go"))
 }
 
 func TestSkipFilesAppliesToAPathYouName(t *testing.T) {
 	dir := copyTree(t, "packages.go", "")
-	assertSkipped(t, dir, "--skip-files", "packages.go", "kept.go", "packages.go")
+	write(t, dir, ".goalierc", `{"skipFiles": ["packages.go"], "paths": ["kept.go", "packages.go"]}`)
+	assertSkipped(t, dir)
 }
 
 func TestASkippedFileIsNotParsed(t *testing.T) {
@@ -69,12 +82,12 @@ func TestASkippedFileIsNotParsed(t *testing.T) {
 		"kept.go":     "package a\n\n" + sumFunc("One"),
 		"packages.go": "this is not Go",
 	})
-	assertSkipped(t, dir, "--skip-files", "packages.go")
+	assertSkipped(t, withSkipFiles(t, dir, "packages.go"))
 }
 
 func TestABadSkipFilesPatternIsAnError(t *testing.T) {
 	dir := copyTree(t, "packages.go", "")
-	code, stdout, stderr := runGodry(t, dir, "--warn-only", "--skip-files", "[")
+	code, stdout, stderr := runDup(t, withSkipFiles(t, dir, "["), "--warn-only")
 	if code != 2 || stdout != "" || !strings.Contains(stderr, "[") {
 		t.Errorf("exit code = %d, stdout = %q, stderr = %q; want exit 2 naming the pattern", code, stdout, stderr)
 	}
@@ -85,15 +98,15 @@ func TestSkipFilesAppliesToNewCodeMode(t *testing.T) {
 	write(t, dir, "packages.go", "package a\n\n"+sumFunc("Two"))
 	write(t, dir, "added.go", "package a\n\n"+sumFunc("Three"))
 
-	code, stdout, stderr := runGodry(t, dir, "--base", "HEAD", "--skip-files", "packages.go")
+	code, stdout, stderr := runDup(t, withSkipFiles(t, dir, "packages.go"), "--base", "HEAD")
 	if code != 1 || strings.Contains(stdout, "packages.go") || !strings.Contains(stdout, "added.go:") {
 		t.Errorf("exit code = %d, stdout = %q, stderr = %q; want only added.go reported", code, stdout, stderr)
 	}
 }
 
 func TestHelpListsSkipFiles(t *testing.T) {
-	_, stdout, _ := runGodry(t, t.TempDir(), "--help")
-	if !strings.Contains(stdout, "--skip-files") {
-		t.Errorf("stdout = %q; want --skip-files listed", stdout)
+	_, stdout, _ := runDup(t, t.TempDir(), "--help")
+	if !strings.Contains(stdout, "skipFiles") {
+		t.Errorf("stdout = %q; want skipFiles listed", stdout)
 	}
 }

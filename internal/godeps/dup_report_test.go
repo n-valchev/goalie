@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const dryFixture = "testdata/godry"
+const dupFixture = "testdata/dup"
 
 type duplicate struct {
 	ID    string  `json:"id"`
@@ -54,11 +54,11 @@ func (m dryModel) op(t *testing.T, class, name string) dryOp {
 }
 
 func TestAnOpInTwoPairsGetsADuplicateForEachOtherSide(t *testing.T) {
-	result := readModel[dryModel](t, dryFixture, "--dup-report", "dup.json", "--editor-url", "idea://open?file={file}&line={line}")
+	result := readModel[dryModel](t, dupFixture, "--dup-report", "dup.json", "--editor-url", "idea://open?file={file}&line={line}")
 	got := result.op(t, "example.com/shop/billing/invoice", "Total").Duplicates
 	want := []duplicate{
-		{"example.com/shop/orders", "Order.Sum", "orders/order.go", 5, "idea://open?file=testdata/godry/orders/order.go&line=5", 1},
-		{"example.com/shop/web/cart", "Subtotal", "web/cart/cart.go", 3, "idea://open?file=testdata/godry/web/cart/cart.go&line=3", 1},
+		{"example.com/shop/orders", "Order.Sum", "orders/order.go", 5, "idea://open?file=testdata/dup/orders/order.go&line=5", 1},
+		{"example.com/shop/web/cart", "Subtotal", "web/cart/cart.go", 3, "idea://open?file=testdata/dup/web/cart/cart.go&line=3", 1},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("duplicates = %+v, want %+v", got, want)
@@ -66,9 +66,9 @@ func TestAnOpInTwoPairsGetsADuplicateForEachOtherSide(t *testing.T) {
 }
 
 func TestADuplicateLinkUsesTheDefaultEditorURL(t *testing.T) {
-	result := readModel[dryModel](t, dryFixture, "--dup-report", "dup.json")
+	result := readModel[dryModel](t, dupFixture, "--dup-report", "dup.json")
 	got := result.op(t, "example.com/shop/orders", "Order.Sum").Duplicates[0].URL
-	if want := "file://testdata/godry/billing/invoice/total.go"; got != want {
+	if want := "file://testdata/dup/billing/invoice/total.go"; got != want {
 		t.Errorf("url = %q, want %q", got, want)
 	}
 }
@@ -109,7 +109,7 @@ func dryTree(t *testing.T, extra map[string]string) string {
 }
 
 func TestAnOpInTwoPairsCountsOnce(t *testing.T) {
-	result := readModel[dryModel](t, dryFixture, "--dup-report", "dup.json")
+	result := readModel[dryModel](t, dupFixture, "--dup-report", "dup.json")
 	for _, class := range result.Classes {
 		wantCount(t, class.ID, class.DuplicateCount, 1)
 	}
@@ -156,7 +156,7 @@ func TestAForeignClassHasNoDuplicateCount(t *testing.T) {
 }
 
 func TestWithNoDryReportTheModelHasNoDuplicateData(t *testing.T) {
-	stdout, _ := run(t, dryFixture, 0, "--format", "json")
+	stdout, _ := run(t, dupFixture, 0, "--format", "json")
 	for _, field := range []string{"duplicates", "duplicateCount"} {
 		if strings.Contains(stdout, field) {
 			t.Errorf("stdout holds %q with no report:\n%s", field, stdout)
@@ -177,7 +177,7 @@ func TestAnInvalidDryReportFails(t *testing.T) {
 		{"empty", ""},
 		{"no findings", "{}"},
 		{"null findings", `{"findings": null}`},
-		{"a gocrap report", `{"limit": 8, "findings": [{"file": "root.go", "line": 3, "crap": 2}]}`},
+		{"a crap report", `{"limit": 8, "findings": [{"file": "root.go", "line": 3, "crap": 2}]}`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -224,7 +224,7 @@ func TestSidesThatMatchNoOpWarnOnceWithTheCount(t *testing.T) {
 }
 
 func TestAReportThatMatchesPrintsNoWarning(t *testing.T) {
-	if _, stderr := run(t, dryFixture, 0, "--format", "json", "--dup-report", "dup.json"); stderr != "" {
+	if _, stderr := run(t, dupFixture, 0, "--format", "json", "--dup-report", "dup.json"); stderr != "" {
 		t.Errorf("stderr = %q, want nothing", stderr)
 	}
 }

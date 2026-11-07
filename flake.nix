@@ -19,8 +19,7 @@
         };
 
         apps = {
-          godry = { type = "app"; program = "${goalie}/bin/godry"; };
-          gocrap = { type = "app"; program = "${goalie}/bin/gocrap"; };
+          goalie = { type = "app"; program = "${goalie}/bin/goalie"; };
           godeps = { type = "app"; program = "${goalie}/bin/godeps"; };
         };
 

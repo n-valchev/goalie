@@ -242,8 +242,8 @@ func TestAnArchGoReportThatCanNotBeReadFailsTheRun(t *testing.T) {
 		{"not JSON, setting", `{"godeps": {"archGoReport": "report.json"}}`, "not json", nil},
 		{"no compliance", "{}", "{}", []string{"--arch-go-report", "report.json"}},
 		{"null compliance", "{}", `{"compliance": null}`, []string{"--arch-go-report", "report.json"}},
-		{"a gocrap report", "{}", `{"findings": [{"file": "a.go", "line": 3, "score": 2}]}`, []string{"--arch-go-report", "report.json"}},
-		{"a godry report", "{}", `{"findings": []}`, []string{"--arch-go-report", "report.json"}},
+		{"a crap report", "{}", `{"findings": [{"file": "a.go", "line": 3, "score": 2}]}`, []string{"--arch-go-report", "report.json"}},
+		{"a dup report", "{}", `{"findings": []}`, []string{"--arch-go-report", "report.json"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

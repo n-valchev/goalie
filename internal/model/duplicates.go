@@ -8,7 +8,7 @@ import (
 	"github.com/n-valchev/goalie/internal/toolreport"
 )
 
-// Duplicate is the other side of a godry pair. ID is the class of that side. It is left out when
+// Duplicate is the other side of a dup pair. ID is the class of that side. It is left out when
 // that side is not on the map, as with an omitted class or a test file.
 type Duplicate struct {
 	ID    string  `json:"id,omitempty"`
@@ -29,7 +29,7 @@ type placedOp struct {
 	op    *Op
 }
 
-// placeOps leaves out assembly stubs, because neither gocrap nor godry can report one.
+// placeOps leaves out assembly stubs, because neither the crap rule nor the dup rule can report one.
 func placeOps(result *Model) map[opPosition][]placedOp {
 	ops := map[opPosition][]placedOp{}
 	for i := range result.Classes {

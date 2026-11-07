@@ -228,7 +228,7 @@ func TestHelpWorksWithABadConfig(t *testing.T) {
 	run(t, smallTree(t, "oops"), 0, "--help")
 }
 
-func TestLimitsThatGocrapRejectsAreErrors(t *testing.T) {
+func TestLimitsThatGoalieRejectsAreErrors(t *testing.T) {
 	tests := []struct{ name, config, want string }{
 		{"negative limit", `{"rules": {"crap": {"limit": -1}}}`, "limit"},
 		{"negative shared limit", `{"shared": ["a/**"], "rules": {"crap": {"sharedLimit": -1}}}`, "limit"},

@@ -34,9 +34,8 @@ func (f Function) Lines() int {
 }
 
 type Directive struct {
-	Name    string
-	Rules   []string // The rule names that the comment may list.
-	Implied string   // The one rule of a directive that lists none.
+	Name  string
+	Rules []string // The rule names that the comment may list.
 }
 
 // Parser belongs to one run. Its rules share it, so that a run reads each file once, however many
@@ -196,12 +195,6 @@ func (d Directive) read(fset *token.FileSet, fn *ast.FuncDecl) ([]string, error)
 }
 
 func (d Directive) rulesIn(words []string) ([]string, error) {
-	if d.Implied != "" {
-		if len(words) == 0 {
-			return nil, errors.New("needs a reason")
-		}
-		return []string{d.Implied}, nil
-	}
 	if len(words) == 0 {
 		return nil, errors.New("needs rule names and a reason")
 	}

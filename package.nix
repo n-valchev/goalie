@@ -24,7 +24,7 @@ buildGoModule {
     description = "Checks that keep coding agents from adding poor code";
     homepage = "https://github.com/n-valchev/goalie";
     license = lib.licenses.bsd0;
-    mainProgram = "godry";
+    mainProgram = "goalie";
     platforms = lib.platforms.unix;
   };
 }

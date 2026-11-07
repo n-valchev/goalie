@@ -1,4 +1,4 @@
-package godry_test
+package goalie_test
 
 import (
 	"fmt"
@@ -80,7 +80,7 @@ func oneFunctionFile(function string) string {
 	return "package gen\n\n" + function
 }
 
-// allPairsFindings runs godry on every pair alone. A threshold of 0 reports each pair, so the
+// allPairsFindings runs the dup rule on every pair alone. A threshold of 0 reports each pair, so the
 // result is the finding and score of every pair, with no help from anything a scan of the whole
 // set can use.
 func allPairsFindings(t *testing.T, functions []string) []map[string]any {
@@ -92,15 +92,25 @@ func allPairsFindings(t *testing.T, functions []string) []map[string]any {
 				fileName(i): oneFunctionFile(functions[i]),
 				fileName(j): oneFunctionFile(functions[j]),
 			})
-			_, stdout, stderr := runGodry(t, dir, "--format", "json", "--threshold", "0", "--min-lines", "1", "--min-nodes", "1")
+			_, stdout, stderr := runDupWith(t, dir, `"minLines": 1, "minNodes": 1`, "--format", "json", "--limit", "0")
 			report := decodeReport(t, stdout)
 			if len(report.Findings) != 1 {
 				t.Fatalf("pair %d, %d: %d findings, want 1; stderr: %s", i, j, len(report.Findings), stderr)
 			}
-			findings = append(findings, report.Findings[0])
+			findings = append(findings, pairFields(report.Findings[0]))
 		}
 	}
 	return findings
+}
+
+// pairFields leaves out the fields that every result has, because the limit in them changes with
+// the threshold of each run.
+func pairFields(finding map[string]any) map[string]any {
+	result := maps.Clone(finding)
+	for _, shared := range []string{"rule", "mode", "value", "limit"} {
+		delete(result, shared)
+	}
+	return result
 }
 
 func scoreOf(finding map[string]any) float64 {
@@ -172,9 +182,12 @@ func wantEachThreshold(t *testing.T, dir string, findings []map[string]any, args
 	t.Helper()
 	for _, threshold := range thresholdsAround(findings) {
 		text := strconv.FormatFloat(threshold, 'g', -1, 64)
-		all := append([]string{"--format", "json", "--threshold", text, "--min-lines", "1", "--min-nodes", "1"}, args...)
-		_, stdout, stderr := runGodry(t, dir, all...)
-		got := decodeReport(t, stdout).Findings
+		all := append([]string{"--format", "json", "--limit", text}, args...)
+		_, stdout, stderr := runDupWith(t, dir, `"minLines": 1, "minNodes": 1`, all...)
+		var got []map[string]any
+		for _, finding := range decodeReport(t, stdout).Findings {
+			got = append(got, pairFields(finding))
+		}
 		want := reportedAt(findings, threshold)
 		if len(got) == 0 && len(want) == 0 {
 			continue
@@ -265,7 +278,7 @@ func TestTenThousandFunctionsScanWithinBudget(t *testing.T) {
 	dir := writeTree(t, spreadOverFiles(functions))
 
 	start := time.Now()
-	code, stdout, stderr := runGodry(t, dir, "--format", "json")
+	code, stdout, stderr := runDup(t, dir, "--format", "json")
 	elapsed := time.Since(start)
 
 	t.Logf("%d functions, %d findings, %v", len(functions), len(decodeReport(t, stdout).Findings), elapsed)
@@ -280,9 +293,9 @@ func TestTenThousandFunctionsScanWithinBudget(t *testing.T) {
 func TestRepeatedScansPrintTheSameBytes(t *testing.T) {
 	dir := writeTree(t, spreadOverFiles(generatedFunctions(3, 100, 5, 200)))
 
-	_, first, _ := runGodry(t, dir)
+	_, first, _ := runDup(t, dir)
 	for range 5 {
-		if _, again, _ := runGodry(t, dir); again != first {
+		if _, again, _ := runDup(t, dir); again != first {
 			t.Fatal("two scans of the same files printed different output")
 		}
 	}
@@ -295,7 +308,7 @@ func TestParseErrorNamesTheFirstBadFileEveryTime(t *testing.T) {
 	dir := writeTree(t, files)
 
 	for range 20 {
-		code, _, stderr := runGodry(t, dir)
+		code, _, stderr := runDup(t, dir)
 		if code != 2 {
 			t.Fatalf("exit code = %d, want 2", code)
 		}
@@ -311,7 +324,7 @@ func TestOldPairsInALargeRepoAreLeftOut(t *testing.T) {
 	copied := strings.Replace(functions[42], "F00042", "Copied", 1)
 	write(t, dir, "a_new.go", "package copied\n\n"+copied)
 
-	_, stdout, _ := runGodry(t, dir, "--format", "json")
+	_, stdout, _ := runDup(t, dir, "--format", "json")
 	var want []string
 	oldPairs := 0
 	for _, finding := range decodeReport(t, stdout).Findings {
@@ -325,7 +338,7 @@ func TestOldPairsInALargeRepoAreLeftOut(t *testing.T) {
 		t.Fatalf("%d pairs with the new function and %d old pairs, want at least 1 and 100", len(want), oldPairs)
 	}
 
-	code, stdout, stderr := runGodry(t, dir, "--base", "HEAD", "--format", "json")
+	code, stdout, stderr := runDup(t, dir, "--base", "HEAD", "--format", "json")
 
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1; stderr: %s", code, stderr)
@@ -349,7 +362,7 @@ func TestOneNewFunctionInTenThousandChecksWithinBudget(t *testing.T) {
 	write(t, dir, "a_new.go", "package fresh\n\n"+copied)
 
 	start := time.Now()
-	code, stdout, stderr := runGodry(t, dir, "--base", "HEAD", "--format", "json")
+	code, stdout, stderr := runDup(t, dir, "--base", "HEAD", "--format", "json")
 	elapsed := time.Since(start)
 
 	t.Logf("%v", elapsed)

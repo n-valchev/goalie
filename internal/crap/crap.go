@@ -13,9 +13,8 @@ import (
 
 const DefaultLimit = 30.0
 
-const IgnoreDirective = "//gocrap:ignore"
-
-// Limits is the rule that decides each function's limit, so that godeps grades with what gocrap fails on.
+// Limits is the rule that decides each function's limit, so that godeps grades with what goalie
+// check crap fails on.
 type Limits struct {
 	Limit       float64
 	SharedLimit *float64
@@ -29,23 +28,14 @@ func (l Limits) For(file string) float64 {
 	return l.Limit
 }
 
-// CheckValues is apart from Check, because gocrap checks its flags before it has read the shared
-// patterns from the settings.
-func (l Limits) CheckValues() error {
+// Check is shared, so that godeps never grades with limits that goalie refuses to run with.
+func (l Limits) Check() error {
 	// Written so that NaN, which fails every comparison, is rejected too.
 	if !(l.Limit >= 0) {
 		return fmt.Errorf("invalid limit %v: must not be negative", l.Limit)
 	}
 	if l.SharedLimit != nil && !(*l.SharedLimit >= 0) {
 		return fmt.Errorf("invalid shared limit %v: must not be negative", *l.SharedLimit)
-	}
-	return nil
-}
-
-// Check is shared, so that godeps never grades with limits that gocrap refuses to run with.
-func (l Limits) Check() error {
-	if err := l.CheckValues(); err != nil {
-		return err
 	}
 	// Otherwise the stricter limit would quietly apply to nothing.
 	if l.SharedLimit != nil && len(l.Shared) == 0 {

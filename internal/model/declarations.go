@@ -48,7 +48,7 @@ type Op struct {
 	Grade      Grade       `json:"grade,omitempty"`
 	Duplicates []Duplicate `json:"duplicates,omitempty"`
 	Ignored    bool        `json:"ignored,omitempty"`
-	// NoBody marks an assembly stub, which gocrap can never score, so it must not show as missing.
+	// NoBody marks an assembly stub, which the crap rule can never score, so it must not show as missing.
 	NoBody bool `json:"-"`
 }
 
@@ -59,7 +59,7 @@ type fileReader struct {
 	link   func(file string, line int) string
 }
 
-// line ignores //line directives, because gocrap and godry rows match on the line in the file.
+// line ignores //line directives, because crap and dup rows match on the line in the file.
 func (r fileReader) line(pos token.Pos) int {
 	return r.fset.PositionFor(pos, false).Line
 }

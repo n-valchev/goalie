@@ -165,8 +165,7 @@ func (w *lockedWriter) Write(text []byte) (int, error) {
 
 func newDup(file config.Settings, opts options, parser *extract.Parser) (rule, error) {
 	ruleSettings := file.Rules.Dup
-	dup := check.NewDup("goalie")
-	dup.Parser = parser
+	dup := check.NewDup(parser)
 	var err error
 	if dup.Base, err = revision(ruleSettings.Scope, opts, file); err != nil {
 		return nil, err
@@ -186,8 +185,7 @@ func newDup(file config.Settings, opts options, parser *extract.Parser) (rule, e
 
 func newCrap(file config.Settings, opts options, parser *extract.Parser) (rule, error) {
 	ruleSettings := file.Rules.Crap
-	crap := check.NewCrap("goalie")
-	crap.Parser = parser
+	crap := check.NewCrap(parser)
 	crap.Partial = opts.partial
 	var err error
 	if crap.Base, err = revision(ruleSettings.Scope, opts, file); err != nil {
