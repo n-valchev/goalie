@@ -51,8 +51,9 @@ Results:
   fail results come first, then warn results. Within each, the highest value
   divided by its limit comes first. A limit of 0 counts as 1 for this order.
 
-  stdout holds only results. With json, it holds a list called findings. Each
-  entry has rule, mode, value, and limit, and the fields of its rule.
+  stdout holds only results. With json, it holds an object with a findings
+  array. Each entry has rule, mode, value, and limit, and the fields of its
+  rule.
 
 Settings file:
   goalie reads .goalierc from the current directory only. It holds one JSON
@@ -61,10 +62,10 @@ Settings file:
 
     {"base": "origin/main", "rules": {"dup": {"mode": "warn"}}}
 
-  mode   off: no output. warn: reports, and never fails. fail: reports, and
-         fails. The default is fail.
-  scope  changes: only changed code. all: the whole code base. The default is
-         changes.
+  mode   off: no output. warn: reports, and never changes the exit code. fail:
+         reports, and exits with 1. The default is fail.
+  scope  changes: only functions that the change touches. all: every function
+         in the whole repository. The default is changes.
 
   The dup rule also takes threshold (default 0.82), minLines (default 9),
   minNodes (default 20), weakAnchors (default 0), weakLiterals (default 0.5),
@@ -99,6 +100,17 @@ Files:
     across-products  The functions are in two products.
     same-product     Both functions are in one product.
     within-shared    Both functions are shared.
+
+Excuse a function:
+  Write //goalie:ignore <rules> <reason> in the doc comment of a function. The
+  rules that it names leave the function out, and the other rules still check
+  it. Separate two rules with a comma and no space:
+
+    //goalie:ignore crap,dup The table of cases needs every branch.
+
+  An unknown rule name or a missing reason exits with 2. A dup directive also
+  leaves out every pair with the function in it.
+  //godry:ignore and //gocrap:ignore have no effect.
 
 Coverage:
   Set coverCommand or coverProfiles, not both. Each entry in coverProfiles is a

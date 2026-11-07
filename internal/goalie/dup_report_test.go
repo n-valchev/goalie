@@ -299,6 +299,10 @@ func TestHelpListsFlagsSettingsSkipRulesAndExitCodes(t *testing.T) {
 		"exit codes": {
 			"0  No fail result", "1  At least one fail result", "2  Any error",
 		},
+		"excuse": {
+			"//goalie:ignore <rules> <reason> in the doc comment", "Separate two rules with a comma and no space",
+			"An unknown rule name or a missing reason exits with 2", "//godry:ignore and //gocrap:ignore have no effect",
+		},
 	}
 	for section, phrases := range sections {
 		for _, phrase := range phrases {
