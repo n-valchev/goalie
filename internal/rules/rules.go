@@ -12,36 +12,40 @@ import (
 	"github.com/n-valchev/goalie/internal/extract"
 )
 
-type Count struct {
+type Measurement struct {
 	Value int
 	Line  int
 }
 
 // Lines counts blank lines and comments too, because an agent reads them all.
-func Lines(fn extract.Function) Count {
-	return Count{fn.Lines(), fn.StartLine}
+func Lines(fn extract.Function) Measurement {
+	return Measurement{fn.Lines(), fn.StartLine}
 }
 
 // Parameters counts an unnamed parameter as 1, so that func(int, string) is 2, as it is to a caller.
-func Parameters(fn extract.Function) Count {
+func Parameters(fn extract.Function) Measurement {
 	count := 0
 	for _, field := range fn.Decl.Type.Params.List {
 		count += max(len(field.Names), 1)
 	}
-	return Count{count, fn.StartLine}
+	return Measurement{count, fn.StartLine}
 }
 
 // ComplexCondition gives only the worst condition, because one result for each condition would fill
 // an agent's context with the same advice. A return or an assignment doesn't count, because naming
 // a boolean expression is often the fix.
-func ComplexCondition(fn extract.Function) Count {
-	worst := Count{0, fn.StartLine}
-	measure := func(condition ast.Expr) {
-		if condition == nil {
+func ComplexCondition(fn extract.Function) Measurement {
+	worst := Measurement{0, fn.StartLine}
+	measure := func(condition ...ast.Expr) {
+		if len(condition) == 0 || condition[0] == nil {
 			return
 		}
-		if count := operators(condition); count > worst.Value {
-			worst = Count{count, fn.Line(condition.Pos())}
+		count := 0
+		for _, expression := range condition {
+			count += operators(expression)
+		}
+		if count > worst.Value {
+			worst = Measurement{count, fn.Line(condition[0].Pos())}
 		}
 	}
 	ast.Inspect(fn.Decl.Body, func(node ast.Node) bool {
@@ -51,9 +55,8 @@ func ComplexCondition(fn extract.Function) Count {
 		case *ast.ForStmt:
 			measure(node.Cond)
 		case *ast.CaseClause:
-			for _, expression := range node.List {
-				measure(expression)
-			}
+			// One condition, because a reader must hold every expression of the case in mind at once.
+			measure(node.List...)
 		}
 		return true
 	})

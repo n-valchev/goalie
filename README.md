@@ -493,7 +493,7 @@ A condition is the expression of an `if`, of a `for`, or of a `case`:
 | --- | --- |
 | `if a && b \|\| c {` | Yes: 2 operators |
 | `for i < n && !done {` | Yes: 1 operator |
-| `case a && b:` | Yes: 1 operator. In `case x, y:`, each expression is its own condition |
+| `case a && b, c && d:` | Yes: 2 operators. The expressions of one `case` are one condition |
 | `if ok() && func() bool { return a && b }() {` | Yes: 2 operators. An operator in a closure in the condition counts |
 | `return a && b && c && d && e` | No |
 | `ready := a && b && c && d && e` | No |
@@ -502,7 +502,7 @@ A condition is the expression of an `if`, of a `for`, or of a `case`:
 
 A `return` and an assignment don't count, because a boolean expression with a name is often the fix. To fix a result, give parts of the condition names, such as `ready := a && b`, or move the condition into a function.
 
-A function reports once, with the operators of its worst condition and the line of that condition.
+A function reports once, with the operators of its worst condition and the line of that condition. If two conditions have the same count, the first one reports.
 
 | Setting in `rules.complex-condition` | Type | Default | Meaning |
 | --- | --- | --- | --- |

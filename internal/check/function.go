@@ -123,7 +123,7 @@ type Measure struct {
 	// Applies is nil for every function. It keeps the choice of functions out of Of, so that one
 	// count serves two rules, as Parameters does for many-arguments and many-dependencies.
 	Applies func(extract.Function) bool
-	Of      func(extract.Function) rules.Count
+	Of      func(extract.Function) rules.Measurement
 	Format  string // Takes the function name and the value, as in "%s has %d lines".
 }
 

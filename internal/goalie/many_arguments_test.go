@@ -24,7 +24,7 @@ func ints(count int) string {
 
 func checkParameters(t *testing.T, fn string) string {
 	t.Helper()
-	dir := repoWithNewLongFunction(t, onlyParameterRules, fn)
+	dir := repoWithNewCode(t, onlyParameterRules, fn)
 	code, stdout, stderr := runGoalie(t, dir, "check", "--base", "HEAD")
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)

@@ -19,7 +19,7 @@ func operators(count int) string {
 
 func checkConditions(t *testing.T, fn string) string {
 	t.Helper()
-	dir := repoWithNewLongFunction(t, onlyComplexCondition, fn)
+	dir := repoWithNewCode(t, onlyComplexCondition, fn)
 	code, stdout, stderr := runGoalie(t, dir, "check", "--base", "HEAD")
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)
@@ -57,6 +57,9 @@ func TestComplexConditionCountsIfForAndCase(t *testing.T) {
 		{"for", "\tfor a && b && c && d && e {\n\t}\n", conditionWarn},
 		{"case", "\tswitch {\n\tcase a && b && c && d && e:\n\t}\n",
 			"a.go:5: warn complex-condition: Parse has a condition with 4 operators (limit 3)\n"},
+		{"a case with several expressions adds them up", "\tswitch {\n\tcase a && b, c && d, e && a && b:\n\t}\n",
+			"a.go:5: warn complex-condition: Parse has a condition with 4 operators (limit 3)\n"},
+		{"a select case", "\tch := make(chan bool)\n\tselect {\n\tcase ch <- a && b && c && d && e:\n\tdefault:\n\t}\n", ""},
 		{"a closure in the condition", "\tif func() bool { return a && b && c }() && d && e {\n\t}\n", conditionWarn},
 		{"return", "\t_ = func() bool { return a && b && c && d && e }\n", ""},
 		{"assignment", "\tready := a && b && c && d && e\n\t_ = ready\n", ""},
@@ -81,6 +84,7 @@ func TestAFunctionReportsOnceWithItsWorstCondition(t *testing.T) {
 	}{
 		{"worst last", four + five, "a.go:6: warn complex-condition: Parse has a condition with 5 operators (limit 3)\n"},
 		{"worst first", five + four, "a.go:4: warn complex-condition: Parse has a condition with 5 operators (limit 3)\n"},
+		{"a tie reports the first", four + four, conditionWarn},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

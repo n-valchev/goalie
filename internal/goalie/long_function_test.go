@@ -24,8 +24,8 @@ func longFunc(name string, lines int) string {
 	return fmt.Sprintf("func %s() {\n%s}\n", name, strings.Repeat("\t_ = 0\n", lines-2))
 }
 
-// repoWithNewLongFunction commits an empty package and then adds fn as a change, at line 3 of a.go.
-func repoWithNewLongFunction(t *testing.T, settings, fn string) string {
+// repoWithNewCode commits an empty package and then adds fn as a change, at line 3 of a.go.
+func repoWithNewCode(t *testing.T, settings, fn string) string {
 	t.Helper()
 	dir := gitRepo(t, map[string]string{"a.go": "package a\n", ".goalierc": settings})
 	write(t, dir, "a.go", "package a\n\n"+fn)
@@ -42,7 +42,7 @@ func TestLongFunctionReportsAFunctionOverEightyLines(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(fmt.Sprint(tc.lines), func(t *testing.T) {
-			dir := repoWithNewLongFunction(t, onlyLongFunction, longFunc("Parse", tc.lines))
+			dir := repoWithNewCode(t, onlyLongFunction, longFunc("Parse", tc.lines))
 			code, stdout, stderr := runGoalie(t, dir, "check", "--base", "HEAD")
 			if code != 0 {
 				t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)
@@ -67,7 +67,7 @@ func TestEachModeDecidesWhatALongFunctionDoes(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := repoWithNewLongFunction(t, withLongFunction(tc.settings), longFunc("Parse", 81))
+			dir := repoWithNewCode(t, withLongFunction(tc.settings), longFunc("Parse", 81))
 			code, stdout, stderr := runGoalie(t, dir, "check", "--base", "HEAD")
 			if code != tc.wantCode {
 				t.Errorf("exit code = %d, want %d; stderr: %s", code, tc.wantCode, stderr)
@@ -123,7 +123,7 @@ func TestTheLongFunctionLimitComesFromTheFlagThenTheFile(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := repoWithNewLongFunction(t, withLongFunction(tc.settings), longFunc("Parse", 81))
+			dir := repoWithNewCode(t, withLongFunction(tc.settings), longFunc("Parse", 81))
 			code, stdout, stderr := runGoalie(t, dir, tc.args...)
 			if code != 0 {
 				t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)
@@ -149,7 +149,7 @@ func TestALimitMistakeForLongFunctionExitsWithTwo(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := repoWithNewLongFunction(t, withLongFunction(tc.settings), longFunc("Parse", 81))
+			dir := repoWithNewCode(t, withLongFunction(tc.settings), longFunc("Parse", 81))
 			code, stdout, stderr := runGoalie(t, dir, tc.args...)
 			if code != 2 || stdout != "" || !strings.Contains(stderr, tc.want) {
 				t.Errorf("got exit code %d, stdout %q, stderr %q; want 2, nothing, and %q", code, stdout, stderr, tc.want)
@@ -170,7 +170,7 @@ func TestGoalieIgnoreLongFunctionHidesThatRuleOnly(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := repoWithNewLongFunction(t, onlyLongFunction, tc.directive+longFunc("Parse", 81))
+			dir := repoWithNewCode(t, onlyLongFunction, tc.directive+longFunc("Parse", 81))
 			code, stdout, stderr := runGoalie(t, dir, "check", "--base", "HEAD")
 			if code != 0 {
 				t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)
@@ -194,7 +194,7 @@ func TestLongFunctionSkipsTestFilesAndFunctionsWithNoBody(t *testing.T) {
 }
 
 func TestAnUnmatchedSharedPatternWarnsOnceForEveryRule(t *testing.T) {
-	dir := repoWithNewLongFunction(t, `{"shared": ["pkgs/**"], "rules": {"crap": {"coverProfiles": ["p.out"]}}}`, longFunc("Parse", 81))
+	dir := repoWithNewCode(t, `{"shared": ["pkgs/**"], "rules": {"crap": {"coverProfiles": ["p.out"]}}}`, longFunc("Parse", 81))
 	write(t, dir, "p.out", "mode: set\n")
 	code, _, stderr := runGoalie(t, dir, "check", "--partial", "--base", "HEAD")
 	if code != 0 {
@@ -206,7 +206,7 @@ func TestAnUnmatchedSharedPatternWarnsOnceForEveryRule(t *testing.T) {
 }
 
 func TestALongFunctionResultHasAJSONForm(t *testing.T) {
-	dir := repoWithNewLongFunction(t, onlyLongFunction, longFunc("Parse", 81))
+	dir := repoWithNewCode(t, onlyLongFunction, longFunc("Parse", 81))
 	code, stdout, stderr := runGoalie(t, dir, "check", "--format", "json", "--base", "HEAD")
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)
@@ -224,7 +224,7 @@ func TestALongFunctionResultHasAJSONForm(t *testing.T) {
 // A wrapper on PATH logs each git command, so the test sees how often a run asks for the changes.
 // Each ask runs merge-base once.
 func TestAPartialCheckRunsGitOnceForEveryRule(t *testing.T) {
-	dir := repoWithNewLongFunction(t, `{}`, longFunc("Parse", 81))
+	dir := repoWithNewCode(t, `{}`, longFunc("Parse", 81))
 	realGit, err := exec.LookPath("git")
 	if err != nil {
 		t.Fatal(err)

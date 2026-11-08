@@ -1,9 +1,12 @@
 package goalie_test
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/n-valchev/goalie/internal/config"
 )
 
 const (
@@ -13,13 +16,13 @@ const (
 	oldWarn    = "a.go:3: warn dup: duplicates b.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"
 )
 
-// A new rule defaults to warn with scope changes, so a test that runs with no revision exits with 2
-// until the rule is in this list.
-var ruleNames = []string{"dup", "crap", "long-function", "many-arguments", "many-dependencies", "complex-condition"}
-
+// rulesOff reads the rule names from config.Rules, because a new rule defaults to warn with scope
+// changes, and a test that runs with no revision exits with 2 for any rule that it leaves on.
 func rulesOff(except ...string) string {
 	var off []string
-	for _, name := range ruleNames {
+	fields := reflect.TypeFor[config.Rules]()
+	for i := range fields.NumField() {
+		name := fields.Field(i).Tag.Get("json")
 		if !slices.Contains(except, name) {
 			off = append(off, `"`+name+`": {"mode": "off"}`)
 		}
