@@ -7,12 +7,13 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`goalie check`](#check-your-code) | Checks Go code against a set of rules, and fails a build when a rule fails |
 | [`godeps`](#map-your-packages) | Draws the shape of a Go module as a map in one HTML file |
 
-`goalie check` has two rules:
+`goalie check` has three rules:
 
 | Rule | What it finds |
 | --- | --- |
 | [`dup`](#find-duplicates-with-dup) | Functions with the same structure, such as a copied function |
 | [`crap`](#find-risky-functions-with-crap) | Functions that are complex and poorly tested |
+| [`long-function`](#find-long-functions-with-long-function) | Functions with more lines than the limit |
 
 goalie uses only the Go standard library.
 
@@ -73,10 +74,11 @@ Each line gives the file, the line, the mode, the rule, and a message with the v
 | Control | Values | Default | Meaning |
 | --- | --- | --- | --- |
 | Limit | A number | Set by each rule | The value that the code must stay within. A value equal to the limit passes |
-| Mode | `off`, `warn`, `fail` | `fail` | `off`: no output. `warn`: reports, and never changes the exit code. `fail`: reports, and exits with `1` |
+| Mode | `off`, `warn`, `fail` | `fail` for `dup` and `crap`. `warn` for `long-function` | `off`: no output. `warn`: reports, and never changes the exit code. `fail`: reports, and exits with `1` |
 | Scope | `changes`, `all` | `changes` | `changes`: only functions that the change touches. `all`: every function |
 
 - Only `"mode": "off"` turns a rule off. A limit of `0` is a normal limit.
+- A new rule defaults to `warn`, so that adopting it can't block work. Set `"mode": "fail"` when you have checked its limit on your repository.
 - A rule that you name runs even if it is `off`, and then it reports as `warn`. Use this to try a limit on real code without failing a build.
 - A rule with scope `changes` needs a revision. goalie takes it from `--base`, or else from `base` in `.goalierc`. With neither, goalie exits with `2` and prints `goalie: needs a revision: use --base <rev>, or set base in .goalierc`. goalie has no default revision, because a default of `HEAD` would see no changes in CI, and a forgotten flag would pass every build.
 - `--all` gives every rule scope `all`, and it needs no revision. Each rule still follows its mode, so an old repository can exit with `1`. Use `--all` to analyse a repository, not in CI.
@@ -85,7 +87,7 @@ The changes include commits since the merge base, uncommitted changes, and untra
 
 ### Full and partial checks
 
-| Check | Command | Runs tests | `dup` | `crap` |
+| Check | Command | Runs tests | `dup` and `long-function` | `crap` |
 | --- | --- | --- | --- | --- |
 | Full | `goalie check` | Yes | The exact result | The exact score |
 | Partial | `goalie check --partial` | No | The exact result | A result from complexity alone |
@@ -109,7 +111,7 @@ billing/total.go:15: warn crap: Decide needs at least 13% coverage (complexity 6
 ### Read the results
 
 - `fail` results come first, then `warn` results. Within each mode, the highest value divided by its limit comes first. A limit of `0` counts as `1` for this order.
-- stdout holds only results, so a clean run prints nothing there. Notes go to stderr: the output of your tests, and a line such as `goalie: dup: No new functions found.` when a rule has nothing to check.
+- stdout holds only results, so a clean run prints nothing there. Notes go to stderr: the output of your tests, and a line such as `goalie: dup: No new functions found.` when `dup` or `crap` has nothing to check. `long-function` writes no such line.
 - `--format json` prints an object with a `findings` array, which is `[]` for a clean run. Each entry has `rule`, `mode`, `value`, and `limit`, and the fields of its rule:
 
 | Rule | Fields |
@@ -117,6 +119,7 @@ billing/total.go:15: warn crap: Decide needs at least 13% coverage (complexity 6
 | `dup` | `score`, `literals` (a number, or `null` for `-`), `anchors`, `left`, and `right`. With `shared` patterns, also `case`. `left` and `right` each have `file`, `function`, `startLine`, `endLine`, `nodes`, and `new` |
 | `crap`, full check | `file`, `line`, `function`, `score`, `complexity`, and `coverage` (a fraction from `0` to `1`) |
 | `crap`, partial check | `file`, `line`, `function`, `complexity`, `canPass`, and `neededCoverage` (a fraction, left out when `canPass` is `false`) |
+| `long-function` | `file`, `line`, and `function` |
 
 ### Use the exit code
 
@@ -159,7 +162,8 @@ To keep your settings in the repo, write them in a `.goalierc` file. The file ho
   "shared": ["pkg/**"],
   "rules": {
     "dup": { "mode": "fail", "scope": "changes", "threshold": 0.82, "weakAnchors": 1 },
-    "crap": { "mode": "warn", "limit": 30, "sharedLimit": 15, "coverCommand": "make coverage" }
+    "crap": { "mode": "warn", "limit": 30, "sharedLimit": 15, "coverCommand": "make coverage" },
+    "long-function": { "mode": "fail", "limit": 60 }
   }
 }
 ```
@@ -181,6 +185,7 @@ Each rule has its own object in `rules`:
 | Every rule | `mode` and `scope`. See [Every rule has a limit, a mode, and a scope](#every-rule-has-a-limit-a-mode-and-a-scope) |
 | `dup` | `threshold`, `minLines`, `minNodes`, `weakAnchors`, `weakLiterals`, and `includeTests`. See [Set the limits of dup](#set-the-limits-of-dup) |
 | `crap` | `limit`, `sharedLimit`, `coverCommand`, and `coverProfiles`. See [Set the limits of crap](#set-the-limits-of-crap) |
+| `long-function` | `limit`. See [Find long functions with long-function](#find-long-functions-with-long-function) |
 
 - Every setting is optional. A missing setting uses its default, and a missing file is not an error.
 - goalie reads `.goalierc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run goalie from the repo root in CI.
@@ -417,6 +422,22 @@ If CI has already run the tests, list the files in `coverProfiles`. goalie then 
 
 goalie supports one Go module, and it reads `go.mod` from the directory it runs in, or above it. A profile that holds a file outside that module is an error. Limit `paths` to one module if your repo holds several.
 
+## Find long functions with `long-function`
+
+`long-function` reports a function with more lines than its limit. A long function is hard for a person or an agent to read and to change. The lines run from the `func` keyword to the closing brace. Blank lines and comments count.
+
+```text
+billing/parse.go:12: warn long-function: Parse has 92 lines (limit 80)
+```
+
+| Setting in `rules.long-function` | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `limit` | Number | `80` | The most lines that pass. `--limit` replaces it |
+
+- The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
+- It skips `*_test.go` files, and functions with no body, such as assembly stubs.
+- It gives the same result in a full and a partial check, and it runs no tests.
+
 ## Run goalie in CI
 
 This GitHub Actions workflow runs every rule, and fails a pull request when a rule in `fail` mode reports a result:
@@ -463,6 +484,7 @@ After you change Go code, run `goalie check --partial --base origin/main` from t
 - `dup`: reuse the other function, or move the shared code to one place. Don't keep the copy.
 - `crap ... can't pass at any coverage`: split the function. No test can bring it under the limit.
 - `crap ... needs at least N% coverage`: write tests that cover at least that much of the function.
+- `long-function`: split the function into smaller functions with clear names.
 
 Don't change `.goalierc` or `.goalieignore`, and don't add `//goalie:ignore`, unless a person asks you to.
 ```

@@ -15,11 +15,9 @@ import (
 
 const DupRule = "dup"
 
-// Dup finds functions with the same structure. An empty Base compares the whole repo.
+// Dup finds functions with the same structure.
 type Dup struct {
-	config.Repo
-	Parser       *extract.Parser
-	Base         string
+	Scope
 	Threshold    float64
 	MinLines     int
 	MinNodes     int
@@ -28,9 +26,9 @@ type Dup struct {
 	IncludeTests bool
 }
 
-func NewDup(parser *extract.Parser) Dup {
+func NewDup(scope Scope) Dup {
 	return Dup{
-		Parser:       parser,
+		Scope:        scope,
 		Threshold:    0.82,
 		MinLines:     9,
 		MinNodes:     20,
@@ -97,7 +95,7 @@ func (d Dup) Results(dir string, stderr io.Writer) ([]Result, error) {
 func (d Dup) pairs(dir string, stderr io.Writer) (pairs []compare.Pair, notice string, err error) {
 	var changes gitchange.Changes
 	if d.Base != "" {
-		if changes, err = gitchange.Since(dir, d.Base); err != nil {
+		if changes, err = d.Changes.Since(dir, d.Base); err != nil {
 			return nil, "", err
 		}
 	}
@@ -108,7 +106,7 @@ func (d Dup) pairs(dir string, stderr io.Writer) (pairs []compare.Pair, notice s
 	if len(paths) == 0 {
 		return nil, "No Go files found.", nil
 	}
-	d.WarnUnmatched(stderr, tool, paths)
+	d.Warnings.warnUnmatched(stderr, d.Repo, paths)
 	functions, err := d.Parser.Parse(dir, paths, DupRule)
 	if err != nil {
 		return nil, "", err

@@ -13,6 +13,7 @@ import (
 	"github.com/n-valchev/goalie/internal/config"
 	"github.com/n-valchev/goalie/internal/extract"
 	"github.com/n-valchev/goalie/internal/files"
+	"github.com/n-valchev/goalie/internal/gitchange"
 )
 
 const (
@@ -76,14 +77,17 @@ type rule interface {
 }
 
 type ruleEntry struct {
-	name    string
-	control func(config.Rules) config.Control
-	build   func(config.Settings, options, *extract.Parser) (rule, error)
+	name        string
+	defaultMode config.Mode
+	control     func(config.Rules) config.Control
+	build       func(config.Settings, options, check.Scope) (rule, error)
 }
 
+// A new rule defaults to warn, so that adopting it can't block work.
 var allRules = []ruleEntry{
-	{check.DupRule, func(rules config.Rules) config.Control { return rules.Dup.Control }, newDup},
-	{check.CrapRule, func(rules config.Rules) config.Control { return rules.Crap.Control }, newCrap},
+	{check.DupRule, config.ModeFail, func(rules config.Rules) config.Control { return rules.Dup.Control }, newDup},
+	{check.CrapRule, config.ModeFail, func(rules config.Rules) config.Control { return rules.Crap.Control }, newCrap},
+	measureEntry(check.LongFunction, func(rules config.Rules) config.FunctionRule { return rules.LongFunction }),
 }
 
 type selectedRule struct {
@@ -102,13 +106,14 @@ func ignoreDirective() extract.Directive {
 
 func selectRules(file config.Settings, opts options) ([]selectedRule, error) {
 	var selected []selectedRule
-	parser := extract.NewParser(ignoreDirective())
+	parser, changes, warnings := extract.NewParser(ignoreDirective()), gitchange.NewCache(), check.NewWarnings()
 	for _, entry := range allRules {
 		named := slices.Contains(opts.ruleNames, entry.name)
 		if len(opts.ruleNames) > 0 && !named {
 			continue
 		}
-		mode := cmp.Or(entry.control(file.Rules).Mode, config.ModeFail)
+		control := entry.control(file.Rules)
+		mode := cmp.Or(control.Mode, entry.defaultMode)
 		if mode == config.ModeOff {
 			if !named {
 				continue
@@ -119,7 +124,11 @@ func selectRules(file config.Settings, opts options) ([]selectedRule, error) {
 		if opts.warnOnly {
 			mode = config.ModeWarn
 		}
-		built, err := entry.build(file, opts, parser)
+		base, err := revision(control.Scope, opts, file)
+		if err != nil {
+			return nil, err
+		}
+		built, err := entry.build(file, opts, check.Scope{Parser: parser, Changes: changes, Warnings: warnings, Base: base})
 		if err != nil {
 			return nil, err
 		}
@@ -163,13 +172,9 @@ func (w *lockedWriter) Write(text []byte) (int, error) {
 	return w.target.Write(text)
 }
 
-func newDup(file config.Settings, opts options, parser *extract.Parser) (rule, error) {
+func newDup(file config.Settings, opts options, scope check.Scope) (rule, error) {
 	ruleSettings := file.Rules.Dup
-	dup := check.NewDup(parser)
-	var err error
-	if dup.Base, err = revision(ruleSettings.Scope, opts, file); err != nil {
-		return nil, err
-	}
+	dup := check.NewDup(scope)
 	dup.ApplyRule(ruleSettings)
 	if opts.limit != nil {
 		dup.Threshold = *opts.limit
@@ -183,14 +188,10 @@ func newDup(file config.Settings, opts options, parser *extract.Parser) (rule, e
 	return dup, nil
 }
 
-func newCrap(file config.Settings, opts options, parser *extract.Parser) (rule, error) {
+func newCrap(file config.Settings, opts options, scope check.Scope) (rule, error) {
 	ruleSettings := file.Rules.Crap
-	crap := check.NewCrap(parser)
+	crap := check.NewCrap(scope)
 	crap.Partial = opts.partial
-	var err error
-	if crap.Base, err = revision(ruleSettings.Scope, opts, file); err != nil {
-		return nil, err
-	}
 	crap.ApplyRule(ruleSettings)
 	if opts.limit != nil {
 		crap.Limits.Limit = *opts.limit
@@ -205,6 +206,30 @@ func newCrap(file config.Settings, opts options, parser *extract.Parser) (rule, 
 		return nil, fmt.Errorf("%s: %w", config.Name, err)
 	}
 	return crap, nil
+}
+
+// measureEntry gives each function rule the same settings and flags, so that a new rule adds only
+// its measure.
+func measureEntry(measure check.Measure, settings func(config.Rules) config.FunctionRule) ruleEntry {
+	return ruleEntry{
+		name:        measure.Name,
+		defaultMode: config.ModeWarn,
+		control:     func(rules config.Rules) config.Control { return settings(rules).Control },
+		build: func(file config.Settings, opts options, scope check.Scope) (rule, error) {
+			function := check.NewFunction(scope, measure)
+			function.ApplyRule(settings(file.Rules))
+			if opts.limit != nil {
+				function.Limit = *opts.limit
+			}
+			if err := function.Apply(file, nil); err != nil {
+				return nil, err
+			}
+			if err := function.Validate(); err != nil {
+				return nil, fmt.Errorf("%s: %w", config.Name, err)
+			}
+			return function, nil
+		},
+	}
 }
 
 func revision(scope config.Scope, opts options, file config.Settings) (string, error) {

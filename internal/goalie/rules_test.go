@@ -11,8 +11,9 @@ const (
 	oldPair    = "a.go:3: fail dup: duplicates b.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"
 	oldWarn    = "a.go:3: warn dup: duplicates b.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"
 
-	// crapOff keeps these tests on dup, because these repos have no module for crap to test.
-	crapOff = `"crap": {"mode": "off"}`
+	// otherRulesOff keeps these tests on dup, because these repos have no module for crap to test,
+	// and some of them run with no revision.
+	otherRulesOff = `"crap": {"mode": "off"}, "long-function": {"mode": "off"}`
 )
 
 func repoWithNewCopy(t *testing.T, settings string) string {
@@ -31,13 +32,13 @@ func TestEachModeDecidesWhatADuplicateDoes(t *testing.T) {
 		wantCode   int
 		wantStdout string
 	}{
-		{"no dup settings fails", `{"rules": {` + crapOff + `}}`, []string{"check", "--base", "HEAD"}, 1, copiedPair},
-		{"a rule with no mode fails", `{"rules": {` + crapOff + `, "dup": {}}}`, []string{"check", "--base", "HEAD"}, 1, copiedPair},
-		{"fail fails", `{"rules": {` + crapOff + `, "dup": {"mode": "fail"}}}`, []string{"check", "--base", "HEAD"}, 1, copiedPair},
-		{"warn reports and passes", `{"rules": {` + crapOff + `, "dup": {"mode": "warn"}}}`, []string{"check", "--base", "HEAD"}, 0, copiedWarn},
-		{"off says nothing", `{"rules": {` + crapOff + `, "dup": {"mode": "off"}}}`, []string{"check", "--base", "HEAD"}, 0, ""},
-		{"off needs no revision", `{"rules": {` + crapOff + `, "dup": {"mode": "off"}}}`, []string{"check"}, 0, ""},
-		{"off runs as warn when named", `{"rules": {` + crapOff + `, "dup": {"mode": "off"}}}`, []string{"check", "dup", "--base", "HEAD"}, 0, copiedWarn},
+		{"no dup settings fails", `{"rules": {` + otherRulesOff + `}}`, []string{"check", "--base", "HEAD"}, 1, copiedPair},
+		{"a rule with no mode fails", `{"rules": {` + otherRulesOff + `, "dup": {}}}`, []string{"check", "--base", "HEAD"}, 1, copiedPair},
+		{"fail fails", `{"rules": {` + otherRulesOff + `, "dup": {"mode": "fail"}}}`, []string{"check", "--base", "HEAD"}, 1, copiedPair},
+		{"warn reports and passes", `{"rules": {` + otherRulesOff + `, "dup": {"mode": "warn"}}}`, []string{"check", "--base", "HEAD"}, 0, copiedWarn},
+		{"off says nothing", `{"rules": {` + otherRulesOff + `, "dup": {"mode": "off"}}}`, []string{"check", "--base", "HEAD"}, 0, ""},
+		{"off needs no revision", `{"rules": {` + otherRulesOff + `, "dup": {"mode": "off"}}}`, []string{"check"}, 0, ""},
+		{"off runs as warn when named", `{"rules": {` + otherRulesOff + `, "dup": {"mode": "off"}}}`, []string{"check", "dup", "--base", "HEAD"}, 0, copiedWarn},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -70,11 +71,11 @@ func TestEachScopeDecidesWhichCodeIsChecked(t *testing.T) {
 		wantCode   int
 		wantStdout string
 	}{
-		{"changes skips old code", `{"rules": {` + crapOff + `, "dup": {"scope": "changes"}}}`, []string{"check", "--base", "HEAD"}, 0, ""},
-		{"all sees old code with no revision", `{"rules": {` + crapOff + `, "dup": {"scope": "all"}}}`, []string{"check"}, 1, oldPair},
-		{"all sees old code despite a revision", `{"rules": {` + crapOff + `, "dup": {"scope": "all"}}}`, []string{"check", "--base", "HEAD"}, 1, oldPair},
-		{"all never reads the revision", `{"rules": {` + crapOff + `, "dup": {"scope": "all"}}}`, []string{"check", "--base", "no-such-rev"}, 1, oldPair},
-		{"all follows the mode", `{"rules": {` + crapOff + `, "dup": {"scope": "all", "mode": "warn"}}}`, []string{"check"}, 0, oldWarn},
+		{"changes skips old code", `{"rules": {` + otherRulesOff + `, "dup": {"scope": "changes"}}}`, []string{"check", "--base", "HEAD"}, 0, ""},
+		{"all sees old code with no revision", `{"rules": {` + otherRulesOff + `, "dup": {"scope": "all"}}}`, []string{"check"}, 1, oldPair},
+		{"all sees old code despite a revision", `{"rules": {` + otherRulesOff + `, "dup": {"scope": "all"}}}`, []string{"check", "--base", "HEAD"}, 1, oldPair},
+		{"all never reads the revision", `{"rules": {` + otherRulesOff + `, "dup": {"scope": "all"}}}`, []string{"check", "--base", "no-such-rev"}, 1, oldPair},
+		{"all follows the mode", `{"rules": {` + otherRulesOff + `, "dup": {"scope": "all", "mode": "warn"}}}`, []string{"check"}, 0, oldWarn},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -97,13 +98,13 @@ func TestTheRevisionComesFromTheFlagThenTheFile(t *testing.T) {
 		wantCode   int
 		wantStderr string
 	}{
-		{"the file alone", `{"base": "HEAD", "rules": {` + crapOff + `}}`, []string{"check"}, 1, ""},
-		{"the flag replaces the file", `{"base": "no-such-rev", "rules": {` + crapOff + `}}`, []string{"check", "--base", "HEAD"}, 1, ""},
-		{"a bad revision in the file", `{"base": "no-such-rev", "rules": {` + crapOff + `}}`, []string{"check"}, 2, "no-such-rev"},
-		{"an empty revision in the file", `{"base": "", "rules": {` + crapOff + `}}`, []string{"check"}, 2, "revision"},
-		{"neither", `{"rules": {` + crapOff + `}}`, []string{"check"}, 2, ".goalierc"},
-		{"neither for a named rule that is off", `{"rules": {` + crapOff + `, "dup": {"mode": "off"}}}`, []string{"check", "dup"}, 2, "revision"},
-		{"an empty flag doesn't fall back to the file", `{"base": "HEAD", "rules": {` + crapOff + `}}`, []string{"check", "--base", ""}, 2, "revision"},
+		{"the file alone", `{"base": "HEAD", "rules": {` + otherRulesOff + `}}`, []string{"check"}, 1, ""},
+		{"the flag replaces the file", `{"base": "no-such-rev", "rules": {` + otherRulesOff + `}}`, []string{"check", "--base", "HEAD"}, 1, ""},
+		{"a bad revision in the file", `{"base": "no-such-rev", "rules": {` + otherRulesOff + `}}`, []string{"check"}, 2, "no-such-rev"},
+		{"an empty revision in the file", `{"base": "", "rules": {` + otherRulesOff + `}}`, []string{"check"}, 2, "revision"},
+		{"neither", `{"rules": {` + otherRulesOff + `}}`, []string{"check"}, 2, ".goalierc"},
+		{"neither for a named rule that is off", `{"rules": {` + otherRulesOff + `, "dup": {"mode": "off"}}}`, []string{"check", "dup"}, 2, "revision"},
+		{"an empty flag doesn't fall back to the file", `{"base": "HEAD", "rules": {` + otherRulesOff + `}}`, []string{"check", "--base", ""}, 2, "revision"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -11,7 +11,7 @@ To upgrade:
 3. Move the `godry` and `gocrap` sections of `.goalierc` into `rules`. See [Settings](#settings).
 4. Change `//godry:ignore` and `//gocrap:ignore` to `//goalie:ignore`. See [Directives](#directives).
 5. If a `coverCommand` uses `GOCRAP_COVER_DIR`, change it to `GOALIE_COVER_DIR`.
-6. Run `goalie check --base origin/main` and compare the results with your last CI run. They match, apart from functions that a `//godry:ignore` or `//gocrap:ignore` line excused and that you didn't change in step 4.
+6. Run `goalie check --base origin/main` and compare the results with your last CI run. They match, apart from two differences. Functions that a `//godry:ignore` or `//gocrap:ignore` line excused, and that you didn't change in step 4, now report. The new `long-function` rule adds `warn` results, which never change the exit code.
 
 ### Install
 
@@ -113,7 +113,7 @@ This example shows one file before and after:
 }
 ```
 
-Every rule also takes two new settings: `mode` (`off`, `warn`, or `fail`, default `fail`) and `scope` (`changes` or `all`, default `changes`). A mode change has the same effect as a limit change, so keep human approval for changes to `.goalierc`.
+Every rule also takes two new settings: `mode` (`off`, `warn`, or `fail`, default `fail` for `dup` and `crap`) and `scope` (`changes` or `all`, default `changes`). A mode change has the same effect as a limit change, so keep human approval for changes to `.goalierc`.
 
 ### Directives
 
@@ -170,3 +170,4 @@ godeps now exits with `2` on a crap report with no `score`. `goalie check crap -
 - `goalie check --all` checks the whole repository and needs no revision.
 - `mode` and `scope` for each rule.
 - A rule that you name runs even if it is `off`, and reports as `warn`.
+- The rule `long-function` reports a function with more than 80 lines, from the `func` keyword to the closing brace. Set the limit with `limit` in `rules.long-function`. Its default mode is `warn`, so it never changes the exit code until you set `"mode": "fail"`. Its default scope is `changes`, so it needs a revision. If your `.goalierc` sets no `base` and gives every other rule scope `all` or mode `off`, `goalie check` with no `--base` now exits with `2`. To fix this, give `long-function` the same scope or mode.

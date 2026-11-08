@@ -34,7 +34,7 @@ func TestTheLimitFlagsReplaceTheSettingsForOneRun(t *testing.T) {
 }
 
 func TestTheLimitFlagSetsTheDupThreshold(t *testing.T) {
-	dir := repoWithNewCopy(t, `{"rules": {"dup": {"threshold": 0.9}, `+crapOff+`}}`)
+	dir := repoWithNewCopy(t, `{"rules": {"dup": {"threshold": 0.9}, `+otherRulesOff+`}}`)
 	code, stdout, stderr := runGoalie(t, dir, "check", "dup", "--base", "HEAD", "--limit", "0.5")
 	want := "b.go:3: fail dup: duplicates a.go:3 (score 1.00, limit 0.5, literals 1.00, anchors 0)\n"
 	if code != 1 || stdout != want {
@@ -50,7 +50,7 @@ func TestWarnOnlyReportsAFailRuleAsWarnAndExitsWithZero(t *testing.T) {
 		want string
 	}{
 		{"crap", func(t *testing.T) string { return repoWithNewFunction(t, coverSettings, emptyProfile) }, "crap", decideWarn},
-		{"dup", func(t *testing.T) string { return repoWithNewCopy(t, `{"rules": {`+crapOff+`}}`) }, "dup", copiedWarn},
+		{"dup", func(t *testing.T) string { return repoWithNewCopy(t, `{"rules": {`+otherRulesOff+`}}`) }, "dup", copiedWarn},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

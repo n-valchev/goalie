@@ -73,7 +73,15 @@ func (r Repo) Find(dir string, includeTests bool) ([]string, error) {
 // WarnUnmatched warns and does not fail, because paths can limit a run to code with no shared
 // folder. Without it, a mistyped pattern would quietly label shared code as a product.
 func (r Repo) WarnUnmatched(stderr io.Writer, tool string, paths []string) {
-	for _, pattern := range files.Unmatched(r.Shared, paths) {
-		fmt.Fprintf(stderr, "%s: shared pattern %q matches no file; to match a folder, write folder/**\n", tool, pattern)
+	for _, warning := range r.UnmatchedWarnings(tool, paths) {
+		fmt.Fprint(stderr, warning)
 	}
+}
+
+func (r Repo) UnmatchedWarnings(tool string, paths []string) []string {
+	var warnings []string
+	for _, pattern := range files.Unmatched(r.Shared, paths) {
+		warnings = append(warnings, fmt.Sprintf("%s: shared pattern %q matches no file; to match a folder, write folder/**\n", tool, pattern))
+	}
+	return warnings
 }

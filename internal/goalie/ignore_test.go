@@ -128,7 +128,7 @@ func TestAChangeToAnExcusedFunctionAloneRunsNoTests(t *testing.T) {
 func TestDupIgnoreCoversTheOldSideOfAPair(t *testing.T) {
 	dir := gitRepo(t, map[string]string{
 		"a.go":      "package a\n\n//goalie:ignore dup Wiring repeats on purpose.\n" + sumFunc("Total"),
-		".goalierc": `{"rules": {` + crapOff + `}}`,
+		".goalierc": `{"rules": {` + otherRulesOff + `}}`,
 	})
 	write(t, dir, "b.go", "package a\n\n"+sumFunc("Copied"))
 	wantClean(t, dir, "check", "--base", "HEAD")

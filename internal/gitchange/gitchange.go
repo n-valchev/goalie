@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -88,7 +89,8 @@ func (c Changes) For(dir string, files []string) Changes {
 	var unmatched []string
 	for _, file := range files {
 		if ranges, ok := c[file]; ok {
-			result[file] = ranges
+			// Clipped, so that the append below copies it: rules that share a Cache read c at once.
+			result[file] = slices.Clip(ranges)
 		} else {
 			unmatched = append(unmatched, file)
 		}
@@ -298,4 +300,33 @@ func git(dir string, args ...string) (string, error) {
 		return "", fmt.Errorf("git %s: %w", args[0], err)
 	}
 	return string(out), nil
+}
+
+// Cache belongs to one run. Its rules share it, so that a run asks Git once, however many rules
+// need the changes: with each rule running Git, a partial check goes over its 1-second budget.
+type Cache struct {
+	lock  sync.Mutex
+	since map[sinceKey]func() (Changes, error)
+}
+
+type sinceKey struct {
+	dir, rev string
+}
+
+func NewCache() *Cache {
+	return &Cache{since: map[sinceKey]func() (Changes, error){}}
+}
+
+// Since returns the same result as the function Since, and runs Git only on the first call for
+// dir and rev.
+func (c *Cache) Since(dir, rev string) (Changes, error) {
+	key := sinceKey{dir, rev}
+	c.lock.Lock()
+	since, ok := c.since[key]
+	if !ok {
+		since = sync.OnceValues(func() (Changes, error) { return Since(dir, rev) })
+		c.since[key] = since
+	}
+	c.lock.Unlock()
+	return since()
 }

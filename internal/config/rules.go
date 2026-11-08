@@ -9,8 +9,9 @@ import (
 
 // Rules has one field for each rule, so that the strict decoder in Read rejects an unknown rule name.
 type Rules struct {
-	Dup  DupRule  `json:"dup"`
-	Crap CrapRule `json:"crap"`
+	Dup          DupRule      `json:"dup"`
+	Crap         CrapRule     `json:"crap"`
+	LongFunction FunctionRule `json:"long-function"`
 }
 
 // Control holds what every rule has. An empty value means that the file leaves it out.
@@ -36,6 +37,13 @@ type CrapRule struct {
 	Cover
 	Limit       *float64 `json:"limit"`
 	SharedLimit *float64 `json:"sharedLimit"`
+}
+
+// FunctionRule is the settings of a rule that measures one number for each function. It holds a
+// pointer for the same reason as Godeps.
+type FunctionRule struct {
+	Control
+	Limit *float64 `json:"limit"`
 }
 
 type Cover struct {

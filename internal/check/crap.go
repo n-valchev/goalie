@@ -10,25 +10,22 @@ import (
 	"github.com/n-valchev/goalie/internal/coverage"
 	"github.com/n-valchev/goalie/internal/crap"
 	"github.com/n-valchev/goalie/internal/extract"
-	"github.com/n-valchev/goalie/internal/gitchange"
 )
 
 const CrapRule = "crap"
 
-// Crap finds functions that are complex and poorly tested. An empty Base scores the whole repo.
+// Crap finds functions that are complex and poorly tested.
 type Crap struct {
-	config.Repo
+	Scope
 	Partial       bool
-	Parser        *extract.Parser
-	Base          string
 	Limits        crap.Limits
 	CoverCommand  string
 	CoverProfiles []string
 }
 
-func NewCrap(parser *extract.Parser) Crap {
+func NewCrap(scope Scope) Crap {
 	return Crap{
-		Parser:       parser,
+		Scope:        scope,
 		Limits:       crap.Limits{Limit: crap.DefaultLimit},
 		CoverCommand: DefaultCoverCommand,
 	}
@@ -51,10 +48,11 @@ func (c *Crap) Apply(file config.Settings, fromFlags map[string]bool) error {
 }
 
 func (c Crap) Results(dir string, stderr io.Writer) ([]Result, error) {
-	functions, notice, err := c.functions(dir, stderr)
+	functions, notice, err := c.functions(dir, stderr, CrapRule)
 	if err != nil {
 		return nil, err
 	}
+	// Before the coverage step, so that a change with no functions doesn't run the tests.
 	if notice != "" {
 		noResults(stderr, CrapRule, notice)
 		return nil, nil
@@ -74,47 +72,6 @@ func (c Crap) Results(dir string, stderr io.Writer) ([]Result, error) {
 		})
 	}
 	return results, nil
-}
-
-// A notice says why there is nothing to score.
-func (c Crap) functions(dir string, stderr io.Writer) (functions []extract.Function, notice string, err error) {
-	var changes gitchange.Changes
-	if c.Base != "" {
-		if changes, err = gitchange.Since(dir, c.Base); err != nil {
-			return nil, "", err
-		}
-	}
-	paths, err := c.Find(dir, false)
-	if err != nil {
-		return nil, "", err
-	}
-	if len(paths) == 0 {
-		return nil, "No Go files found.", nil
-	}
-	c.WarnUnmatched(stderr, tool, paths)
-	var changed gitchange.Changes
-	if c.Base != "" {
-		changed = changes.For(dir, paths)
-		// No other file can hold a result, and parsing all of them breaks the partial check's budget.
-		paths = slices.DeleteFunc(paths, func(file string) bool {
-			_, ok := changed[file]
-			return !ok
-		})
-	}
-	functions, err = c.Parser.Parse(dir, paths, CrapRule)
-	if err != nil {
-		return nil, "", err
-	}
-	if c.Base != "" {
-		functions = slices.DeleteFunc(functions, func(fn extract.Function) bool {
-			return !changed.Touches(fn.File, fn.StartLine, fn.EndLine)
-		})
-		// Before the coverage step, so that a change with no functions doesn't run the tests.
-		if len(functions) == 0 {
-			return nil, "No new functions found.", nil
-		}
-	}
-	return functions, "", nil
 }
 
 func (c Crap) findings(dir string, functions []extract.Function, stderr io.Writer) ([]finding, error) {
