@@ -1,6 +1,7 @@
 package goalie_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -10,11 +11,25 @@ const (
 	copiedWarn = "b.go:3: warn dup: duplicates a.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"
 	oldPair    = "a.go:3: fail dup: duplicates b.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"
 	oldWarn    = "a.go:3: warn dup: duplicates b.go:3 (score 1.00, limit 0.82, literals 1.00, anchors 0)\n"
-
-	// otherRulesOff keeps these tests on dup, because these repos have no module for crap to test,
-	// and some of them run with no revision.
-	otherRulesOff = `"crap": {"mode": "off"}, "long-function": {"mode": "off"}, "many-arguments": {"mode": "off"}, "many-dependencies": {"mode": "off"}`
 )
+
+// A new rule defaults to warn with scope changes, so a test that runs with no revision exits with 2
+// until the rule is in this list.
+var ruleNames = []string{"dup", "crap", "long-function", "many-arguments", "many-dependencies", "complex-condition"}
+
+func rulesOff(except ...string) string {
+	var off []string
+	for _, name := range ruleNames {
+		if !slices.Contains(except, name) {
+			off = append(off, `"`+name+`": {"mode": "off"}`)
+		}
+	}
+	return strings.Join(off, ", ")
+}
+
+// otherRulesOff keeps these tests on dup, because these repos have no module for crap to test,
+// and some of them run with no revision.
+var otherRulesOff = rulesOff("dup")
 
 func repoWithNewCopy(t *testing.T, settings string) string {
 	t.Helper()

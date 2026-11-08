@@ -14,6 +14,7 @@ type Rules struct {
 	LongFunction     FunctionRule `json:"long-function"`
 	ManyArguments    FunctionRule `json:"many-arguments"`
 	ManyDependencies FunctionRule `json:"many-dependencies"`
+	ComplexCondition FunctionRule `json:"complex-condition"`
 }
 
 // Control holds what every rule has. An empty value means that the file leaves it out.

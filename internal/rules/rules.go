@@ -3,6 +3,8 @@
 package rules
 
 import (
+	"go/ast"
+	"go/token"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -10,17 +12,63 @@ import (
 	"github.com/n-valchev/goalie/internal/extract"
 )
 
+type Count struct {
+	Value int
+	Line  int
+}
+
 // Lines counts blank lines and comments too, because an agent reads them all.
-func Lines(fn extract.Function) int {
-	return fn.Lines()
+func Lines(fn extract.Function) Count {
+	return Count{fn.Lines(), fn.StartLine}
 }
 
 // Parameters counts an unnamed parameter as 1, so that func(int, string) is 2, as it is to a caller.
-func Parameters(fn extract.Function) int {
+func Parameters(fn extract.Function) Count {
 	count := 0
 	for _, field := range fn.Decl.Type.Params.List {
 		count += max(len(field.Names), 1)
 	}
+	return Count{count, fn.StartLine}
+}
+
+// ComplexCondition gives only the worst condition, because one result for each condition would fill
+// an agent's context with the same advice. A return or an assignment doesn't count, because naming
+// a boolean expression is often the fix.
+func ComplexCondition(fn extract.Function) Count {
+	worst := Count{0, fn.StartLine}
+	measure := func(condition ast.Expr) {
+		if condition == nil {
+			return
+		}
+		if count := operators(condition); count > worst.Value {
+			worst = Count{count, fn.Line(condition.Pos())}
+		}
+	}
+	ast.Inspect(fn.Decl.Body, func(node ast.Node) bool {
+		switch node := node.(type) {
+		case *ast.IfStmt:
+			measure(node.Cond)
+		case *ast.ForStmt:
+			measure(node.Cond)
+		case *ast.CaseClause:
+			for _, expression := range node.List {
+				measure(expression)
+			}
+		}
+		return true
+	})
+	return worst
+}
+
+// operators also counts inside a closure in the condition, because a reader must follow it too.
+func operators(condition ast.Expr) int {
+	count := 0
+	ast.Inspect(condition, func(node ast.Node) bool {
+		if binary, ok := node.(*ast.BinaryExpr); ok && (binary.Op == token.LAND || binary.Op == token.LOR) {
+			count++
+		}
+		return true
+	})
 	return count
 }
 

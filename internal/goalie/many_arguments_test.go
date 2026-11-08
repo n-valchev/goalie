@@ -7,7 +7,7 @@ import (
 )
 
 // onlyParameterRules turns off the other rules, so that each test sees only the parameter count.
-const onlyParameterRules = `{"rules": {"dup": {"mode": "off"}, "crap": {"mode": "off"}, "long-function": {"mode": "off"}}}`
+var onlyParameterRules = `{"rules": {` + rulesOff("many-arguments", "many-dependencies") + `}}`
 
 // The type S comes after fn, so that fn stays at line 3.
 func withParams(fn, params string) string {

@@ -35,6 +35,11 @@ Rules:
         constructor is a function, not a method, named New or New and a
         capital letter, such as NewServer. It uses this rule and not
         many-arguments.
+  complex-condition
+        Reports functions with a condition that has more && and || operators
+        than the limit. A condition is the expression of an if, a for, or a
+        case. A return or an assignment doesn't count. Each function reports
+        once, at the line of its worst condition.
 
 With no rule names, goalie runs every rule that isn't off. A rule that you name
 runs even if it is off, and then it reports as warn.
@@ -86,8 +91,9 @@ Settings file:
   below weakLiterals is dropped, so the default drops nothing. A result whose
   literals are - is never dropped. The crap rule also takes limit (default 30),
   sharedLimit, coverCommand, and coverProfiles. The other rules also take
-  limit: 80 for long-function, 4 for many-arguments, and 5 for
-  many-dependencies. A limit of 0 doesn't turn a rule off.
+  limit: 80 for long-function, 4 for many-arguments, 5 for
+  many-dependencies, and 3 for complex-condition. A limit of 0 doesn't turn
+  a rule off.
 
 Files:
   goalie checks the Go files below the current directory, or in paths. It

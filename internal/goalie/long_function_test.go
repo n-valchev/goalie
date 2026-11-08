@@ -9,14 +9,14 @@ import (
 	"testing"
 )
 
-// onlyLongFunction turns off the stage 1 rules, because these repos have no module for crap to test,
+// onlyLongFunction turns off the other rules, because these repos have no module for crap to test,
 // and the bodies of two long functions are duplicates.
-const onlyLongFunction = `{"rules": {"dup": {"mode": "off"}, "crap": {"mode": "off"}}}`
+var onlyLongFunction = `{"rules": {` + rulesOff("long-function") + `}}`
 
 const longWarn = "a.go:3: warn long-function: Parse has 81 lines (limit 80)\n"
 
 func withLongFunction(settings string) string {
-	return `{"rules": {"dup": {"mode": "off"}, "crap": {"mode": "off"}, "many-arguments": {"mode": "off"}, "many-dependencies": {"mode": "off"}, "long-function": ` + settings + `}}`
+	return `{"rules": {` + rulesOff("long-function") + `, "long-function": ` + settings + `}}`
 }
 
 // longFunc has exactly lines lines, from the func keyword to the closing brace.

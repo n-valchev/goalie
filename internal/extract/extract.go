@@ -26,11 +26,16 @@ type Function struct {
 	StartLine int    // The line of the func keyword, so the doc comment doesn't count.
 	EndLine   int    // The line of the closing brace.
 	Decl      *ast.FuncDecl
+	fset      *token.FileSet
 	excused   []string
 }
 
 func (f Function) Lines() int {
 	return f.EndLine - f.StartLine + 1
+}
+
+func (f Function) Line(pos token.Pos) int {
+	return fileLine(f.fset, pos)
 }
 
 type Directive struct {
@@ -123,6 +128,7 @@ func parseFile(dir, file string, directive Directive) ([]Function, error) {
 			StartLine: fileLine(fset, fn.Pos()),
 			EndLine:   fileLine(fset, fn.Body.Rbrace),
 			Decl:      fn,
+			fset:      fset,
 			excused:   excused,
 		})
 	}

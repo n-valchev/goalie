@@ -7,7 +7,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`goalie check`](#check-your-code) | Checks Go code against a set of rules, and fails a build when a rule fails |
 | [`godeps`](#map-your-packages) | Draws the shape of a Go module as a map in one HTML file |
 
-`goalie check` has five rules:
+`goalie check` has six rules:
 
 | Rule | What it finds |
 | --- | --- |
@@ -16,6 +16,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`long-function`](#find-long-functions-with-long-function) | Functions with more lines than the limit |
 | [`many-arguments`](#find-functions-with-many-parameters) | Functions and methods with more parameters than the limit |
 | [`many-dependencies`](#find-functions-with-many-parameters) | Constructors with more parameters than the limit |
+| [`complex-condition`](#find-complex-conditions-with-complex-condition) | Functions with a condition that has more `&&` and `\|\|` operators than the limit |
 
 goalie uses only the Go standard library.
 
@@ -121,7 +122,7 @@ billing/total.go:15: warn crap: Decide needs at least 13% coverage (complexity 6
 | `dup` | `score`, `literals` (a number, or `null` for `-`), `anchors`, `left`, and `right`. With `shared` patterns, also `case`. `left` and `right` each have `file`, `function`, `startLine`, `endLine`, `nodes`, and `new` |
 | `crap`, full check | `file`, `line`, `function`, `score`, `complexity`, and `coverage` (a fraction from `0` to `1`) |
 | `crap`, partial check | `file`, `line`, `function`, `complexity`, `canPass`, and `neededCoverage` (a fraction, left out when `canPass` is `false`) |
-| `long-function`, `many-arguments`, and `many-dependencies` | `file`, `line`, and `function` |
+| `long-function`, `many-arguments`, `many-dependencies`, and `complex-condition` | `file`, `line`, and `function`. For `complex-condition`, `line` is the line of the worst condition |
 
 ### Use the exit code
 
@@ -190,6 +191,7 @@ Each rule has its own object in `rules`:
 | `crap` | `limit`, `sharedLimit`, `coverCommand`, and `coverProfiles`. See [Set the limits of crap](#set-the-limits-of-crap) |
 | `long-function` | `limit`. See [Find long functions with long-function](#find-long-functions-with-long-function) |
 | `many-arguments` and `many-dependencies` | `limit`. See [Find functions with many parameters](#find-functions-with-many-parameters) |
+| `complex-condition` | `limit`. See [Find complex conditions with complex-condition](#find-complex-conditions-with-complex-condition) |
 
 - Every setting is optional. A missing setting uses its default, and a missing file is not an error.
 - goalie reads `.goalierc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run goalie from the repo root in CI.
@@ -477,6 +479,38 @@ The count works like this:
 - `//goalie:ignore many-arguments` doesn't hide a `many-dependencies` result. Name the rule that reports the function.
 - They skip `*_test.go` files. They give the same result in a full and a partial check, and they run no tests.
 
+## Find complex conditions with `complex-condition`
+
+`complex-condition` reports a function with a condition that has more `&&` and `||` operators than its limit. A reader must keep every part of such a condition in mind at once.
+
+```text
+billing/charge.go:31: warn complex-condition: Charge has a condition with 5 operators (limit 3)
+```
+
+A condition is the expression of an `if`, of a `for`, or of a `case`:
+
+| Code | Counts |
+| --- | --- |
+| `if a && b \|\| c {` | Yes: 2 operators |
+| `for i < n && !done {` | Yes: 1 operator |
+| `case a && b:` | Yes: 1 operator. In `case x, y:`, each expression is its own condition |
+| `if ok() && func() bool { return a && b }() {` | Yes: 2 operators. An operator in a closure in the condition counts |
+| `return a && b && c && d && e` | No |
+| `ready := a && b && c && d && e` | No |
+| `if x&1 \| x&2 != 0 {` | No: `&` and `\|` work on bits, so they don't count |
+| A `case` of a `select` | No: it has no boolean expression |
+
+A `return` and an assignment don't count, because a boolean expression with a name is often the fix. To fix a result, give parts of the condition names, such as `ready := a && b`, or move the condition into a function.
+
+A function reports once, with the operators of its worst condition and the line of that condition.
+
+| Setting in `rules.complex-condition` | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `limit` | Number | `3` | The most operators in one condition that pass. `--limit` replaces it |
+
+- The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
+- It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.
+
 ## Run goalie in CI
 
 This GitHub Actions workflow runs every rule, and fails a pull request when a rule in `fail` mode reports a result:
@@ -525,6 +559,7 @@ After you change Go code, run `goalie check --partial --base origin/main` from t
 - `crap ... needs at least N% coverage`: write tests that cover at least that much of the function.
 - `long-function`: split the function into smaller functions with clear names.
 - `many-arguments` or `many-dependencies`: group parameters that belong together into a type, or split the function.
+- `complex-condition`: give parts of the condition names, such as `ready := a && b`, or move the condition into a function.
 
 Don't change `.goalierc` or `.goalieignore`, and don't add `//goalie:ignore`, unless a person asks you to.
 ```

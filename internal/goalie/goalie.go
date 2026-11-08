@@ -90,6 +90,7 @@ var allRules = []ruleEntry{
 	measureEntry(check.LongFunction, func(rules config.Rules) config.FunctionRule { return rules.LongFunction }),
 	measureEntry(check.ManyArguments, func(rules config.Rules) config.FunctionRule { return rules.ManyArguments }),
 	measureEntry(check.ManyDependencies, func(rules config.Rules) config.FunctionRule { return rules.ManyDependencies }),
+	measureEntry(check.ComplexCondition, func(rules config.Rules) config.FunctionRule { return rules.ComplexCondition }),
 }
 
 type selectedRule struct {

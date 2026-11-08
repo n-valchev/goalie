@@ -123,7 +123,7 @@ type Measure struct {
 	// Applies is nil for every function. It keeps the choice of functions out of Of, so that one
 	// count serves two rules, as Parameters does for many-arguments and many-dependencies.
 	Applies func(extract.Function) bool
-	Of      func(extract.Function) int
+	Of      func(extract.Function) rules.Count
 	Format  string // Takes the function name and the value, as in "%s has %d lines".
 }
 
@@ -136,6 +136,10 @@ var (
 	ManyDependencies = Measure{
 		Name: "many-dependencies", DefaultLimit: 5, Applies: rules.IsConstructor,
 		Of: rules.Parameters, Format: "%s has %d parameters",
+	}
+	ComplexCondition = Measure{
+		Name: "complex-condition", DefaultLimit: 3, Of: rules.ComplexCondition,
+		Format: "%s has a condition with %d operators",
 	}
 )
 
@@ -179,14 +183,14 @@ func (f Function) Results(dir string, stderr io.Writer) ([]Result, error) {
 		if f.Measure.Applies != nil && !f.Measure.Applies(fn) {
 			continue
 		}
-		value := f.Measure.Of(fn)
-		if float64(value) <= f.Limit {
+		count := f.Measure.Of(fn)
+		if float64(count.Value) <= f.Limit {
 			continue
 		}
-		found := measured{fn.File, fn.StartLine, name(fn)}
+		found := measured{fn.File, count.Line, name(fn)}
 		results = append(results, Result{
-			Rule: f.Measure.Name, Value: float64(value), Limit: f.Limit, File: fn.File, Line: fn.StartLine,
-			Message: fmt.Sprintf(f.Measure.Format+" (limit %g)", found.Function, value, f.Limit),
+			Rule: f.Measure.Name, Value: float64(count.Value), Limit: f.Limit, File: fn.File, Line: count.Line,
+			Message: fmt.Sprintf(f.Measure.Format+" (limit %g)", found.Function, count.Value, f.Limit),
 			Details: found,
 		})
 	}
