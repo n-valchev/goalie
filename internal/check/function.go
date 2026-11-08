@@ -141,6 +141,10 @@ var (
 		Name: "complex-condition", DefaultLimit: 3, Of: rules.ComplexCondition,
 		Format: "%s has a condition with %d operators",
 	}
+	CognitiveComplexity = Measure{
+		Name: "cognitive-complexity", DefaultLimit: 15, Of: rules.CognitiveComplexity,
+		Format: "%s has cognitive complexity %d",
+	}
 )
 
 type Function struct {

@@ -40,6 +40,16 @@ Rules:
         than the limit. A condition is the expression of an if, a for, or a
         case. A return or an assignment doesn't count. Each function reports
         once, at the line of its worst condition.
+  cognitive-complexity
+        Reports functions that are hard to follow. if, for, range, switch,
+        and select each add 1, plus 1 for each block that they are inside.
+        else adds 1. Code in a closure counts as 1 block deeper. && and ||
+        add nothing. A guard adds 0: an if with no else, no inner block, a
+        body that ends in return, continue, break, or panic, and one of
+        these conditions:
+          err != nil, or name != nil for a name that ends in Err
+          !ok
+        The condition may follow an init, as in if err := f(); err != nil.
 
 With no rule names, goalie runs every rule that isn't off. A rule that you name
 runs even if it is off, and then it reports as warn.
@@ -92,8 +102,8 @@ Settings file:
   literals are - is never dropped. The crap rule also takes limit (default 30),
   sharedLimit, coverCommand, and coverProfiles. The other rules also take
   limit: 80 for long-function, 4 for many-arguments, 5 for
-  many-dependencies, and 3 for complex-condition. A limit of 0 doesn't turn
-  a rule off.
+  many-dependencies, 3 for complex-condition, and 15 for
+  cognitive-complexity. A limit of 0 doesn't turn a rule off.
 
 Files:
   goalie checks the Go files below the current directory, or in paths. It

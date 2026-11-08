@@ -7,7 +7,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`goalie check`](#check-your-code) | Checks Go code against a set of rules, and fails a build when a rule fails |
 | [`godeps`](#map-your-packages) | Draws the shape of a Go module as a map in one HTML file |
 
-`goalie check` has six rules:
+`goalie check` has seven rules:
 
 | Rule | What it finds |
 | --- | --- |
@@ -17,6 +17,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`many-arguments`](#find-functions-with-many-parameters) | Functions and methods with more parameters than the limit |
 | [`many-dependencies`](#find-functions-with-many-parameters) | Constructors with more parameters than the limit |
 | [`complex-condition`](#find-complex-conditions-with-complex-condition) | Functions with a condition that has more `&&` and `\|\|` operators than the limit |
+| [`cognitive-complexity`](#find-functions-that-are-hard-to-follow-with-cognitive-complexity) | Functions with more nesting and branches than the limit |
 
 goalie uses only the Go standard library.
 
@@ -122,7 +123,7 @@ billing/total.go:15: warn crap: Decide needs at least 13% coverage (complexity 6
 | `dup` | `score`, `literals` (a number, or `null` for `-`), `anchors`, `left`, and `right`. With `shared` patterns, also `case`. `left` and `right` each have `file`, `function`, `startLine`, `endLine`, `nodes`, and `new` |
 | `crap`, full check | `file`, `line`, `function`, `score`, `complexity`, and `coverage` (a fraction from `0` to `1`) |
 | `crap`, partial check | `file`, `line`, `function`, `complexity`, `canPass`, and `neededCoverage` (a fraction, left out when `canPass` is `false`) |
-| `long-function`, `many-arguments`, `many-dependencies`, and `complex-condition` | `file`, `line`, and `function`. For `complex-condition`, `line` is the line of the worst condition |
+| `long-function`, `many-arguments`, `many-dependencies`, `complex-condition`, and `cognitive-complexity` | `file`, `line`, and `function`. For `complex-condition`, `line` is the line of the worst condition |
 
 ### Use the exit code
 
@@ -192,6 +193,7 @@ Each rule has its own object in `rules`:
 | `long-function` | `limit`. See [Find long functions with long-function](#find-long-functions-with-long-function) |
 | `many-arguments` and `many-dependencies` | `limit`. See [Find functions with many parameters](#find-functions-with-many-parameters) |
 | `complex-condition` | `limit`. See [Find complex conditions with complex-condition](#find-complex-conditions-with-complex-condition) |
+| `cognitive-complexity` | `limit`. See [Find functions that are hard to follow with cognitive-complexity](#find-functions-that-are-hard-to-follow-with-cognitive-complexity) |
 
 - Every setting is optional. A missing setting uses its default, and a missing file is not an error.
 - goalie reads `.goalierc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run goalie from the repo root in CI.
@@ -511,6 +513,54 @@ A function reports once, with the operators of its worst condition and the line 
 - The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
 - It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.
 
+## Find functions that are hard to follow with `cognitive-complexity`
+
+`cognitive-complexity` reports a function with a cognitive complexity over its limit. Cognitive complexity is a score for how hard code is to follow. It comes from SonarSource. The tool `gocognit` measures it for Go. The result points at the first line of the function.
+
+```text
+billing/charge.go:12: warn cognitive-complexity: Charge has cognitive complexity 18 (limit 15)
+```
+
+Each branch adds to the score, and a branch inside another block adds more:
+
+| Code | Adds |
+| --- | --- |
+| `if`, `for`, `range`, `switch`, or `select` | 1, plus 1 for each block that it is inside |
+| Each `case` of a `switch` or `select` | 0: the `switch` or `select` counts once |
+| `else` or `else if` | 1, however deep it is |
+| A closure (`func() { ... }` in a function) | 0, but the code inside it counts as 1 block deeper |
+| `&&` and `\|\|` | 0: `complex-condition` reports them |
+| A call of the function to itself | 0 |
+
+So nesting adds more than branches side by side. Three `if` statements side by side score 3. Three nested `if` statements score 1 + 2 + 3 = 6, and a fourth nested `if` makes it 10.
+
+### A Go guard adds 0
+
+A guard is an `if` that checks for an error or a failed lookup and exits at once. A guard adds 0, so that ten `if err != nil { return err }` checks in a row score 0. An `if` is a guard when all of these are true:
+
+- It has no `else`.
+- Its condition is `err != nil` or `!ok`, including the form `if err := f(); err != nil`. A name that ends in `Err`, such as `readErr != nil`, also counts.
+- Its body holds no other block, and its last statement is `return`, `continue`, `break`, or `panic(...)`.
+
+| Code | Adds |
+| --- | --- |
+| `if err != nil { return fmt.Errorf("read: %w", err) }` | 0 |
+| `if !ok { continue }` | 0 |
+| `if err := func() error { ... }(); err != nil { return err }` | 0 for the guard, but each branch in the closure adds |
+| `if err != nil { log.Print(err) }` | As any `if`: the body doesn't exit |
+| `if err != nil { if retry { ... }; return err }` | As any `if`, and the inner `if` adds too |
+| `if err != nil { return err } else { ... }` | As any `if`, and 1 for the `else` |
+| `if failure != nil { return failure }` | As any `if`: goalie goes by the name, because it reads no types |
+
+To fix a result, return early in place of a nested `if`, or move a nested block into its own function.
+
+| Setting in `rules.cognitive-complexity` | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `limit` | Number | `15` | The highest score that passes. `--limit` replaces it |
+
+- The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
+- It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.
+
 ## Run goalie in CI
 
 This GitHub Actions workflow runs every rule, and fails a pull request when a rule in `fail` mode reports a result:
@@ -560,6 +610,7 @@ After you change Go code, run `goalie check --partial --base origin/main` from t
 - `long-function`: split the function into smaller functions with clear names.
 - `many-arguments` or `many-dependencies`: group parameters that belong together into a type, or split the function.
 - `complex-condition`: give parts of the condition names, such as `ready := a && b`, or move the condition into a function.
+- `cognitive-complexity`: return early in place of a nested `if`, or move a nested block into its own function.
 
 Don't change `.goalierc` or `.goalieignore`, and don't add `//goalie:ignore`, unless a person asks you to.
 ```

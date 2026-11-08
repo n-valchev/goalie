@@ -75,6 +75,107 @@ func operators(condition ast.Expr) int {
 	return count
 }
 
+// CognitiveComplexity follows the SonarSource measure, except that operators add nothing, because
+// complex-condition reports them, and that a Go guard costs 0, so that idiomatic error checks don't
+// add up to a result.
+func CognitiveComplexity(fn extract.Function) Measurement {
+	return Measurement{cognitive(fn.Decl.Body, 0), fn.StartLine}
+}
+
+// cognitive skips root itself, so that a caller can score what is inside a statement that it has
+// already counted.
+func cognitive(root ast.Node, nesting int) int {
+	if root == nil {
+		return 0
+	}
+	total := 0
+	ast.Inspect(root, func(node ast.Node) bool {
+		switch node := node.(type) {
+		case *ast.IfStmt:
+			if node != root {
+				if isGuard(node) {
+					// The guard costs 0, but a closure in its init can still hold branches.
+					total += cognitive(node.Init, nesting+1)
+				} else {
+					total += ifChain(node, nesting, 1+nesting)
+				}
+				return false
+			}
+		case *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt:
+			if node != root {
+				total += 1 + nesting + cognitive(node, nesting+1)
+				return false
+			}
+		case *ast.FuncLit:
+			total += cognitive(node.Body, nesting+1)
+			return false
+		}
+		return true
+	})
+	return total
+}
+
+// ifChain charges an else if only 1, because a reader takes the chain as one choice.
+func ifChain(node *ast.IfStmt, nesting, cost int) int {
+	total := cost + cognitive(node.Init, nesting+1) + cognitive(node.Cond, nesting+1) +
+		cognitive(node.Body, nesting+1)
+	switch next := node.Else.(type) {
+	case *ast.IfStmt:
+		total += ifChain(next, nesting, 1)
+	case *ast.BlockStmt:
+		total += 1 + cognitive(next, nesting+1)
+	}
+	return total
+}
+
+// isGuard goes by names alone, because the parser has no types: err != nil may test any type.
+func isGuard(node *ast.IfStmt) bool {
+	body := node.Body.List
+	if node.Else != nil || !isGuardCondition(node.Cond) || len(body) == 0 {
+		return false
+	}
+	blocks := 0
+	ast.Inspect(node.Body, func(node ast.Node) bool {
+		if _, ok := node.(*ast.BlockStmt); ok {
+			blocks++
+		}
+		return true
+	})
+	// The one block is the body itself.
+	return blocks == 1 && exits(body[len(body)-1])
+}
+
+func isGuardCondition(condition ast.Expr) bool {
+	switch condition := condition.(type) {
+	case *ast.BinaryExpr:
+		name, isName := condition.X.(*ast.Ident)
+		other, isNil := condition.Y.(*ast.Ident)
+		return condition.Op == token.NEQ && isName && (name.Name == "err" || strings.HasSuffix(name.Name, "Err")) &&
+			isNil && other.Name == "nil"
+	case *ast.UnaryExpr:
+		name, isName := condition.X.(*ast.Ident)
+		return condition.Op == token.NOT && isName && name.Name == "ok"
+	}
+	return false
+}
+
+func exits(statement ast.Stmt) bool {
+	switch statement := statement.(type) {
+	case *ast.ReturnStmt:
+		return true
+	case *ast.BranchStmt:
+		return statement.Tok == token.BREAK || statement.Tok == token.CONTINUE
+	case *ast.ExprStmt:
+		call, isCall := statement.X.(*ast.CallExpr)
+		if !isCall {
+			return false
+		}
+		name, isName := call.Fun.(*ast.Ident)
+		return isName && name.Name == "panic"
+	}
+	return false
+}
+
 // IsConstructor needs the capital, so that Newline, which builds nothing, keeps the lower limit of
 // an ordinary function. A method is never a constructor: its receiver already exists.
 func IsConstructor(fn extract.Function) bool {
