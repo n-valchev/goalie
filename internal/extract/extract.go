@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"unicode"
 
 	gofiles "github.com/n-valchev/goalie/internal/files"
 )
@@ -22,9 +23,10 @@ type Function struct {
 	File      string // Slash-separated path, as passed to Parse.
 	Package   string // The folder and package clause. Each alone can repeat: `main`, or `a` and `a_test`.
 	Name      string
-	Receiver  string // The type name alone, or empty for a function.
-	StartLine int    // The line of the func keyword, so the doc comment doesn't count.
-	EndLine   int    // The line of the closing brace.
+	Receiver  string   // The type name alone, or empty for a function.
+	Imports   []string // The names that the imports of the file bind. Blank and dot imports bind none.
+	StartLine int      // The line of the func keyword, so the doc comment doesn't count.
+	EndLine   int      // The line of the closing brace.
 	Decl      *ast.FuncDecl
 	fset      *token.FileSet
 	excused   []string
@@ -106,6 +108,7 @@ func parseFile(dir, file string, directive Directive) ([]Function, error) {
 	if err != nil {
 		return nil, err
 	}
+	imports := importNames(parsed)
 	var functions []Function
 	for _, decl := range parsed.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
@@ -125,6 +128,7 @@ func parseFile(dir, file string, directive Directive) ([]Function, error) {
 			Package:   path.Join(path.Dir(file), parsed.Name.Name),
 			Name:      fn.Name.Name,
 			Receiver:  ReceiverType(fn),
+			Imports:   imports,
 			StartLine: fileLine(fset, fn.Pos()),
 			EndLine:   fileLine(fset, fn.Body.Rbrace),
 			Decl:      fn,
@@ -133,6 +137,42 @@ func parseFile(dir, file string, directive Directive) ([]Function, error) {
 		})
 	}
 	return functions, nil
+}
+
+// importNames guesses the name of an unnamed import from its path, as goimports does, because the
+// parser can't read the package clause of another package: gopkg.in/yaml.v3 binds yaml,
+// github.com/mattn/go-sqlite3 binds sqlite3, and github.com/opentracing/opentracing-go binds
+// opentracing.
+func importNames(file *ast.File) []string {
+	var names []string
+	for _, spec := range file.Imports {
+		if spec.Name != nil {
+			if spec.Name.Name != "_" && spec.Name.Name != "." {
+				names = append(names, spec.Name.Name)
+			}
+			continue
+		}
+		importPath := strings.Trim(spec.Path.Value, `"`)
+		name := path.Base(importPath)
+		if isMajorVersion(name) && path.Dir(importPath) != "." {
+			name = path.Base(path.Dir(importPath))
+		}
+		name = strings.TrimPrefix(name, "go-")
+		if end := strings.IndexFunc(name, notInIdentifier); end >= 0 {
+			name = name[:end]
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+func notInIdentifier(r rune) bool {
+	return r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r)
+}
+
+func isMajorVersion(element string) bool {
+	digits, ok := strings.CutPrefix(element, "v")
+	return ok && digits != "" && strings.Trim(digits, "0123456789") == ""
 }
 
 // fileLine ignores //line directives, because a span must point into the file on disk.

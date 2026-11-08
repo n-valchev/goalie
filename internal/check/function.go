@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/n-valchev/goalie/internal/config"
@@ -124,7 +125,9 @@ type Measure struct {
 	// count serves two rules, as Parameters does for many-arguments and many-dependencies.
 	Applies func(extract.Function) bool
 	Of      func(extract.Function) rules.Measurement
-	Format  string // Takes the function name and the value, as in "%s has %d lines".
+	// Format takes the function name and the value, as in "%s has %d lines". When the measurement
+	// names parameters, it takes the function name and the list of parameters instead.
+	Format string
 }
 
 var (
@@ -144,6 +147,9 @@ var (
 	CognitiveComplexity = Measure{
 		Name: "cognitive-complexity", DefaultLimit: 15, Of: rules.CognitiveComplexity,
 		Format: "%s has cognitive complexity %d",
+	}
+	PrimitiveArguments = Measure{
+		Name: "primitive-arguments", DefaultLimit: 0, Of: rules.PrimitiveArguments, Format: "%s passes %s",
 	}
 )
 
@@ -170,9 +176,15 @@ func (f Function) Validate() error {
 }
 
 type measured struct {
-	File     string `json:"file"`
-	Line     int    `json:"line"`
-	Function string `json:"function"`
+	File       string      `json:"file"`
+	Line       int         `json:"line"`
+	Function   string      `json:"function"`
+	Parameters []parameter `json:"parameters,omitempty"`
+}
+
+type parameter struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 // Results writes no notice when there is nothing to check, because with several function rules the
@@ -191,11 +203,20 @@ func (f Function) Results(dir string, stderr io.Writer) ([]Result, error) {
 		if float64(count.Value) <= f.Limit {
 			continue
 		}
-		found := measured{fn.File, count.Line, name(fn)}
+		found := measured{File: fn.File, Line: count.Line, Function: name(fn)}
+		message := fmt.Sprintf(f.Measure.Format+" (limit %g)", found.Function, count.Value, f.Limit)
+		if len(count.Parameters) > 0 {
+			var passed []string
+			for _, param := range count.Parameters {
+				found.Parameters = append(found.Parameters, parameter(param))
+				passed = append(passed, param.Name+" down as "+param.Type)
+			}
+			message = fmt.Sprintf(f.Measure.Format+" (%d, limit %g)", found.Function, strings.Join(passed, ", "),
+				count.Value, f.Limit)
+		}
 		results = append(results, Result{
 			Rule: f.Measure.Name, Value: float64(count.Value), Limit: f.Limit, File: fn.File, Line: count.Line,
-			Message: fmt.Sprintf(f.Measure.Format+" (limit %g)", found.Function, count.Value, f.Limit),
-			Details: found,
+			Message: message, Details: found,
 		})
 	}
 	return results, nil

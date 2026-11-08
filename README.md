@@ -7,7 +7,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`goalie check`](#check-your-code) | Checks Go code against a set of rules, and fails a build when a rule fails |
 | [`godeps`](#map-your-packages) | Draws the shape of a Go module as a map in one HTML file |
 
-`goalie check` has seven rules:
+`goalie check` has eight rules:
 
 | Rule | What it finds |
 | --- | --- |
@@ -18,6 +18,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`many-dependencies`](#find-functions-with-many-parameters) | Constructors with more parameters than the limit |
 | [`complex-condition`](#find-complex-conditions-with-complex-condition) | Functions with a condition that has more `&&` and `\|\|` operators than the limit |
 | [`cognitive-complexity`](#find-functions-that-are-hard-to-follow-with-cognitive-complexity) | Functions with more nesting and branches than the limit |
+| [`primitive-arguments`](#find-basic-types-passed-down-with-primitive-arguments) | Functions that take a `string`, an `int`, or another basic type and only pass it down to other code in your repo |
 
 goalie uses only the Go standard library.
 
@@ -123,7 +124,7 @@ billing/total.go:15: warn crap: Decide needs at least 13% coverage (complexity 6
 | `dup` | `score`, `literals` (a number, or `null` for `-`), `anchors`, `left`, and `right`. With `shared` patterns, also `case`. `left` and `right` each have `file`, `function`, `startLine`, `endLine`, `nodes`, and `new` |
 | `crap`, full check | `file`, `line`, `function`, `score`, `complexity`, and `coverage` (a fraction from `0` to `1`) |
 | `crap`, partial check | `file`, `line`, `function`, `complexity`, `canPass`, and `neededCoverage` (a fraction, left out when `canPass` is `false`) |
-| `long-function`, `many-arguments`, `many-dependencies`, `complex-condition`, and `cognitive-complexity` | `file`, `line`, and `function`. For `complex-condition`, `line` is the line of the worst condition |
+| `long-function`, `many-arguments`, `many-dependencies`, `complex-condition`, `cognitive-complexity`, and `primitive-arguments` | `file`, `line`, and `function`. For `complex-condition`, `line` is the line of the worst condition. For `primitive-arguments`, `parameters` lists each reported parameter with its `name` and `type` |
 
 ### Use the exit code
 
@@ -194,6 +195,7 @@ Each rule has its own object in `rules`:
 | `many-arguments` and `many-dependencies` | `limit`. See [Find functions with many parameters](#find-functions-with-many-parameters) |
 | `complex-condition` | `limit`. See [Find complex conditions with complex-condition](#find-complex-conditions-with-complex-condition) |
 | `cognitive-complexity` | `limit`. See [Find functions that are hard to follow with cognitive-complexity](#find-functions-that-are-hard-to-follow-with-cognitive-complexity) |
+| `primitive-arguments` | `limit`. See [Find basic types passed down with primitive-arguments](#find-basic-types-passed-down-with-primitive-arguments) |
 
 - Every setting is optional. A missing setting uses its default, and a missing file is not an error.
 - goalie reads `.goalierc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run goalie from the repo root in CI.
@@ -561,6 +563,59 @@ To fix a result, return early in place of a nested `if`, or move a nested block 
 - The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
 - It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.
 
+## Find basic types passed down with `primitive-arguments`
+
+`primitive-arguments` reports a function with a parameter of a basic type that the function only passes down to other code in your repo. A chain is a row of functions where each one passes the same value down to the next. When the type of that value changes later, every function in the chain must change too. With a defined type, such as `type UserID string`, a function that only passes the value down doesn't change. The result points at the first line of the function and names each parameter and its type:
+
+```text
+users/service.go:14: warn primitive-arguments: Service.Get passes id down as string (1, limit 0)
+```
+
+```go
+// Reported: id is only passed down.
+func (s *Service) Get(ctx context.Context, id string) (User, error) {
+    return s.repo.Find(ctx, id)
+}
+
+// Not reported: name is used here.
+func greet(name string) string {
+    return "Hello, " + strings.TrimSpace(name)
+}
+```
+
+A basic type is a built-in type such as `string`, `int`, `float64`, `bool`, or `byte`. `error`, `any`, slices, maps, pointers, and function types are not basic types.
+
+A parameter reports only when the function passes it down every time that it appears. Passing it down means giving it, as it is, as an argument to a call into your repo's code. Every other appearance is a use, and a parameter with a use doesn't report:
+
+| Code | Reports |
+| --- | --- |
+| `s.repo.Find(ctx, id)` or `find(id)` | Yes: the call goes to your repo's code |
+| `UserID(id)` | Yes: goalie reads no types, so it can't tell a conversion to your own type from a call to a function in your repo |
+| `os.ReadFile(path)` | No: this is a use, because there the value leaves your repo's code and the basic type is required |
+| `len(id)` | No: a call to a built-in function is a use |
+| `int64(n)`, `[]byte(s)`, or `any(s)` | No: a conversion to a type that Go declares is a use |
+| `id == ""`, `"user " + id`, or `&id` | No: the function uses the value |
+| Never used | No: `go vet` and other linters report unused parameters |
+
+Each function reports on its own, so a chain of three functions that pass `id string` down gives three results. The value is the number of reported parameters, and the default limit of `0` means that one parameter reports.
+
+goalie reads no types, so the rule has these gaps:
+
+- A method whose signature an interface forces reports too. Excuse it with `//goalie:ignore primitive-arguments <reason>`.
+- The rule can't see an alias defined elsewhere, such as `type UserID = string`, so a parameter of type `UserID` doesn't report. An alias gives none of the benefit of a defined type.
+- goalie knows an imported package by its name. For an import with no name, it takes the name from the path: `gopkg.in/yaml.v3` is `yaml`, `math/rand/v2` is `rand`, and `github.com/mattn/go-sqlite3` is `sqlite3`. When the package has another name, give the import that name, or goalie counts the call as a call into your repo.
+- A call into a package that you import with `.`, such as `TrimSpace(name)` after `import . "strings"`, counts as a call into your repo.
+- goalie goes by the parameter's name. A variable of the same name in a closure counts as a use.
+
+To fix a result, define a type for the value, such as `type UserID string`, and use it in each function of the chain.
+
+| Setting in `rules.primitive-arguments` | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `limit` | Number | `0` | The highest number of reported parameters that passes. `--limit` replaces it |
+
+- The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
+- It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.
+
 ## Run goalie in CI
 
 This GitHub Actions workflow runs every rule, and fails a pull request when a rule in `fail` mode reports a result:
@@ -611,6 +666,7 @@ After you change Go code, run `goalie check --partial --base origin/main` from t
 - `many-arguments` or `many-dependencies`: group parameters that belong together into a type, or split the function.
 - `complex-condition`: give parts of the condition names, such as `ready := a && b`, or move the condition into a function.
 - `cognitive-complexity`: return early in place of a nested `if`, or move a nested block into its own function.
+- `primitive-arguments`: define a type for the value, such as `type UserID string`, and use it in each function that passes the value down.
 
 Don't change `.goalierc` or `.goalieignore`, and don't add `//goalie:ignore`, unless a person asks you to.
 ```

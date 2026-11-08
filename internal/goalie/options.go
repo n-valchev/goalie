@@ -50,6 +50,13 @@ Rules:
           err != nil, or name != nil for a name that ends in Err
           !ok
         The condition may follow an init, as in if err := f(); err != nil.
+  primitive-arguments
+        Reports functions with a parameter of a basic type, such as string or
+        int, that the function only passes down to calls into your repo. A
+        call into an imported package or a built-in function, such as
+        os.ReadFile(path) or len(id), and a conversion such as []byte(s), is
+        a use, so the parameter doesn't report. An unused parameter doesn't
+        report.
 
 With no rule names, goalie runs every rule that isn't off. A rule that you name
 runs even if it is off, and then it reports as warn.
@@ -102,8 +109,9 @@ Settings file:
   literals are - is never dropped. The crap rule also takes limit (default 30),
   sharedLimit, coverCommand, and coverProfiles. The other rules also take
   limit: 80 for long-function, 4 for many-arguments, 5 for
-  many-dependencies, 3 for complex-condition, and 15 for
-  cognitive-complexity. A limit of 0 doesn't turn a rule off.
+  many-dependencies, 3 for complex-condition, 15 for
+  cognitive-complexity, and 0 for primitive-arguments. A limit of 0 doesn't
+  turn a rule off.
 
 Files:
   goalie checks the Go files below the current directory, or in paths. It

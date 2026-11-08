@@ -5,6 +5,7 @@ package rules
 import (
 	"go/ast"
 	"go/token"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -13,13 +14,19 @@ import (
 )
 
 type Measurement struct {
-	Value int
-	Line  int
+	Value      int
+	Line       int
+	Parameters []Parameter // The parameters that the value counts, for a rule whose result must name them.
+}
+
+type Parameter struct {
+	Name string
+	Type string
 }
 
 // Lines counts blank lines and comments too, because an agent reads them all.
 func Lines(fn extract.Function) Measurement {
-	return Measurement{fn.Lines(), fn.StartLine}
+	return Measurement{Value: fn.Lines(), Line: fn.StartLine}
 }
 
 // Parameters counts an unnamed parameter as 1, so that func(int, string) is 2, as it is to a caller.
@@ -28,14 +35,14 @@ func Parameters(fn extract.Function) Measurement {
 	for _, field := range fn.Decl.Type.Params.List {
 		count += max(len(field.Names), 1)
 	}
-	return Measurement{count, fn.StartLine}
+	return Measurement{Value: count, Line: fn.StartLine}
 }
 
 // ComplexCondition gives only the worst condition, because one result for each condition would fill
 // an agent's context with the same advice. A return or an assignment doesn't count, because naming
 // a boolean expression is often the fix.
 func ComplexCondition(fn extract.Function) Measurement {
-	worst := Measurement{0, fn.StartLine}
+	worst := Measurement{Line: fn.StartLine}
 	measure := func(condition ...ast.Expr) {
 		if len(condition) == 0 || condition[0] == nil {
 			return
@@ -45,7 +52,7 @@ func ComplexCondition(fn extract.Function) Measurement {
 			count += operators(expression)
 		}
 		if count > worst.Value {
-			worst = Measurement{count, fn.Line(condition[0].Pos())}
+			worst = Measurement{Value: count, Line: fn.Line(condition[0].Pos())}
 		}
 	}
 	ast.Inspect(fn.Decl.Body, func(node ast.Node) bool {
@@ -79,7 +86,7 @@ func operators(condition ast.Expr) int {
 // complex-condition reports them, and that a Go guard costs 0, so that idiomatic error checks don't
 // add up to a result.
 func CognitiveComplexity(fn extract.Function) Measurement {
-	return Measurement{cognitive(fn.Decl.Body, 0), fn.StartLine}
+	return Measurement{Value: cognitive(fn.Decl.Body, 0), Line: fn.StartLine}
 }
 
 // cognitive skips root itself, so that a caller can score what is inside a statement that it has
@@ -174,6 +181,88 @@ func exits(statement ast.Stmt) bool {
 		return isName && name.Name == "panic"
 	}
 	return false
+}
+
+// PrimitiveArguments leaves out a parameter that is never used, because go vet and other linters
+// report it. A call into an imported package or a built-in function is a real use, because there the
+// value leaves the repo's code and the basic type is required.
+func PrimitiveArguments(fn extract.Function) Measurement {
+	var passed []Parameter
+	for _, field := range fn.Decl.Type.Params.List {
+		typ, ok := field.Type.(*ast.Ident)
+		if !ok || !basicTypes[typ.Name] {
+			continue
+		}
+		for _, param := range field.Names {
+			if param.Name != "_" && onlyPassedDown(fn, param.Name) {
+				passed = append(passed, Parameter{param.Name, typ.Name})
+			}
+		}
+	}
+	return Measurement{Value: len(passed), Line: fn.StartLine, Parameters: passed}
+}
+
+var basicTypes = setOf("bool", "string", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16",
+	"uint32", "uint64", "uintptr", "byte", "rune", "float32", "float64", "complex64", "complex128")
+
+// builtins holds the predeclared functions, and any and error, because a conversion to them is a
+// real use too.
+var builtins = setOf("append", "cap", "clear", "close", "complex", "copy", "delete", "imag", "len", "make",
+	"max", "min", "new", "panic", "print", "println", "real", "recover", "any", "error")
+
+func setOf(names ...string) map[string]bool {
+	set := map[string]bool{}
+	for _, name := range names {
+		set[name] = true
+	}
+	return set
+}
+
+// onlyPassedDown goes by name, because the parser resolves no objects, so a closure that declares
+// the same name counts as a use of the parameter.
+func onlyPassedDown(fn extract.Function, name string) bool {
+	used, passed := 0, 0
+	fields := map[*ast.Ident]bool{}
+	ast.Inspect(fn.Decl.Body, func(node ast.Node) bool {
+		switch node := node.(type) {
+		case *ast.SelectorExpr:
+			// Sel is a field or method name, never the parameter.
+			fields[node.Sel] = true
+		case *ast.CallExpr:
+			if callsRepoCode(fn, node.Fun) {
+				for _, arg := range node.Args {
+					if ident, ok := arg.(*ast.Ident); ok && ident.Name == name {
+						passed++
+					}
+				}
+			}
+		case *ast.Ident:
+			if node.Name == name && !fields[node] {
+				used++
+			}
+		}
+		return true
+	})
+	return used > 0 && used == passed
+}
+
+// callsRepoCode treats a conversion to a type that no package declares, such as []byte(s), as a
+// built-in call, and any other call that it can't place, such as UserID(id), as a call into the repo.
+func callsRepoCode(fn extract.Function, callee ast.Expr) bool {
+	switch callee := callee.(type) {
+	case *ast.Ident:
+		return !builtins[callee.Name] && !basicTypes[callee.Name]
+	case *ast.SelectorExpr:
+		pkg, ok := callee.X.(*ast.Ident)
+		return !ok || !slices.Contains(fn.Imports, pkg.Name)
+	case *ast.IndexExpr:
+		return callsRepoCode(fn, callee.X)
+	case *ast.IndexListExpr:
+		return callsRepoCode(fn, callee.X)
+	case *ast.ArrayType, *ast.MapType, *ast.ChanType, *ast.FuncType, *ast.InterfaceType:
+		return false
+	}
+	return true
 }
 
 // IsConstructor needs the capital, so that Newline, which builds nothing, keeps the lower limit of
