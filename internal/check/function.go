@@ -149,7 +149,7 @@ var (
 		Format: "%s has cognitive complexity %d",
 	}
 	PrimitiveArguments = Measure{
-		Name: "primitive-arguments", DefaultLimit: 0, Of: rules.PrimitiveArguments, Format: "%s passes %s",
+		Name: "primitive-arguments", DefaultLimit: 1, Of: rules.PrimitiveArguments, Format: "%s passes %s",
 	}
 )
 

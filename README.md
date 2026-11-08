@@ -568,13 +568,13 @@ To fix a result, return early in place of a nested `if`, or move a nested block 
 `primitive-arguments` reports a function with a parameter of a basic type that the function only passes down to other code in your repo. A chain is a row of functions where each one passes the same value down to the next. When the type of that value changes later, every function in the chain must change too. With a defined type, such as `type UserID string`, a function that only passes the value down doesn't change. The result points at the first line of the function and names each parameter and its type:
 
 ```text
-users/service.go:14: warn primitive-arguments: Service.Get passes id down as string (1, limit 0)
+users/service.go:14: warn primitive-arguments: Service.Get passes tenantID down as string, id down as string (2, limit 1)
 ```
 
 ```go
-// Reported: id is only passed down.
-func (s *Service) Get(ctx context.Context, id string) (User, error) {
-    return s.repo.Find(ctx, id)
+// Reported: tenantID and id are only passed down.
+func (s *Service) Get(ctx context.Context, tenantID, id string) (User, error) {
+    return s.repo.Find(ctx, tenantID, id)
 }
 
 // Not reported: name is used here.
@@ -597,7 +597,7 @@ A parameter reports only when the function passes it down every time that it app
 | `id == ""`, `"user " + id`, or `&id` | No: the function uses the value |
 | Never used | No: `go vet` and other linters report unused parameters |
 
-Each function reports on its own, so a chain of three functions that pass `id string` down gives three results. The value is the number of reported parameters, and the default limit of `0` means that one parameter reports.
+Each function reports on its own, so a chain of three functions that pass `tenantID` and `id` down gives three results. The value is the number of reported parameters. With the default limit of `1`, a function with one such parameter doesn't report, so a function that passes down only `id` gives no result. On a monorepo of 11,678 functions, a limit of `0` reported 1 function in 9. An agent can't fix such a result in one edit, because the fix is a new type across a whole chain. To report one parameter too, set the limit to `0`.
 
 goalie reads no types, so the rule has these gaps:
 
@@ -611,7 +611,7 @@ To fix a result, define a type for the value, such as `type UserID string`, and 
 
 | Setting in `rules.primitive-arguments` | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `limit` | Number | `0` | The highest number of reported parameters that passes. `--limit` replaces it |
+| `limit` | Number | `1` | The highest number of reported parameters that passes. `--limit` replaces it |
 
 - The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
 - It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.

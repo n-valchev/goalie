@@ -110,7 +110,7 @@ Settings file:
   sharedLimit, coverCommand, and coverProfiles. The other rules also take
   limit: 80 for long-function, 4 for many-arguments, 5 for
   many-dependencies, 3 for complex-condition, 15 for
-  cognitive-complexity, and 0 for primitive-arguments. A limit of 0 doesn't
+  cognitive-complexity, and 1 for primitive-arguments. A limit of 0 doesn't
   turn a rule off.
 
 Files:

@@ -179,6 +179,6 @@ godeps now exits with `2` on a crap report with no `score`. `goalie check crap -
   | `many-dependencies` | A constructor with more parameters than the limit. A constructor is a function named `New` or `New` and a capital letter, such as `NewServer` | 5 |
   | `complex-condition` | A function with an `if`, `for`, or `case` condition that has more `&&` and `\|\|` operators than the limit. A function reports once, at its worst condition | 3 |
   | `cognitive-complexity` | A function that is hard to follow. Each branch adds 1, plus 1 for each block that it is inside. A Go guard, such as `if err != nil { return err }`, adds 0 | 15 |
-  | `primitive-arguments` | A function with a parameter of a basic type, such as `string`, that it only passes down to other code in your repo. A later change of the type then changes every function that passes the value down | 0 |
+  | `primitive-arguments` | A function with a parameter of a basic type, such as `string`, that it only passes down to other code in your repo. A later change of the type then changes every function that passes the value down | 1 |
 
   Set each limit with `limit` in the rule's object in `rules`. Their default mode is `warn`, so they never change the exit code until you set `"mode": "fail"`. Their default scope is `changes`, so they need a revision. If your `.goalierc` sets no `base` and gives `dup` and `crap` scope `all` or mode `off`, `goalie check` with no `--base` now exits with `2`. To fix this, give the six new rules the same scope or mode.

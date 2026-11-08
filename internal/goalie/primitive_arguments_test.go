@@ -7,6 +7,9 @@ import (
 
 var onlyPrimitiveArguments = `{"rules": {` + rulesOff("primitive-arguments") + `}}`
 
+// onlyPrimitiveArgumentsAtZero makes one passed-down parameter report, so that a test of one parameter can fail.
+var onlyPrimitiveArgumentsAtZero = `{"rules": {` + rulesOff("primitive-arguments") + `, "primitive-arguments": {"limit": 0}}}`
+
 // repoCode gives the functions under test a method in the repo's own code to pass values down to.
 const repoCode = `
 type User struct{}
@@ -35,7 +38,7 @@ const passesID = "func (s *Service) Get(ctx context.Context, id string) (User, e
 
 func TestPrimitiveArgumentsReportsAParameterOnlyPassedDown(t *testing.T) {
 	want := "a.go:5: warn primitive-arguments: Service.Get passes id down as string (1, limit 0)\n"
-	if stdout := checkPrimitives(t, onlyPrimitiveArguments, passesID); stdout != want {
+	if stdout := checkPrimitives(t, onlyPrimitiveArgumentsAtZero, passesID); stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 }
@@ -44,7 +47,7 @@ func TestPrimitiveArgumentsNamesEachParameterOnlyPassedDown(t *testing.T) {
 	// The parameter repo has the name of a field, and s.repo is no use of it.
 	fn := "func (s *Service) Get(ctx context.Context, id string, page int, all bool, repo int) (User, error) {\n" +
 		"\t_ = all\n\ts.repo.Find(ctx, fmt.Sprint(page))\n\tgo s.repo.Find(ctx, repo)\n\treturn s.repo.Find(ctx, id)\n}\n"
-	want := "a.go:5: warn primitive-arguments: Service.Get passes id down as string, repo down as int (2, limit 0)\n"
+	want := "a.go:5: warn primitive-arguments: Service.Get passes id down as string, repo down as int (2, limit 1)\n"
 	if stdout := checkPrimitives(t, onlyPrimitiveArguments, fn); stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
@@ -80,22 +83,21 @@ func TestPrimitiveArgumentsSkipsAParameterThatTheFunctionUses(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if stdout := checkPrimitives(t, onlyPrimitiveArguments, tc.fn); stdout != "" {
+			if stdout := checkPrimitives(t, onlyPrimitiveArgumentsAtZero, tc.fn); stdout != "" {
 				t.Errorf("stdout = %q, want nothing", stdout)
 			}
 		})
 	}
 }
 
-func TestPrimitiveArgumentsWithALimitOfOneAllowsOneParameter(t *testing.T) {
-	settings := `{"rules": {` + rulesOff("primitive-arguments") + `, "primitive-arguments": {"limit": 1}}}`
-	if stdout := checkPrimitives(t, settings, passesID); stdout != "" {
+func TestPrimitiveArgumentsByDefaultAllowsOneParameter(t *testing.T) {
+	if stdout := checkPrimitives(t, onlyPrimitiveArguments, passesID); stdout != "" {
 		t.Errorf("stdout = %q, want nothing", stdout)
 	}
 }
 
 func TestPrimitiveArgumentsListsTheParametersInJSON(t *testing.T) {
-	dir := repoWithNewCode(t, onlyPrimitiveArguments, "import \"context\"\n\n"+passesID+repoCode)
+	dir := repoWithNewCode(t, onlyPrimitiveArgumentsAtZero, "import \"context\"\n\n"+passesID+repoCode)
 	code, stdout, stderr := runGoalie(t, dir, "check", "--base", "HEAD", "--format", "json")
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)
