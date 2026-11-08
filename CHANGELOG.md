@@ -11,7 +11,7 @@ To upgrade:
 3. Move the `godry` and `gocrap` sections of `.goalierc` into `rules`. See [Settings](#settings).
 4. Change `//godry:ignore` and `//gocrap:ignore` to `//goalie:ignore`. See [Directives](#directives).
 5. If a `coverCommand` uses `GOCRAP_COVER_DIR`, change it to `GOALIE_COVER_DIR`.
-6. Run `goalie check --base origin/main` and compare the results with your last CI run. They match, apart from two differences. Functions that a `//godry:ignore` or `//gocrap:ignore` line excused, and that you didn't change in step 4, now report. The new `long-function` rule adds `warn` results, which never change the exit code.
+6. Run `goalie check --base origin/main` and compare the results with your last CI run. They match, apart from two differences. Functions that a `//godry:ignore` or `//gocrap:ignore` line excused, and that you didn't change in step 4, now report. The new rules `long-function`, `many-arguments`, and `many-dependencies` add `warn` results, which never change the exit code.
 
 ### Install
 
@@ -170,4 +170,12 @@ godeps now exits with `2` on a crap report with no `score`. `goalie check crap -
 - `goalie check --all` checks the whole repository and needs no revision.
 - `mode` and `scope` for each rule.
 - A rule that you name runs even if it is `off`, and reports as `warn`.
-- The rule `long-function` reports a function with more than 80 lines, from the `func` keyword to the closing brace. Set the limit with `limit` in `rules.long-function`. Its default mode is `warn`, so it never changes the exit code until you set `"mode": "fail"`. Its default scope is `changes`, so it needs a revision. If your `.goalierc` sets no `base` and gives every other rule scope `all` or mode `off`, `goalie check` with no `--base` now exits with `2`. To fix this, give `long-function` the same scope or mode.
+- Three new rules report functions that are hard to change:
+
+  | Rule | Reports | Default limit |
+  | --- | --- | --- |
+  | `long-function` | A function with more lines than the limit, from the `func` keyword to the closing brace | 80 |
+  | `many-arguments` | A function or method with more parameters than the limit. A constructor uses `many-dependencies` instead | 4 |
+  | `many-dependencies` | A constructor with more parameters than the limit. A constructor is a function named `New` or `New` and a capital letter, such as `NewServer` | 5 |
+
+  Set each limit with `limit` in the rule's object in `rules`. Their default mode is `warn`, so they never change the exit code until you set `"mode": "fail"`. Their default scope is `changes`, so they need a revision. If your `.goalierc` sets no `base` and gives `dup` and `crap` scope `all` or mode `off`, `goalie check` with no `--base` now exits with `2`. To fix this, give the three new rules the same scope or mode.

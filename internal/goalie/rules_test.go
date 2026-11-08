@@ -13,7 +13,7 @@ const (
 
 	// otherRulesOff keeps these tests on dup, because these repos have no module for crap to test,
 	// and some of them run with no revision.
-	otherRulesOff = `"crap": {"mode": "off"}, "long-function": {"mode": "off"}`
+	otherRulesOff = `"crap": {"mode": "off"}, "long-function": {"mode": "off"}, "many-arguments": {"mode": "off"}, "many-dependencies": {"mode": "off"}`
 )
 
 func repoWithNewCopy(t *testing.T, settings string) string {

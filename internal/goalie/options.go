@@ -27,6 +27,14 @@ Rules:
         Reports functions with more lines than the limit. The lines run from
         the func keyword to the closing brace, and blank lines and comments
         count.
+  many-arguments
+        Reports functions and methods with more parameters than the limit.
+        Each name counts, so a, b int is 2. A receiver doesn't count.
+  many-dependencies
+        Reports constructors with more parameters than the limit. A
+        constructor is a function, not a method, named New or New and a
+        capital letter, such as NewServer. It uses this rule and not
+        many-arguments.
 
 With no rule names, goalie runs every rule that isn't off. A rule that you name
 runs even if it is off, and then it reports as warn.
@@ -68,7 +76,7 @@ Settings file:
 
   mode   off: no output. warn: reports, and never changes the exit code. fail:
          reports, and exits with 1. The default is fail for dup and crap, and
-         warn for long-function.
+         warn for the other rules.
   scope  changes: only functions that the change touches. all: every function
          in the whole repository. The default is changes.
 
@@ -77,16 +85,17 @@ Settings file:
   and includeTests. A result with fewer anchors than weakAnchors and literals
   below weakLiterals is dropped, so the default drops nothing. A result whose
   literals are - is never dropped. The crap rule also takes limit (default 30),
-  sharedLimit, coverCommand, and coverProfiles. The long-function rule also
-  takes limit (default 80). A limit of 0 doesn't turn a rule off.
+  sharedLimit, coverCommand, and coverProfiles. The other rules also take
+  limit: 80 for long-function, 4 for many-arguments, and 5 for
+  many-dependencies. A limit of 0 doesn't turn a rule off.
 
 Files:
   goalie checks the Go files below the current directory, or in paths. It
   skips:
   - Folders named vendor, testdata, or node_modules, and names that start
     with . or _.
-  - *_test.go files, unless dup sets includeTests. crap and long-function
-    never check them.
+  - *_test.go files, unless dup sets includeTests. The other rules never
+    check them.
   - Files with the header "Code generated ... DO NOT EDIT."
   - Files with an ignore build constraint, and files that can only build with
     a tag in skipTags. Other build constraints have no effect.
@@ -129,8 +138,8 @@ Coverage:
   has 0% coverage. goalie supports one Go module.
 
 Partial check:
-  The dup and long-function rules give the same result as in a full check.
-  The crap rule looks only at the complexity of each function:
+  Every rule except crap gives the same result as in a full check. The crap
+  rule looks only at the complexity of each function:
 
   Safe            It passes even with no coverage. No output.
   Needs coverage  It reports the coverage that the function needs. This never

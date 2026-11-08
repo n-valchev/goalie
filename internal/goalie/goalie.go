@@ -88,6 +88,8 @@ var allRules = []ruleEntry{
 	{check.DupRule, config.ModeFail, func(rules config.Rules) config.Control { return rules.Dup.Control }, newDup},
 	{check.CrapRule, config.ModeFail, func(rules config.Rules) config.Control { return rules.Crap.Control }, newCrap},
 	measureEntry(check.LongFunction, func(rules config.Rules) config.FunctionRule { return rules.LongFunction }),
+	measureEntry(check.ManyArguments, func(rules config.Rules) config.FunctionRule { return rules.ManyArguments }),
+	measureEntry(check.ManyDependencies, func(rules config.Rules) config.FunctionRule { return rules.ManyDependencies }),
 }
 
 type selectedRule struct {
@@ -106,7 +108,10 @@ func ignoreDirective() extract.Directive {
 
 func selectRules(file config.Settings, opts options) ([]selectedRule, error) {
 	var selected []selectedRule
-	parser, changes, warnings := extract.NewParser(ignoreDirective()), gitchange.NewCache(), check.NewWarnings()
+	run := check.Scope{
+		Parser: extract.NewParser(ignoreDirective()), Changes: gitchange.NewCache(),
+		Files: check.NewFiles(), Warnings: check.NewWarnings(),
+	}
 	for _, entry := range allRules {
 		named := slices.Contains(opts.ruleNames, entry.name)
 		if len(opts.ruleNames) > 0 && !named {
@@ -128,7 +133,9 @@ func selectRules(file config.Settings, opts options) ([]selectedRule, error) {
 		if err != nil {
 			return nil, err
 		}
-		built, err := entry.build(file, opts, check.Scope{Parser: parser, Changes: changes, Warnings: warnings, Base: base})
+		scope := run
+		scope.Base = base
+		built, err := entry.build(file, opts, scope)
 		if err != nil {
 			return nil, err
 		}

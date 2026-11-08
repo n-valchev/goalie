@@ -12,14 +12,46 @@ import (
 	"github.com/n-valchev/goalie/internal/rules"
 )
 
-// Scope says which code a rule checks. An empty Base checks the whole repo. Parser, Changes, and
-// Warnings belong to the run, and every rule shares them.
+// Scope says which code a rule checks. An empty Base checks the whole repo. Parser, Changes, Files,
+// and Warnings belong to the run, and every rule shares them.
 type Scope struct {
 	config.Repo
 	Parser   *extract.Parser
 	Changes  *gitchange.Cache
+	Files    *Files
 	Warnings *Warnings
 	Base     string
+}
+
+// Files finds the Go files once for each run. Reading the header of every file is most of the time
+// of a partial check, and with each rule reading them again, all the rules go over the 1-second budget.
+type Files struct {
+	lock  sync.Mutex
+	found map[filesKey]func() ([]string, error)
+}
+
+type filesKey struct {
+	dir          string
+	includeTests bool
+}
+
+func NewFiles() *Files {
+	return &Files{found: map[filesKey]func() ([]string, error){}}
+}
+
+// find leaves repo out of the key, because every rule of a run reads the same file settings. It
+// returns a copy, because a rule may delete from the list that it gets.
+func (f *Files) find(repo config.Repo, dir string, includeTests bool) ([]string, error) {
+	key := filesKey{dir, includeTests}
+	f.lock.Lock()
+	found, ok := f.found[key]
+	if !ok {
+		found = sync.OnceValues(func() ([]string, error) { return repo.Find(dir, includeTests) })
+		f.found[key] = found
+	}
+	f.lock.Unlock()
+	paths, err := found()
+	return slices.Clone(paths), err
 }
 
 // Warnings prints each line once, however many rules find it. Each rule still looks for itself,
@@ -53,7 +85,7 @@ func (s Scope) functions(dir string, stderr io.Writer, rule string) (functions [
 			return nil, "", err
 		}
 	}
-	paths, err := s.Find(dir, false)
+	paths, err := s.Files.find(s.Repo, dir, false)
 	if err != nil {
 		return nil, "", err
 	}
@@ -88,11 +120,24 @@ func (s Scope) functions(dir string, stderr io.Writer, rule string) (functions [
 type Measure struct {
 	Name         string
 	DefaultLimit float64
-	Of           func(extract.Function) int
-	Format       string // Takes the function name and the value, as in "%s has %d lines".
+	// Applies is nil for every function. It keeps the choice of functions out of Of, so that one
+	// count serves two rules, as Parameters does for many-arguments and many-dependencies.
+	Applies func(extract.Function) bool
+	Of      func(extract.Function) int
+	Format  string // Takes the function name and the value, as in "%s has %d lines".
 }
 
-var LongFunction = Measure{Name: "long-function", DefaultLimit: 80, Of: rules.Lines, Format: "%s has %d lines"}
+var (
+	LongFunction  = Measure{Name: "long-function", DefaultLimit: 80, Of: rules.Lines, Format: "%s has %d lines"}
+	ManyArguments = Measure{
+		Name: "many-arguments", DefaultLimit: 4, Applies: rules.IsNotConstructor,
+		Of: rules.Parameters, Format: "%s has %d parameters",
+	}
+	ManyDependencies = Measure{
+		Name: "many-dependencies", DefaultLimit: 5, Applies: rules.IsConstructor,
+		Of: rules.Parameters, Format: "%s has %d parameters",
+	}
+)
 
 type Function struct {
 	Scope
@@ -131,6 +176,9 @@ func (f Function) Results(dir string, stderr io.Writer) ([]Result, error) {
 	}
 	var results []Result
 	for _, fn := range functions {
+		if f.Measure.Applies != nil && !f.Measure.Applies(fn) {
+			continue
+		}
 		value := f.Measure.Of(fn)
 		if float64(value) <= f.Limit {
 			continue

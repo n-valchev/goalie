@@ -99,7 +99,7 @@ func (d Dup) pairs(dir string, stderr io.Writer) (pairs []compare.Pair, notice s
 			return nil, "", err
 		}
 	}
-	paths, err := d.Find(dir, d.IncludeTests)
+	paths, err := d.Files.find(d.Repo, dir, d.IncludeTests)
 	if err != nil {
 		return nil, "", err
 	}

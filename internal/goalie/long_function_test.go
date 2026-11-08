@@ -16,7 +16,7 @@ const onlyLongFunction = `{"rules": {"dup": {"mode": "off"}, "crap": {"mode": "o
 const longWarn = "a.go:3: warn long-function: Parse has 81 lines (limit 80)\n"
 
 func withLongFunction(settings string) string {
-	return `{"rules": {"dup": {"mode": "off"}, "crap": {"mode": "off"}, "long-function": ` + settings + `}}`
+	return `{"rules": {"dup": {"mode": "off"}, "crap": {"mode": "off"}, "many-arguments": {"mode": "off"}, "many-dependencies": {"mode": "off"}, "long-function": ` + settings + `}}`
 }
 
 // longFunc has exactly lines lines, from the func keyword to the closing brace.

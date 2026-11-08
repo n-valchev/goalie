@@ -9,9 +9,11 @@ import (
 
 // Rules has one field for each rule, so that the strict decoder in Read rejects an unknown rule name.
 type Rules struct {
-	Dup          DupRule      `json:"dup"`
-	Crap         CrapRule     `json:"crap"`
-	LongFunction FunctionRule `json:"long-function"`
+	Dup              DupRule      `json:"dup"`
+	Crap             CrapRule     `json:"crap"`
+	LongFunction     FunctionRule `json:"long-function"`
+	ManyArguments    FunctionRule `json:"many-arguments"`
+	ManyDependencies FunctionRule `json:"many-dependencies"`
 }
 
 // Control holds what every rule has. An empty value means that the file leaves it out.
