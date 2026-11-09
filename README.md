@@ -784,6 +784,7 @@ Don't change `.goalierc` or `.goalieignore`, and don't add `//goalie:ignore`, un
 ```
 
 - Use the branch that your pull requests target in place of `origin/main`.
+- An agent with the MCP server gets the same rules and the same fixes through the tool `check`, and the server tells it when to call each tool. So the instruction is for agents without the server. See [Give the agent the MCP server](#give-the-agent-the-mcp-server).
 - The instruction steers the agent, but it doesn't guard the code. Keep the full check in CI.
 
 ### Give the agent the MCP server
@@ -804,6 +805,39 @@ The server has four tools:
 | `check` | `dir`, the absolute path of the folder that the agent works in. Optional: `scope` (`changes` or `all`, default `changes`), `path`, a package folder or a file relative to `dir`, and `base` | Up to 10 `results`, with the fields of `goalie check --format json`, `change`, and `hint`. `more`, the count left out. `base`, the revision used. `unparsed`, the files that don't parse |
 | `rules` | `dir`, as in `check` | `rules`: each rule of `goalie check`, with its `rule`, `limit`, `mode`, and `scope` |
 | `risk` | `dir`, as in `check`, and either `symbol`, such as `internal/billing.Invoice.Total`, or `file`, relative to `dir`, and `line` | `file`, `line`, and `function` of the function found. `complexity`, `coverage`, `crapRange`, `requiredCoverage`, `canPass`, and `limit`. `duplicates`, as the answer of `find_similar`. `rules`, the rules that the function is over. `alsoAt`, other functions with the same `symbol`. `unparsed`, as in `check` |
+
+The server gives the agent instructions when the session starts, because an agent that knows only the tool names seldom calls them. The instructions tell the agent to call:
+
+1. `rules` at the start of a task;
+2. `find_similar` before it writes a new function;
+3. `risk` before it changes a function;
+4. `check` after each edit and before a commit, and fix every `new` and `worse` result.
+
+The instructions name no limits, because each worktree can have its own `.goalierc`. The tool `rules` gives the limits.
+
+The examples below come from a repo at `/home/me/shop` with two packages. `internal/billing` holds the method `Invoice.Total`, which is committed. `internal/order` holds `Order.Sum`, a copy of `Invoice.Total` that the agent has just written and not committed.
+
+`check` with no `scope` checks the uncommitted copy against `HEAD`. This call:
+
+```json
+{"name": "check", "arguments": {"dir": "/home/me/shop"}}
+```
+
+gives this answer:
+
+```json
+{"results": [
+  {"rule": "dup", "mode": "fail", "change": "new", "value": 1, "score": 1, "limit": 0.82, "anchors": 0, "literals": 1,
+   "left": {"file": "internal/order/sum.go", "function": "Sum", "startLine": 13, "endLine": 32, "nodes": 77, "new": true},
+   "right": {"file": "internal/billing/total.go", "function": "Total", "startLine": 13, "endLine": 32, "nodes": 77, "new": false},
+   "hint": "Reuse the other function, or move the shared code to one place. Don't keep the copy."},
+  {"rule": "crap", "mode": "warn", "change": "new", "value": 7, "limit": 30, "file": "internal/order/sum.go", "line": 13,
+   "function": "Order.Sum", "complexity": 7, "canPass": true, "neededCoverage": 0.23,
+   "hint": "Write tests that cover at least that much of the function."}],
+ "more": 0, "base": "HEAD", "unparsed": []}
+```
+
+The `crap` result has `mode` `warn`, although `crap` is in `fail` mode. A partial check never fails a function that only needs coverage, because only a test run can measure the coverage.
 
 With `scope` `changes`, each result holds `change`. It says what the change did to the result, so that the agent can tell its own results from old ones:
 
@@ -830,18 +864,49 @@ Each result holds `hint`, one line on how to fix it, so that the agent needs no 
 | Case | Hint |
 | --- | --- |
 | Can't pass | "Split the function. No test can bring it under the limit." |
-| Needs coverage | "Write tests that cover at least that much of the function." The message of the result gives the coverage |
+| Needs coverage | "Write tests that cover at least that much of the function." The field `neededCoverage` of the result gives the coverage, from 0 to 1 |
 
 `goalie check` gives no `hint`.
 
-`rules` gives the settings that `check` uses, so that the agent can write code within the limits the first time. An entry looks like this: `{"rule": "long-function", "limit": 80, "mode": "warn", "scope": "changes"}`.
+`rules` gives the settings that `check` uses, so that the agent can write code within the limits the first time. This call:
+
+```json
+{"name": "rules", "arguments": {"dir": "/home/me/shop"}}
+```
+
+gives this answer, in a repo with no `.goalierc`:
+
+```json
+{"rules": [
+  {"rule": "dup", "limit": 0.82, "mode": "fail", "scope": "changes"},
+  {"rule": "crap", "limit": 30, "mode": "fail", "scope": "changes"},
+  {"rule": "long-function", "limit": 80, "mode": "warn", "scope": "changes"},
+  {"rule": "many-arguments", "limit": 4, "mode": "warn", "scope": "changes"},
+  {"rule": "many-dependencies", "limit": 5, "mode": "warn", "scope": "changes"},
+  {"rule": "complex-condition", "limit": 3, "mode": "warn", "scope": "changes"},
+  {"rule": "cognitive-complexity", "limit": 15, "mode": "warn", "scope": "changes"},
+  {"rule": "primitive-arguments", "limit": 1, "mode": "warn", "scope": "changes"},
+  {"rule": "long-file", "limit": 1000, "mode": "warn", "scope": "changes"},
+  {"rule": "high-mean-complexity", "limit": 7, "mode": "warn", "scope": "changes"},
+  {"rule": "low-cohesion", "limit": 1, "mode": "warn", "scope": "changes"}]}
+```
 
 - It reads the `.goalierc` nearest to `dir`, as `check` does. The defaults fill the settings that the file leaves out.
 - A rule that is `off` is in the list, with `mode` `off`.
 - For `dup`, `limit` is the `threshold`. The other settings of a rule, such as `minLines` or `sharedLimit`, are not in the answer.
 - A `.goalierc` that `goalie check` rejects gives an error with the same message.
 
-`find_similar` finds the functions that are like the one that the agent is about to write, so that it can reuse one instead of writing a copy. A match looks like this: `{"score": 0.91, "file": "internal/billing/total.go", "line": 12, "function": "Invoice.Total"}`.
+`find_similar` finds the functions that are like the one that the agent is about to write, so that it can reuse one instead of writing a copy. This call asks about the copy:
+
+```json
+{"name": "find_similar", "arguments": {"dir": "/home/me/shop", "file": "internal/order/sum.go", "line": 13}}
+```
+
+and gives this answer:
+
+```json
+{"matches": [{"score": 1, "file": "internal/billing/total.go", "line": 13, "function": "Invoice.Total"}], "more": 0, "unparsed": []}
+```
 
 - A match is a pair that `goalie check dup --all` would report: the same comparison, and the `threshold`, size limits, and weak limits of `rules.dup` in the `.goalierc` nearest to `dir`. It finds a match even when `dup` is `off`.
 - `code` need not be in a file yet. The tool reads it as a function of the package in `dir`. So a function with the name of one in that package is a variant for another platform, and no match, as in `dup`.
@@ -850,12 +915,19 @@ Each result holds `hint`, one line on how to fix it, so that the agent needs no 
 - Test files, unless `includeTests` is on, and functions with `//goalie:ignore dup` are no match.
 - `code` that isn't one Go function, and a `line` outside any function, give an error.
 
-`risk` gives the risk of a function before the agent changes it, so that the agent knows how careful to be and which tests the function needs. It runs no tests. An answer looks like this:
+`risk` gives the risk of a function before the agent changes it, so that the agent knows how careful to be and which tests the function needs. It runs no tests. This call:
 
 ```json
-{"file": "internal/billing/total.go", "line": 12, "function": "Invoice.Total", "complexity": 8,
- "coverage": null, "crapRange": [8, 72], "requiredCoverage": 0.3, "canPass": true, "limit": 30,
- "duplicates": {"matches": [], "more": 0}, "rules": [{"rule": "long-function", "value": 95, "limit": 80}], "unparsed": []}
+{"name": "risk", "arguments": {"dir": "/home/me/shop", "symbol": "internal/billing.Invoice.Total"}}
+```
+
+gives this answer:
+
+```json
+{"file": "internal/billing/total.go", "line": 13, "function": "Invoice.Total", "complexity": 7,
+ "coverage": null, "crapRange": [7, 56], "requiredCoverage": 0.23, "canPass": true, "limit": 30,
+ "duplicates": {"matches": [{"score": 1, "file": "internal/order/sum.go", "line": 13, "function": "Order.Sum"}], "more": 0},
+ "rules": [{"rule": "dup", "value": 1, "limit": 0.82}], "unparsed": []}
 ```
 
 - `coverage` is always `null`, because only a test run gives it.

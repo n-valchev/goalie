@@ -272,6 +272,35 @@ func TestServeAnswersACheckAfterInitialize(t *testing.T) {
 	})
 }
 
+func TestServeInstructionsNameEachTool(t *testing.T) {
+	client := startServe(t, serveRepo(t, nil))
+	meta := map[string]any{
+		"io.modelcontextprotocol/protocolVersion":    modernVersion,
+		"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+	}
+	names := toolNames(t, client.request("tools/list", map[string]any{"_meta": meta}))
+
+	for method, params := range map[string]map[string]any{
+		"initialize":      {"protocolVersion": "2025-11-25", "capabilities": map[string]any{}},
+		"server/discover": {"_meta": meta},
+	} {
+		var answer struct {
+			Instructions string `json:"instructions"`
+		}
+		if err := json.Unmarshal(client.request(method, params).Result, &answer); err != nil {
+			t.Fatal(err)
+		}
+		if answer.Instructions == "" || len(answer.Instructions) >= 4096 {
+			t.Errorf("%s gave instructions of %d characters, want 1 to 4,095", method, len(answer.Instructions))
+		}
+		for _, name := range names {
+			if !strings.Contains(answer.Instructions, "`"+name+"`") {
+				t.Errorf("the instructions of %s don't name %s:\n%s", method, name, answer.Instructions)
+			}
+		}
+	}
+}
+
 func TestServeAnswersTheProtocolOf2026WithNoInitialize(t *testing.T) {
 	dir := serveRepo(t, map[string]string{"a.go": "package a\n\n" + longFunction("Long", 7)})
 	client := startServe(t, dir)

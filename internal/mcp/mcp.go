@@ -47,7 +47,10 @@ type Tool struct {
 
 type Server struct {
 	Name, Version string
-	Tools         []Tool
+	// A client may load only the tool names and the instructions at the start of a session, so
+	// without instructions an agent rarely calls a tool.
+	Instructions string
+	Tools        []Tool
 }
 
 type request struct {
@@ -212,6 +215,7 @@ func (s *session) initialize(asked string) map[string]any {
 		"protocolVersion": version,
 		"capabilities":    map[string]any{"tools": map[string]any{}},
 		"serverInfo":      s.info(),
+		"instructions":    s.server.Instructions,
 	}
 }
 
@@ -222,6 +226,7 @@ func (s *session) discover() map[string]any {
 		"_meta":             map[string]any{metaServerInfo: s.info()},
 		"ttlMs":             listTTLMs,
 		"cacheScope":        "public",
+		"instructions":      s.server.Instructions,
 	}
 }
 

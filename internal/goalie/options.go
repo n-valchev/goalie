@@ -214,7 +214,11 @@ Serve:
   duplicates, and the rules that it is over, from a symbol such as
   internal/store.Cache.Get, or from a file and line. A call slower than 5
   seconds adds a line to .goalie/slow.log next to that .goalierc, or at the
-  root of the worktree if it has none. Logs go to stderr.
+  root of the worktree if it has none. The server tells the agent when to
+  call each tool: rules at the start of a task, find_similar before a new
+  function, risk before a change to a function, and check after each edit
+  and before a commit.
+  Logs go to stderr.
 
 Exit codes:
   0  No fail result.

@@ -23,6 +23,25 @@ import (
 // again, and a cursor would point into a list that each edit changes.
 const maxResults = 10
 
+// instructions name no limit, because the limits come from the .goalierc nearest to each dir, and a
+// client reads the instructions once for the whole session. Claude Code cuts them at 4,096 characters.
+const instructions = "goalie checks Go code against the rules of this repo, with no test run. " +
+	"Each tool takes dir: the absolute path of the folder that you work in, which may be a worktree.\n\n" +
+	"Call the tools at these points of a task:\n\n" +
+	"1. At the start of a task, call `rules`. It gives the limit of each rule, " +
+	"so that the code that you write passes the first time.\n" +
+	"2. Before you write a new function, call `find_similar` with its code. " +
+	"Reuse a match, or move the shared code to one place, instead of writing a copy.\n" +
+	"3. Before you change a function, call `risk` with its symbol, such as internal/store.Cache.Get, or its file and line. " +
+	"It gives the coverage that the function needs, its duplicates, and the rules that it is over. " +
+	"When canPass is false, split the function. No test can bring it under the limit.\n" +
+	"4. After each edit, and before you commit, call `check`. " +
+	"Each result has change and hint. change is new or worse when your edit made the result, " +
+	"and unchanged when the result was there before. hint says how to fix the result. " +
+	"Fix the new and worse results, and call `check` again until it gives no new or worse results." +
+	"Fix an unchanged result too when the fix is small, but don't let it hold up your task.\n\n" +
+	"Don't change .goalierc or .goalieignore, and don't add //goalie:ignore, unless a person asks you to."
+
 func runServe(args []string, dir string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 1 && slices.Contains(helpFlags, args[0]) {
 		fmt.Fprint(stdout, usage)
@@ -36,7 +55,7 @@ func runServe(args []string, dir string, stdin io.Reader, stdout, stderr io.Writ
 		return fail(stderr, fmt.Errorf("serve needs a Git repository: %w", err))
 	}
 	tools := served{shared: shared, stderr: stderr}
-	server := mcp.Server{Name: "goalie", Version: version(), Tools: []mcp.Tool{tools.similarTool(), tools.checkTool(), tools.rulesTool(), tools.riskTool()}}
+	server := mcp.Server{Name: "goalie", Version: version(), Instructions: instructions, Tools: []mcp.Tool{tools.similarTool(), tools.checkTool(), tools.rulesTool(), tools.riskTool()}}
 	if err := server.Serve(stdin, stdout); err != nil {
 		return fail(stderr, err)
 	}
