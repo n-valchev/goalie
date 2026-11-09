@@ -35,7 +35,10 @@ func (c Crap) estimates(functions []extract.Function) []Result {
 }
 
 func (e estimate) result() Result {
-	result := Result{Rule: CrapRule, Value: float64(e.Complexity), Limit: e.Limit, File: e.File, Line: e.Line, Details: e}
+	result := Result{
+		Rule: CrapRule, Value: float64(e.Complexity), Limit: e.Limit, File: e.File, Line: e.Line, Details: e,
+		About: []Place{{e.File, e.Function}},
+	}
 	if !e.CanPass {
 		result.Message = fmt.Sprintf("%s can't pass at any coverage, so split it (complexity %d, limit %g)",
 			e.Function, e.Complexity, e.Limit)

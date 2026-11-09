@@ -29,6 +29,9 @@ type Scope struct {
 type Files struct {
 	lock  sync.Mutex
 	found map[filesKey]func() ([]string, error)
+	// from and keep make a part of another run's list, so that a second run finds no file again.
+	from *Files
+	keep func(file string) bool
 }
 
 type filesKey struct {
@@ -43,6 +46,10 @@ func NewFiles() *Files {
 // find leaves repo out of the key, because every rule of a run reads the same file settings. It
 // returns a copy, because a rule may delete from the list that it gets.
 func (f *Files) find(repo config.Repo, dir string, includeTests bool) ([]string, error) {
+	if f.from != nil {
+		paths, err := f.from.find(repo, dir, includeTests)
+		return slices.DeleteFunc(paths, func(file string) bool { return !f.keep(file) }), err
+	}
 	key := filesKey{dir, includeTests}
 	f.lock.Lock()
 	found, ok := f.found[key]
@@ -239,7 +246,7 @@ func (f Function) Results(dir string, stderr io.Writer) ([]Result, error) {
 		}
 		results = append(results, Result{
 			Rule: f.Measure.Name, Value: float64(count.Value), Limit: f.Limit, File: fn.File, Line: count.Line,
-			Message: message, Details: found,
+			Message: message, Details: found, About: []Place{{fn.File, found.Function}},
 		})
 	}
 	return results, nil

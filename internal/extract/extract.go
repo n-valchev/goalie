@@ -68,6 +68,10 @@ type Parser struct {
 	// leaves it off, so that a file that doesn't build can't pass.
 	skipUnparsed bool
 	unparsed     map[string]bool
+	// sources and fallback make a parser of the code at a base. Every file outside sources is the
+	// same at the base and now, so fallback parses it once for both.
+	sources  map[string][]byte
+	fallback *Parser
 }
 
 // parsedFile holds the functions and the types of a file, so that the function rules and the type
@@ -85,6 +89,22 @@ func NewParser(directive Directive) *Parser {
 // mistake in a directive still fails, because it is no half-finished edit.
 func (p *Parser) SkipUnparsed() {
 	p.skipUnparsed = true
+}
+
+// Replace returns a parser that reads each file in sources from its content there, and asks p for
+// every other file.
+func (p *Parser) Replace(sources map[string][]byte) *Parser {
+	replaced := NewParser(p.directive)
+	replaced.skipUnparsed, replaced.sources, replaced.fallback = p.skipUnparsed, sources, p
+	return replaced
+}
+
+// Source returns the content that the parser reads for file, relative to dir.
+func (p *Parser) Source(dir, file string) ([]byte, error) {
+	if source, ok := p.sources[file]; ok {
+		return source, nil
+	}
+	return os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
 }
 
 // Unparsed returns the files that the parser left out, sorted.
@@ -164,12 +184,19 @@ func (p *Parser) parseAll(dir string, files []string) ([]parsedFile, error) {
 }
 
 func (p *Parser) parseOnce(dir, file string) (parsedFile, error) {
+	if _, ok := p.sources[file]; !ok && p.fallback != nil {
+		return p.fallback.parseOnce(dir, file)
+	}
 	path := filepath.Join(dir, file)
 	p.lock.Lock()
 	parse, ok := p.parsed[path]
 	if !ok {
 		parse = sync.OnceValues(func() (parsedFile, error) {
-			return parseFile(dir, file, p.directive)
+			source, err := p.Source(dir, file)
+			if err != nil {
+				return parsedFile{}, err
+			}
+			return parseFile(file, source, p.directive)
 		})
 		p.parsed[path] = parse
 	}
@@ -177,11 +204,7 @@ func (p *Parser) parseOnce(dir, file string) (parsedFile, error) {
 	return parse()
 }
 
-func parseFile(dir, file string, directive Directive) (parsedFile, error) {
-	source, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
-	if err != nil {
-		return parsedFile{}, err
-	}
+func parseFile(file string, source []byte, directive Directive) (parsedFile, error) {
 	fset := token.NewFileSet()
 	parsed, err := parser.ParseFile(fset, file, source, parser.ParseComments|parser.SkipObjectResolution)
 	if err != nil {

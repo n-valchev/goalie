@@ -3,8 +3,6 @@ package check
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 
 	"github.com/n-valchev/goalie/internal/gitchange"
 	"github.com/n-valchev/goalie/internal/rules"
@@ -70,7 +68,7 @@ func (f File) Results(dir string, stderr io.Writer) ([]Result, error) {
 	}
 	var results []Result
 	for _, file := range paths {
-		src, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(file)))
+		src, err := f.Parser.Source(dir, file)
 		if err != nil {
 			return nil, err
 		}
@@ -82,7 +80,7 @@ func (f File) Results(dir string, stderr io.Writer) ([]Result, error) {
 		results = append(results, Result{
 			Rule: f.Measure.Name, Value: measured.Value, Limit: f.Limit, File: file, Line: 1,
 			Message: fmt.Sprintf("%s (limit %g)", f.Measure.Describe(file, measured), f.Limit),
-			Details: fileMeasured{File: file, Line: 1, Functions: measured.Functions},
+			Details: fileMeasured{File: file, Line: 1, Functions: measured.Functions}, About: []Place{{file, ""}},
 		})
 	}
 	return results, nil

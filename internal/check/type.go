@@ -111,5 +111,6 @@ func (t Type) result(typ extract.Type, measured rules.TypeMeasurement) Result {
 		Message: fmt.Sprintf("%s has %d groups of methods: %s (limit %g)", typ.Name, measured.Value,
 			strings.Join(groups, "; "), t.Limit),
 		Details: typeMeasured{File: typ.File, Line: typ.StartLine, Type: typ.Name, Groups: measured.Groups},
+		About:   []Place{{typ.File, typ.Name}},
 	}
 }

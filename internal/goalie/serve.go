@@ -112,7 +112,9 @@ func (s served) checkTool() mcp.Tool {
 	return mcp.Tool{
 		Name: "check",
 		Description: "Check Go code against goalie's rules, with no test run. Gives up to 10 results, the worst first, " +
-			"with more: the count left out. With scope changes, it checks what changed since base, uncommitted work included.",
+			"with more: the count left out. With scope changes, it checks what changed since base, uncommitted work included. " +
+			"Then each result has change: new or worse when your edit made it, unchanged when it was there before, " +
+			"and results that are new or worse come before the worst unchanged ones.",
 		InputSchema: map[string]any{
 			"type":     "object",
 			"required": []string{"dir"},
@@ -185,6 +187,9 @@ func (s served) check(arguments json.RawMessage) (string, error) {
 		return "", errors.New(strings.TrimSpace(log.String()))
 	}
 	s.stderr.Write(log.Bytes())
+	if !opts.all {
+		check.Mark(results, s.baseResults(file, opts, run, runDir, results))
+	}
 	check.SortResults(results)
 	shown := append([]check.Result{}, results[:min(maxResults, len(results))]...)
 	answer := checkAnswer{Results: shown, More: len(results) - len(shown), Unparsed: run.Parser.Unparsed()}
@@ -193,6 +198,38 @@ func (s served) check(arguments json.RawMessage) (string, error) {
 	}
 	encoded, err := json.Marshal(answer)
 	return string(encoded), err
+}
+
+// baseResults runs the same rules on the code at the base. An error leaves every result new instead
+// of failing the call, because the agent still needs the results.
+func (s served) baseResults(file config.Settings, opts options, run check.Scope, runDir string, results []check.Result) []check.Result {
+	if len(results) == 0 {
+		return nil
+	}
+	if err := run.Repo.Apply(file, nil); err != nil {
+		fail(s.stderr, err)
+		return nil
+	}
+	baseRun, err := run.AtBase(runDir, opts.base, results)
+	if err != nil {
+		fail(s.stderr, fmt.Errorf("can't read the code at %s: %w", opts.base, err))
+		return nil
+	}
+	// Every function in the listed folders, because the changed lines are numbered as they are now, and
+	// not as they were at the base.
+	opts.all = true
+	selected, err := selectRules(file, opts, baseRun)
+	if err != nil {
+		fail(s.stderr, err)
+		return nil
+	}
+	var log bytes.Buffer
+	base, failures := runRules(selected, runDir, &log)
+	// Only the errors, because the notices of the base run would read as notices of the check.
+	if failures > 0 {
+		s.stderr.Write(log.Bytes())
+	}
+	return base
 }
 
 // pathIn turns path, relative to dir, into a path relative to the run folder, where the rules

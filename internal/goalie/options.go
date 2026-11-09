@@ -200,10 +200,11 @@ Partial check:
 
 Serve:
   goalie serve runs an MCP server for coding agents on stdin and stdout. Its
-  tool check runs a partial check and gives up to 10 results, the worst
-  first. The tool takes dir, the absolute path of the folder that the agent
-  works in, and reads the .goalierc nearest to it. With no base input and no base in
-  .goalierc, it compares against HEAD. It skips a file that doesn't parse and
+  tool check runs a partial check and gives up to 10 results. Each result
+  says whether the change made it new, made it worse, or left it unchanged,
+  and unchanged results come last. The tool takes dir, the absolute path of
+  the folder that the agent works in, and reads the .goalierc nearest to it.
+  With no base input and no base in .goalierc, it compares against HEAD. It skips a file that doesn't parse and
   lists it under unparsed. Logs go to stderr.
 
 Exit codes:

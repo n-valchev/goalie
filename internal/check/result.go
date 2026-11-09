@@ -37,6 +37,8 @@ type Result struct {
 	Line    int
 	Message string
 	Details any // The JSON fields that only this rule has.
+	About   []Place
+	Change  Change // Empty in goalie check, which has no base results to compare with.
 }
 
 // MarshalJSON puts the shared fields beside the details in one object, because godeps reads the
@@ -51,6 +53,9 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	fields["rule"], fields["mode"], fields["value"], fields["limit"] = r.Rule, r.Mode, r.Value, r.Limit
+	if r.Change != "" {
+		fields["change"] = r.Change
+	}
 	return json.Marshal(fields)
 }
 
@@ -66,9 +71,19 @@ func (r Result) rank() int {
 	return 1
 }
 
+// changeRank puts what the change made after the old results that it touched, so that old results
+// can't fill the places of a capped answer.
+func (r Result) changeRank() int {
+	if r.Change == ChangeUnchanged {
+		return 1
+	}
+	return 0
+}
+
 func SortResults(results []Result) {
 	slices.SortStableFunc(results, func(a, b Result) int {
 		return cmp.Or(
+			cmp.Compare(a.changeRank(), b.changeRank()),
 			cmp.Compare(a.rank(), b.rank()),
 			cmp.Compare(b.limitRatio(), a.limitRatio()),
 			cmp.Compare(a.File, b.File),

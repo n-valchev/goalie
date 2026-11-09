@@ -800,7 +800,19 @@ The server has one tool:
 
 | Tool | Input | Output |
 | --- | --- | --- |
-| `check` | `dir`, the absolute path of the folder that the agent works in. Optional: `scope` (`changes` or `all`, default `changes`), `path`, a package folder or a file relative to `dir`, and `base` | Up to 10 `results`, the worst first, with the fields of `goalie check --format json`. `more`, the count left out. `base`, the revision used. `unparsed`, the files that don't parse |
+| `check` | `dir`, the absolute path of the folder that the agent works in. Optional: `scope` (`changes` or `all`, default `changes`), `path`, a package folder or a file relative to `dir`, and `base` | Up to 10 `results`, with the fields of `goalie check --format json` and `change`. `more`, the count left out. `base`, the revision used. `unparsed`, the files that don't parse |
+
+With `scope` `changes`, each result holds `change`. It says what the change did to the result, so that the agent can tell its own results from old ones:
+
+| `change` | Meaning | Example, with a limit of 80 lines |
+| --- | --- | --- |
+| `new` | The base had no result: the value was at or under the limit, or the function, type, file, or duplicate pair didn't exist there | A function grows from 70 to 90 lines |
+| `worse` | The base had a result, and the value is higher now | A function grows from 90 to 110 lines |
+| `unchanged` | The base had a result, and the value is the same or lower | A function of 110 lines gets a one-line edit |
+
+- `new` and `worse` results come first, then `unchanged`. So when the tool leaves out results, it leaves out old ones first. Within each group, `fail` comes before `warn`, and then the highest value relative to the limit.
+- The tool matches a function or a type by its file and its name. So a renamed function is `new`.
+- A file that doesn't parse at the base counts as a file with no results, so its results are `new`.
 
 - The tool runs a partial check, and never runs your tests.
 - It reads the `.goalierc` nearest to `dir`, so a worktree gets its own settings.

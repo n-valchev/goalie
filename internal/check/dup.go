@@ -2,8 +2,10 @@
 package check
 
 import (
+	"cmp"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/n-valchev/goalie/internal/compare"
 	"github.com/n-valchev/goalie/internal/config"
@@ -85,10 +87,17 @@ func (d Dup) Results(dir string, stderr io.Writer) ([]Result, error) {
 		results = append(results, Result{
 			Rule: DupRule, Value: pair.Score, Limit: d.Threshold,
 			File: pair.Left.File, Line: pair.Left.StartLine,
-			Message: report.Summary(pair, d.Threshold), Details: report.Finding(pair),
+			Message: report.Summary(pair, d.Threshold), Details: report.Finding(pair), About: pairPlaces(pair),
 		})
 	}
 	return results, nil
+}
+
+// pairPlaces sorts the two functions, because the base can put the pair the other way round.
+func pairPlaces(pair compare.Pair) []Place {
+	places := []Place{{pair.Left.File, name(pair.Left.Function)}, {pair.Right.File, name(pair.Right.Function)}}
+	slices.SortFunc(places, func(a, b Place) int { return cmp.Or(cmp.Compare(a.File, b.File), cmp.Compare(a.Name, b.Name)) })
+	return places
 }
 
 // A notice says why there is nothing to compare.
