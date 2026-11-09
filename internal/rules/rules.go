@@ -79,22 +79,73 @@ type TypeMeasurement struct {
 
 // LowCohesion goes by method name, so that the platform variants of one method in two files count
 // once. A method that only other methods call stays in, because the call joins it to them.
+//
+// An accessor is left out: a getter for each field would otherwise make a group of each field. A
+// call to it counts as a use of the field it returns, so a method that reads a field through its
+// getter still joins that field.
 func LowCohesion(typ extract.Type, methods []extract.Function) TypeMeasurement {
-	c := cohesion{fields: setOf(typ.Fields...), methods: map[string]bool{}, groups: unionFind{}, kept: map[string]bool{}}
+	c := cohesion{fields: setOf(typ.Fields...), methods: map[string]bool{}, accessors: map[string]node{},
+		groups: unionFind{}, kept: map[string]bool{}}
 	for _, method := range methods {
 		c.methods[method.Name] = true
 	}
+	c.findAccessors(methods)
 	for _, method := range methods {
-		c.read(method)
+		if _, ok := c.accessors[method.Name]; !ok {
+			c.read(method)
+		}
 	}
 	return c.measure()
 }
 
 type cohesion struct {
 	fields, methods map[string]bool
+	accessors       map[string]node // The field that each accessor returns.
 	groups          unionFind
 	kept            map[string]bool // The methods that use a field, call a method, or are called.
 	passers         []string
+}
+
+// findAccessors needs every platform variant of a method to be an accessor of the same field,
+// because the rule reads the variants as one method. It calls nodeOf while c.accessors fills. That
+// is safe, because nodeOf reads c.accessors only for a method name, and a method that selects a
+// method is no accessor.
+func (c *cohesion) findAccessors(methods []extract.Function) {
+	notAccessors := map[string]bool{}
+	for _, method := range methods {
+		selected, ok := accessedField(method.Decl)
+		field := c.nodeOf(selected)
+		if earlier, seen := c.accessors[method.Name]; !ok || c.methods[selected] || seen && earlier != field {
+			notAccessors[method.Name] = true
+			continue
+		}
+		c.accessors[method.Name] = field
+	}
+	for name := range notAccessors {
+		delete(c.accessors, name)
+	}
+}
+
+func accessedField(fn *ast.FuncDecl) (string, bool) {
+	receiver := receiverName(fn)
+	if receiver == "" || fn.Body == nil || len(fn.Body.List) != 1 {
+		return "", false
+	}
+	ret, ok := fn.Body.List[0].(*ast.ReturnStmt)
+	if !ok || len(ret.Results) != 1 {
+		return "", false
+	}
+	expr := withoutAddress(ret.Results[0])
+	for {
+		sel, ok := expr.(*ast.SelectorExpr)
+		if !ok {
+			return "", false
+		}
+		if isName(sel.X, receiver) {
+			return sel.Sel.Name, true
+		}
+		expr = sel.X
+	}
 }
 
 type nodeKind int
@@ -134,6 +185,9 @@ func (c *cohesion) read(method extract.Function) {
 }
 
 func (c *cohesion) nodeOf(selected string) node {
+	if field, ok := c.accessors[selected]; ok {
+		return field
+	}
 	switch {
 	case c.fields[selected]:
 		return node{fieldNode, selected}
@@ -153,14 +207,19 @@ func (c *cohesion) join(method string, other node) {
 
 // isName counts &s and *s as s, because each passes the whole receiver.
 func isName(expr ast.Expr, name string) bool {
-	if unary, ok := expr.(*ast.UnaryExpr); ok && unary.Op == token.AND {
-		expr = unary.X
-	}
+	expr = withoutAddress(expr)
 	if star, ok := expr.(*ast.StarExpr); ok {
 		expr = star.X
 	}
 	ident, ok := expr.(*ast.Ident)
 	return ok && ident.Name == name
+}
+
+func withoutAddress(expr ast.Expr) ast.Expr {
+	if unary, ok := expr.(*ast.UnaryExpr); ok && unary.Op == token.AND {
+		return unary.X
+	}
+	return expr
 }
 
 func (c *cohesion) measure() TypeMeasurement {

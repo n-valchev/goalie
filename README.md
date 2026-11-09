@@ -706,6 +706,10 @@ store.go:12: warn low-cohesion: Store has 2 groups of methods: Close, Ping; Get,
 
 - The methods of the type count from every file of its package, with a pointer or a value receiver. Methods in `*_test.go` files don't count.
 - A method that uses no field and calls no method is left out, such as `func (s *Store) Name() string { return "store" }`. A method that another method calls stays in.
+- An accessor is left out. An accessor is a method whose body only returns a receiver field, a field of that field, or the address of either, such as `return s.conn`, `return s.conn.addr`, or `return &s.conn`. It may have parameters. Without this, a type with one accessor for each field, such as a config type, reports one group for each field.
+- A call to an accessor, such as `s.Conn()`, counts as a use of the field that the accessor returns.
+- Any other body is not an accessor. Examples are `return s.items[k]`, `return fmt.Sprintf("%s", e.Msg)`, `return s.Ping` (a method value), and a setter. So an error type with `Error` and `Unwrap` gives no result, because only `Error` is left.
+- A method with variants in two files, such as one for each platform, is an accessor only when every variant returns the same field.
 - A method that passes the whole receiver to a call, such as `save(s)` or `save(*s)`, joins every group, because the function it calls can use any field.
 - A field use inside a closure in a method counts.
 - A selector on the receiver that names no field and no method, such as `s.Lock()` from an embedded `sync.Mutex`, counts as a use of one shared field. goalie reads no types, so it can't tell which embedded field holds `Lock`.

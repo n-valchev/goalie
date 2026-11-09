@@ -85,6 +85,14 @@ func TestWhichMethodsAndTypesCount(t *testing.T) {
 			"a.go":      storeType + "func (s *Store) Get(k string) int { return s.items[k] }\n",
 			"a_test.go": "package a\n\nfunc (s *Store) Ping() error { return s.conn.Ping() }\n",
 		}, ""},
+		{"a method with an accessor variant and another variant is not an accessor", map[string]string{
+			"a.go": storeType + getAndPing + "func (s *Store) Conn() Conn { return s.conn }\n",
+			"b.go": "package a\n\nfunc (s *Store) Conn() Conn { c := s.conn; return c }\n",
+		}, storeWarn("Conn, Ping; Get")},
+		{"a method whose variants return different fields is not an accessor", map[string]string{
+			"a.go": storeType + getAndPing + "func (s *Store) Conn() Conn { return s.conn }\n",
+			"b.go": "package a\n\nfunc (s *Store) Conn() Conn { return s.items }\n",
+		}, ""},
 		{"a type with fewer than 2 methods left", map[string]string{
 			"a.go": storeType + "func (s *Store) Get(k string) int { return s.items[k] }\n" +
 				"func (s *Store) Name() string { return \"store\" }\n",
@@ -202,6 +210,36 @@ func TestALowCohesionResultHasAJSONForm(t *testing.T) {
 	})
 	if want := []any{[]any{"Get"}, []any{"Ping"}}; !reflect.DeepEqual(results[0]["groups"], want) {
 		t.Errorf("groups = %v, want %v", results[0]["groups"], want)
+	}
+}
+
+func TestLowCohesionLeavesOutAnAccessor(t *testing.T) {
+	cases := []struct {
+		name       string
+		src        string
+		wantStdout string
+	}{
+		{"a getter for each field", storeType + "func (s *Store) Items() map[string]int { return s.items }\n" +
+			"func (s *Store) Conn() Conn { return s.conn }\n", ""},
+		{"a field of a field", storeType + "func (s *Store) Items() map[string]int { return s.items }\n" +
+			"func (s *Store) Addr() string { return s.conn.addr }\n", ""},
+		{"the address of a field", storeType + "func (s *Store) Items() *map[string]int { return &s.items }\n" +
+			"func (s *Store) Conn(n int) *Conn { return &s.conn }\n", ""},
+		{"a call to a getter joins its field", storeType + getAndPing + "func (s *Store) Conn() Conn { return s.conn }\n" +
+			"func (s *Store) Ready() bool { return s.items != nil && s.Conn() != nil }\n", ""},
+		{"a method that reads a map entry still counts", storeType + getAndPing +
+			"func (s *Store) Conn() Conn { return s.conn }\n", storeWarn("Get; Ping")},
+		{"a method value is not an accessor", storeType + getAndPing + "func (s *Store) Pinger() func() error { return s.Ping }\n",
+			storeWarn("Get; Ping, Pinger")},
+		{"an error type with Error and Unwrap", "package a\n\nimport \"fmt\"\n\n" +
+			"type ViolationError struct {\n\tMsg string\n\tErr error\n}\n\n" +
+			"func (e *ViolationError) Error() string { return fmt.Sprintf(\"%s\", e.Msg) }\n" +
+			"func (e *ViolationError) Unwrap() error { return e.Err }\n", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			checkLowCohesion(t, map[string]string{"a.go": tc.src}, tc.wantStdout)
+		})
 	}
 }
 

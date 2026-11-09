@@ -72,9 +72,12 @@ Rules:
         limit. Two methods are in one group when they use the same field of
         the receiver, or when one calls the other. Methods in every file of
         the package count, apart from test files. A method that uses no
-        field and calls no method is left out. With scope changes, a type
-        reports when the change touches its declaration or one of its
-        methods. Write //goalie:ignore low-cohesion <reason> above the type.
+        field and calls no method is left out. An accessor is left out too.
+        An accessor only returns a receiver field, a field of that field, or
+        the address of either, such as return s.conn. A call to an accessor
+        counts as a use of its field. With scope changes, a type reports
+        when the change touches its declaration or one of its methods. Write
+        //goalie:ignore low-cohesion <reason> above the type.
 
 With no rule names, goalie runs every rule that isn't off. A rule that you name
 runs even if it is off, and then it reports as warn.
