@@ -251,6 +251,15 @@ func crapLimit(rules config.Rules) float64 {
 }
 
 func newCrap(file config.Settings, opts options, scope check.Scope) (rule, error) {
+	crap, err := buildCrap(file, opts, scope)
+	if err != nil {
+		return nil, err
+	}
+	return crap, nil
+}
+
+// buildCrap gives risk the same limits as the crap rule.
+func buildCrap(file config.Settings, opts options, scope check.Scope) (check.Crap, error) {
 	ruleSettings := file.Rules.Crap
 	crap := check.NewCrap(scope)
 	crap.Partial = opts.partial
@@ -262,10 +271,10 @@ func newCrap(file config.Settings, opts options, scope check.Scope) (rule, error
 		crap.Limits.SharedLimit = opts.sharedLimit
 	}
 	if err := crap.Apply(file, nil); err != nil {
-		return nil, err
+		return check.Crap{}, err
 	}
 	if err := cmp.Or(ruleSettings.Cover.Check(), crap.Limits.Check()); err != nil {
-		return nil, fmt.Errorf("%s: %w", config.Name, err)
+		return check.Crap{}, fmt.Errorf("%s: %w", config.Name, err)
 	}
 	return crap, nil
 }

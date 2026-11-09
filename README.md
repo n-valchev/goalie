@@ -796,13 +796,14 @@ claude mcp add --scope project goalie -- goalie serve
 
 The command writes the server to `.mcp.json`. Commit that file. Each person approves the server the first time that Claude Code starts in the repo. To add the server for your own projects only, use `--scope user`.
 
-The server has three tools:
+The server has four tools:
 
 | Tool | Input | Output |
 | --- | --- | --- |
 | `find_similar` | `dir`, as in `check`, and either `code`, the source of one function, or `file`, relative to `dir`, and `line` | Up to 10 `matches`, the highest `score` first, each with `score`, `file`, `line`, and `function`. `more`, the count left out. `unparsed`, as in `check` |
 | `check` | `dir`, the absolute path of the folder that the agent works in. Optional: `scope` (`changes` or `all`, default `changes`), `path`, a package folder or a file relative to `dir`, and `base` | Up to 10 `results`, with the fields of `goalie check --format json`, `change`, and `hint`. `more`, the count left out. `base`, the revision used. `unparsed`, the files that don't parse |
 | `rules` | `dir`, as in `check` | `rules`: each rule of `goalie check`, with its `rule`, `limit`, `mode`, and `scope` |
+| `risk` | `dir`, as in `check`, and either `symbol`, such as `internal/billing.Invoice.Total`, or `file`, relative to `dir`, and `line` | `file`, `line`, and `function` of the function found. `complexity`, `coverage`, `crapRange`, `requiredCoverage`, `canPass`, and `limit`. `duplicates`, as the answer of `find_similar`. `rules`, the rules that the function is over. `alsoAt`, other functions with the same `symbol`. `unparsed`, as in `check` |
 
 With `scope` `changes`, each result holds `change`. It says what the change did to the result, so that the agent can tell its own results from old ones:
 
@@ -848,6 +849,25 @@ Each result holds `hint`, one line on how to fix it, so that the agent needs no 
 - A function under `minLines` or `minNodes` has no matches, because `dup` never reports it.
 - Test files, unless `includeTests` is on, and functions with `//goalie:ignore dup` are no match.
 - `code` that isn't one Go function, and a `line` outside any function, give an error.
+
+`risk` gives the risk of a function before the agent changes it, so that the agent knows how careful to be and which tests the function needs. It runs no tests. An answer looks like this:
+
+```json
+{"file": "internal/billing/total.go", "line": 12, "function": "Invoice.Total", "complexity": 8,
+ "coverage": null, "crapRange": [8, 72], "requiredCoverage": 0.3, "canPass": true, "limit": 30,
+ "duplicates": {"matches": [], "more": 0}, "rules": [{"rule": "long-function", "value": 95, "limit": 80}], "unparsed": []}
+```
+
+- `coverage` is always `null`, because only a test run gives it.
+- `crapRange` gives the `crap` score at full coverage and at no coverage: from `c` to `c² + c`, where `c` is the complexity.
+- `requiredCoverage` is the coverage that the function needs to pass the `crap` limit, from 0 to 1. It is the same number as the `crap` result of a partial check. When the complexity alone is over the limit, no coverage can help: `canPass` is `false`, and `requiredCoverage` is `null`.
+- `limit` is the `crap` limit for the function, `sharedLimit` included.
+- `crapRange`, `requiredCoverage`, `canPass`, and `limit` are there even when `crap` is `off` or a `//goalie:ignore crap` directive names the function, because the agent needs them to write its tests.
+- `duplicates` holds the `matches` and `more` that `find_similar` gives for the function.
+- `rules` lists each function rule that the function is over, and `dup` when the function has a duplicate. Each entry holds `rule`, `value`, and `limit`. A rule that is `off`, and a rule that a `//goalie:ignore` directive names on the function, are not in the list. `crap` is not in the list, because `requiredCoverage` gives it. File rules and type rules are not in the list, because `check` reports them for the file or the type.
+- `symbol` is the package folder, a dot, and the function name, or the type name, a dot, and the method name. The folder is relative to the folder of the nearest `.goalierc`, as the `file` of a `check` result is. For a function in that folder itself, give `file` and `line`.
+- When one `symbol` names several functions, such as one function with a variant for each platform, `risk` gives the first by file name, and lists the others in `alsoAt`, with `file` and `line`.
+- A `line` outside any function, a `symbol` that names no function, and `symbol` together with `file` or `line`, give an error.
 
 The server logs each tool call that takes longer than 5 seconds. The call still gives its answer. To check the log, run this in the folder of the nearest `.goalierc`, or at the root of your worktree if it has none:
 

@@ -24,7 +24,7 @@ const needsCoverageHint = "Write tests that cover at least that much of the func
 func AddHints(results []Result) {
 	for i, result := range results {
 		results[i].Hint = hints[result.Rule]
-		if estimate, ok := result.Details.(estimate); ok && estimate.CanPass {
+		if estimate, ok := result.Details.(Estimate); ok && estimate.CanPass {
 			results[i].Hint = needsCoverageHint
 		}
 	}

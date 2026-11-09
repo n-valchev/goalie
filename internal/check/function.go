@@ -226,28 +226,43 @@ func (f Function) Results(dir string, stderr io.Writer) ([]Result, error) {
 	}
 	var results []Result
 	for _, fn := range functions {
-		if f.Measure.Applies != nil && !f.Measure.Applies(fn) {
-			continue
+		if result, ok := f.over(fn); ok {
+			results = append(results, result)
 		}
-		count := f.Measure.Of(fn)
-		if float64(count.Value) <= f.Limit {
-			continue
-		}
-		found := measured{File: fn.File, Line: count.Line, Function: name(fn)}
-		message := fmt.Sprintf(f.Measure.Format+" (limit %g)", found.Function, count.Value, f.Limit)
-		if len(count.Parameters) > 0 {
-			var passed []string
-			for _, param := range count.Parameters {
-				found.Parameters = append(found.Parameters, parameter(param))
-				passed = append(passed, param.Name+" down as "+param.Type)
-			}
-			message = fmt.Sprintf(f.Measure.Format+" (%d, limit %g)", found.Function, strings.Join(passed, ", "),
-				count.Value, f.Limit)
-		}
-		results = append(results, Result{
-			Rule: f.Measure.Name, Value: float64(count.Value), Limit: f.Limit, File: fn.File, Line: count.Line,
-			Message: message, Details: found, About: []Place{{fn.File, found.Function}},
-		})
 	}
 	return results, nil
+}
+
+// Over reads the directive itself, because fn comes from no Parse for this rule. Results calls over,
+// because its Parse has already left out the excused functions.
+func (f Function) Over(fn extract.Function) (Result, bool) {
+	if extract.Excuses(fn.Decl, f.Measure.Name) {
+		return Result{}, false
+	}
+	return f.over(fn)
+}
+
+func (f Function) over(fn extract.Function) (Result, bool) {
+	if f.Measure.Applies != nil && !f.Measure.Applies(fn) {
+		return Result{}, false
+	}
+	count := f.Measure.Of(fn)
+	if float64(count.Value) <= f.Limit {
+		return Result{}, false
+	}
+	found := measured{File: fn.File, Line: count.Line, Function: name(fn)}
+	message := fmt.Sprintf(f.Measure.Format+" (limit %g)", found.Function, count.Value, f.Limit)
+	if len(count.Parameters) > 0 {
+		var passed []string
+		for _, param := range count.Parameters {
+			found.Parameters = append(found.Parameters, parameter(param))
+			passed = append(passed, param.Name+" down as "+param.Type)
+		}
+		message = fmt.Sprintf(f.Measure.Format+" (%d, limit %g)", found.Function, strings.Join(passed, ", "),
+			count.Value, f.Limit)
+	}
+	return Result{
+		Rule: f.Measure.Name, Value: float64(count.Value), Limit: f.Limit, File: fn.File, Line: count.Line,
+		Message: message, Details: found, About: []Place{{fn.File, found.Function}},
+	}, true
 }

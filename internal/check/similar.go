@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"go/build"
 	"io"
+	"os"
 	"path"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/n-valchev/goalie/internal/compare"
 	"github.com/n-valchev/goalie/internal/extract"
@@ -32,24 +35,64 @@ func (d Dup) SimilarToCode(dir, folder string, code string, stderr io.Writer) ([
 	if len(functions) != 1 {
 		return nil, fmt.Errorf("code must be one Go function with a body, got %d", len(functions))
 	}
-	return d.similar(dir, functions[0], stderr)
+	return d.Similar(dir, functions[0], stderr)
 }
 
 func (d Dup) SimilarToFunction(dir, file string, line int, stderr io.Writer) ([]Match, error) {
-	source, err := d.Parser.Source(dir, file)
+	fn, err := FunctionAt(d.Parser, dir, file, line)
 	if err != nil {
 		return nil, err
 	}
-	functions, err := d.Parser.ParseSource(file, source)
+	return d.Similar(dir, fn, stderr)
+}
+
+// FunctionAt parses file again, and not from the parser's copy, so that a syntax error reaches the
+// agent, who asked about this file.
+func FunctionAt(parser *extract.Parser, dir, file string, line int) (extract.Function, error) {
+	source, err := parser.Source(dir, file)
 	if err != nil {
-		return nil, err
+		return extract.Function{}, err
+	}
+	functions, err := parser.ParseSource(file, source)
+	if err != nil {
+		return extract.Function{}, err
 	}
 	for _, fn := range functions {
 		if fn.StartLine <= line && line <= fn.EndLine {
-			return d.similar(dir, fn, stderr)
+			return fn, nil
 		}
 	}
-	return nil, fmt.Errorf("%s:%d is in no function with a body", file, line)
+	return extract.Function{}, fmt.Errorf("%s:%d is in no function with a body", file, line)
+}
+
+// FunctionsNamed finds the functions that symbol names, as folder.Function or folder.Type.Method,
+// with folder relative to dir. A name can repeat in one package, with a variant for each platform, so
+// it gives them all, in file order.
+func FunctionsNamed(parser *extract.Parser, dir, symbol string) ([]extract.Function, error) {
+	slash := strings.LastIndex(symbol, "/")
+	folder, function, ok := strings.Cut(symbol[slash+1:], ".")
+	folder = symbol[:slash+1] + folder
+	var files []string
+	// IsLocal keeps a symbol such as ../other.F out of the folders that the server may read.
+	local := ok && filepath.IsLocal(filepath.FromSlash(folder))
+	if entries, err := os.ReadDir(filepath.Join(dir, filepath.FromSlash(folder))); local && err == nil {
+		for _, entry := range entries {
+			if file := entry.Name(); !entry.IsDir() && strings.HasSuffix(file, ".go") && !strings.HasSuffix(file, "_test.go") {
+				files = append(files, path.Join(folder, file))
+			}
+		}
+	}
+	// No rule, because a directive excuses a function from a rule, and not from the question.
+	functions, err := parser.Parse(dir, files, "")
+	if err != nil {
+		return nil, err
+	}
+	functions = slices.DeleteFunc(functions, func(fn extract.Function) bool { return name(fn) != function })
+	if len(functions) == 0 {
+		return nil, fmt.Errorf("symbol %s names no function with a body: give folder.Function or "+
+			"folder.Type.Method, with the folder relative to %s, or file and line for a function in that folder", symbol, dir)
+	}
+	return functions, nil
 }
 
 // packageName asks go/build, so that a file that the build leaves out, such as a generator, can't
@@ -60,7 +103,7 @@ func packageName(dir, folder string) string {
 	return cmp.Or(pkg.Name, "main")
 }
 
-func (d Dup) similar(dir string, target extract.Function, stderr io.Writer) ([]Match, error) {
+func (d Dup) Similar(dir string, target extract.Function, stderr io.Writer) ([]Match, error) {
 	all, _, err := d.repoCandidates(dir, stderr)
 	if err != nil {
 		return nil, err

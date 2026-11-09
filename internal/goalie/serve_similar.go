@@ -38,9 +38,20 @@ type similarInput struct {
 }
 
 type similarAnswer struct {
-	Matches  []check.Match `json:"matches"`
-	More     int           `json:"more"`
-	Unparsed []string      `json:"unparsed"`
+	shownMatches
+	Unparsed []string `json:"unparsed"`
+}
+
+// shownMatches is the one cap for find_similar and risk, so that the two never give different
+// duplicates of one function.
+type shownMatches struct {
+	Matches []check.Match `json:"matches"`
+	More    int           `json:"more"`
+}
+
+func showMatches(matches []check.Match) shownMatches {
+	shown := append([]check.Match{}, matches[:min(maxResults, len(matches))]...)
+	return shownMatches{Matches: shown, More: len(matches) - len(shown)}
 }
 
 func (s served) similar(arguments json.RawMessage, run check.Scope) (string, error) {
@@ -65,8 +76,7 @@ func (s served) similar(arguments json.RawMessage, run check.Scope) (string, err
 	if err != nil {
 		return "", err
 	}
-	shown := append([]check.Match{}, matches[:min(maxResults, len(matches))]...)
-	encoded, err := json.Marshal(similarAnswer{Matches: shown, More: len(matches) - len(shown), Unparsed: run.Parser.Unparsed()})
+	encoded, err := json.Marshal(similarAnswer{showMatches(matches), run.Parser.Unparsed()})
 	return string(encoded), err
 }
 

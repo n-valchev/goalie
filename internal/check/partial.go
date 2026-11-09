@@ -9,7 +9,7 @@ import (
 	"github.com/n-valchev/goalie/internal/extract"
 )
 
-type estimate struct {
+type Estimate struct {
 	File           string  `json:"file"`
 	Line           int     `json:"line"`
 	Function       string  `json:"function"`
@@ -22,19 +22,23 @@ type estimate struct {
 func (c Crap) estimates(functions []extract.Function) []Result {
 	results := []Result{}
 	for _, fn := range functions {
-		complexity, limit := crap.Complexity(fn.Decl), c.Limits.For(fn.File)
-		needed, canPass := crap.CoverageNeeded(complexity, limit)
-		if canPass && needed == 0 {
-			continue
+		if found := c.Estimate(fn); !found.CanPass || found.NeededCoverage > 0 {
+			results = append(results, found.result())
 		}
-		// Up, because a value rounded down could still score over the limit.
-		found := estimate{fn.File, fn.StartLine, name(fn), complexity, canPass, math.Ceil(needed*100) / 100, limit}
-		results = append(results, found.result())
 	}
 	return results
 }
 
-func (e estimate) result() Result {
+// Estimate gives the coverage that fn needs, from its complexity alone, so that the risk tool and a
+// partial check agree.
+func (c Crap) Estimate(fn extract.Function) Estimate {
+	complexity, limit := crap.Complexity(fn.Decl), c.Limits.For(fn.File)
+	needed, canPass := crap.CoverageNeeded(complexity, limit)
+	// Up, because a value rounded down could still score over the limit.
+	return Estimate{fn.File, fn.StartLine, name(fn), complexity, canPass, math.Ceil(needed*100) / 100, limit}
+}
+
+func (e Estimate) result() Result {
 	result := Result{
 		Rule: CrapRule, Value: float64(e.Complexity), Limit: e.Limit, File: e.File, Line: e.Line, Details: e,
 		About: []Place{{e.File, e.Function}},

@@ -209,9 +209,12 @@ Serve:
   that doesn't parse and lists it under unparsed. Its tool rules gives the
   limit, mode, and scope of each rule from the same .goalierc. Its tool
   find_similar gives up to 10 functions that dup would pair with a function:
-  its source, or its file and line. A call slower than 5 seconds adds a line
-  to .goalie/slow.log next to that .goalierc, or at the root of the
-  worktree if it has none. Logs go to stderr.
+  its source, or its file and line. Its tool risk gives the complexity of a
+  function, the range of its crap score, the coverage that it needs, its
+  duplicates, and the rules that it is over, from a symbol such as
+  internal/store.Cache.Get, or from a file and line. A call slower than 5
+  seconds adds a line to .goalie/slow.log next to that .goalierc, or at the
+  root of the worktree if it has none. Logs go to stderr.
 
 Exit codes:
   0  No fail result.
