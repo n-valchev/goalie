@@ -800,7 +800,7 @@ The server has one tool:
 
 | Tool | Input | Output |
 | --- | --- | --- |
-| `check` | `dir`, the absolute path of the folder that the agent works in. Optional: `scope` (`changes` or `all`, default `changes`), `path`, a package folder or a file relative to `dir`, and `base` | Up to 10 `results`, with the fields of `goalie check --format json` and `change`. `more`, the count left out. `base`, the revision used. `unparsed`, the files that don't parse |
+| `check` | `dir`, the absolute path of the folder that the agent works in. Optional: `scope` (`changes` or `all`, default `changes`), `path`, a package folder or a file relative to `dir`, and `base` | Up to 10 `results`, with the fields of `goalie check --format json`, `change`, and `hint`. `more`, the count left out. `base`, the revision used. `unparsed`, the files that don't parse |
 
 With `scope` `changes`, each result holds `change`. It says what the change did to the result, so that the agent can tell its own results from old ones:
 
@@ -821,6 +821,15 @@ With `scope` `changes`, each result holds `change`. It says what the change did 
 - It skips a file that doesn't parse, so that a half-finished edit doesn't fail the call. `goalie check` still exits with `2` on that file.
 - It accepts a `dir` only in the repository where the server started, or in one of its worktrees.
 - It reads the disk on each call, so an answer is never stale.
+
+Each result holds `hint`, one line on how to fix it, so that the agent needs no second call. Each hint is the line for its rule in the instruction in [Steer coding agents](#steer-coding-agents). For example, a `low-cohesion` result has the hint "Move each group of methods, with the fields that it uses, into a type of its own." `crap` has two hints:
+
+| Case | Hint |
+| --- | --- |
+| Can't pass | "Split the function. No test can bring it under the limit." |
+| Needs coverage | "Write tests that cover at least that much of the function." The message of the result gives the coverage |
+
+`goalie check` gives no `hint`.
 
 The server uses MCP version `2026-07-28`. It also answers a client that starts with `initialize`, with version `2025-11-25` or the older version that the client asks for.
 

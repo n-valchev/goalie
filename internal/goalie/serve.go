@@ -112,7 +112,7 @@ func (s served) checkTool() mcp.Tool {
 	return mcp.Tool{
 		Name: "check",
 		Description: "Check Go code against goalie's rules, with no test run. Gives up to 10 results, the worst first, " +
-			"with more: the count left out. With scope changes, it checks what changed since base, uncommitted work included. " +
+			"with more: the count left out. Each result has hint: one line on how to fix it. With scope changes, it checks what changed since base, uncommitted work included. " +
 			"Then each result has change: new or worse when your edit made it, unchanged when it was there before, " +
 			"and results that are new or worse come before the worst unchanged ones.",
 		InputSchema: map[string]any{
@@ -191,6 +191,7 @@ func (s served) check(arguments json.RawMessage) (string, error) {
 		check.Mark(results, s.baseResults(file, opts, run, runDir, results))
 	}
 	check.SortResults(results)
+	check.AddHints(results)
 	shown := append([]check.Result{}, results[:min(maxResults, len(results))]...)
 	answer := checkAnswer{Results: shown, More: len(results) - len(shown), Unparsed: run.Parser.Unparsed()}
 	if !opts.all {

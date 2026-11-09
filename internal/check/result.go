@@ -39,6 +39,7 @@ type Result struct {
 	Details any // The JSON fields that only this rule has.
 	About   []Place
 	Change  Change // Empty in goalie check, which has no base results to compare with.
+	Hint    string // Empty in goalie check, whose users read the fixes in the README.
 }
 
 // MarshalJSON puts the shared fields beside the details in one object, because godeps reads the
@@ -55,6 +56,9 @@ func (r Result) MarshalJSON() ([]byte, error) {
 	fields["rule"], fields["mode"], fields["value"], fields["limit"] = r.Rule, r.Mode, r.Value, r.Limit
 	if r.Change != "" {
 		fields["change"] = r.Change
+	}
+	if r.Hint != "" {
+		fields["hint"] = r.Hint
 	}
 	return json.Marshal(fields)
 }
