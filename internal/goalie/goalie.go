@@ -16,6 +16,8 @@ import (
 	"github.com/n-valchev/goalie/internal/gitchange"
 )
 
+var helpFlags = []string{"-h", "-help", "--help"}
+
 const (
 	exitClean  = 0
 	exitFailed = 1
@@ -29,7 +31,9 @@ func Run(args []string, dir string, stdin io.Reader, stdout, stderr io.Writer) i
 	switch args[0] {
 	case "check":
 		return runCheck(args[1:], dir, stdout, stderr)
-	case "-h", "-help", "--help":
+	case "serve":
+		return runServe(args[1:], dir, stdin, stdout, stderr)
+	case helpFlags[0], helpFlags[1], helpFlags[2]:
 		fmt.Fprint(stdout, usage)
 		return exitClean
 	}
@@ -50,7 +54,7 @@ func runCheck(args []string, dir string, stdout, stderr io.Writer) int {
 		return fail(stderr, err)
 	}
 	// All of them before any runs, so that a mistake in the settings doesn't wait for a test run.
-	selected, err := selectRules(file, opts)
+	selected, err := selectRules(file, opts, newRun())
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -117,12 +121,16 @@ func ignoreDirective() extract.Directive {
 	return directive
 }
 
-func selectRules(file config.Settings, opts options) ([]selectedRule, error) {
-	var selected []selectedRule
-	run := check.Scope{
+// newRun gives the rules of one run a shared parser, diff, and file list, so that each is read once.
+func newRun() check.Scope {
+	return check.Scope{
 		Parser: extract.NewParser(ignoreDirective()), Changes: gitchange.NewCache(),
 		Files: check.NewFiles(), Warnings: check.NewWarnings(),
 	}
+}
+
+func selectRules(file config.Settings, opts options, run check.Scope) ([]selectedRule, error) {
+	var selected []selectedRule
 	for _, entry := range allRules {
 		named := slices.Contains(opts.ruleNames, entry.name)
 		if len(opts.ruleNames) > 0 && !named {
@@ -163,6 +171,13 @@ func runRules(selected []selectedRule, dir string, stderr io.Writer) (results []
 	perRule := make([][]check.Result, len(selected))
 	errs := make([]error, len(selected))
 	files.Parallel(len(selected), func(i int) {
+		// A panic in one rule's goroutine would stop the process, and in goalie serve that ends
+		// the agent's server.
+		defer func() {
+			if r := recover(); r != nil {
+				errs[i] = fmt.Errorf("panic: %v", r)
+			}
+		}()
 		perRule[i], errs[i] = selected[i].check.Results(dir, shared)
 	})
 	for i, entry := range selected {

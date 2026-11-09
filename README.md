@@ -786,6 +786,32 @@ Don't change `.goalierc` or `.goalieignore`, and don't add `//goalie:ignore`, un
 - Use the branch that your pull requests target in place of `origin/main`.
 - The instruction steers the agent, but it doesn't guard the code. Keep the full check in CI.
 
+### Give the agent the MCP server
+
+`goalie serve` runs an MCP server on stdin and stdout, so that an agent can call goalie as a tool. To add it to Claude Code for everyone who works on your repo, run this from the repo root:
+
+```sh
+claude mcp add --scope project goalie -- goalie serve
+```
+
+The command writes the server to `.mcp.json`. Commit that file. Each person approves the server the first time that Claude Code starts in the repo. To add the server for your own projects only, use `--scope user`.
+
+The server has one tool:
+
+| Tool | Input | Output |
+| --- | --- | --- |
+| `check` | `dir`, the absolute path of the folder that the agent works in. Optional: `scope` (`changes` or `all`, default `changes`), `path`, a package folder or a file relative to `dir`, and `base` | Up to 10 `results`, the worst first, with the fields of `goalie check --format json`. `more`, the count left out. `base`, the revision used. `unparsed`, the files that don't parse |
+
+- The tool runs a partial check, and never runs your tests.
+- It reads the `.goalierc` nearest to `dir`, so a worktree gets its own settings.
+- It compares against the `base` input, then `base` in `.goalierc`, then `HEAD`. So it never fails because a revision is missing. With `scope` `all`, it uses no revision, and the answer holds no `base`.
+- `path` replaces `paths` in `.goalierc`. An absolute `path` works too.
+- It skips a file that doesn't parse, so that a half-finished edit doesn't fail the call. `goalie check` still exits with `2` on that file.
+- It accepts a `dir` only in the repository where the server started, or in one of its worktrees.
+- It reads the disk on each call, so an answer is never stale.
+
+The server uses MCP version `2026-07-28`. It also answers a client that starts with `initialize`, with version `2025-11-25` or the older version that the client asks for.
+
 ## Map your packages
 
 godeps reads your Go code and writes a map of it as one HTML file. You open the file in a browser, with no network and no install. It helps you see which code depends on a package, which imports break a rule, and where the risky and copied code is.

@@ -168,6 +168,7 @@ godeps now exits with `2` on a crap report with no `score`. `goalie check crap -
 
 - `goalie check --partial` runs no tests. `dup` gives its exact result, and `crap` reports from complexity alone: a function that can't pass at any coverage, or the coverage that a function needs.
 - `goalie check --all` checks the whole repository and needs no revision.
+- `goalie serve` runs an MCP server for coding agents. Its tool `check` runs a partial check and gives the 10 worst results, the count of the rest, the revision used, and the files that don't parse. It needs no revision: with no `base` input and no `base` in `.goalierc`, it uses `HEAD`. See the README section "Give the agent the MCP server".
 - `mode` and `scope` for each rule.
 - A rule that you name runs even if it is `off`, and reports as `warn`.
 - Nine new rules report code that is hard to change:

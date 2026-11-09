@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	"os"
 	"path"
@@ -63,6 +64,10 @@ type Parser struct {
 	directive Directive
 	lock      sync.Mutex
 	parsed    map[string]func() (parsedFile, error)
+	// skipUnparsed is for an agent's half-finished edit, which must not fail the whole check. CI
+	// leaves it off, so that a file that doesn't build can't pass.
+	skipUnparsed bool
+	unparsed     map[string]bool
 }
 
 // parsedFile holds the functions and the types of a file, so that the function rules and the type
@@ -73,7 +78,25 @@ type parsedFile struct {
 }
 
 func NewParser(directive Directive) *Parser {
-	return &Parser{directive: directive, parsed: map[string]func() (parsedFile, error){}}
+	return &Parser{directive: directive, parsed: map[string]func() (parsedFile, error){}, unparsed: map[string]bool{}}
+}
+
+// SkipUnparsed makes the parser leave out a file with a syntax error, and list it in Unparsed. A
+// mistake in a directive still fails, because it is no half-finished edit.
+func (p *Parser) SkipUnparsed() {
+	p.skipUnparsed = true
+}
+
+// Unparsed returns the files that the parser left out, sorted.
+func (p *Parser) Unparsed() []string {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	files := make([]string, 0, len(p.unparsed))
+	for file := range p.unparsed {
+		files = append(files, file)
+	}
+	slices.Sort(files)
+	return files
 }
 
 // Parse reads files, given relative to dir, and returns their functions in file order, apart from
@@ -122,13 +145,22 @@ func (p *Parser) parseAll(dir string, files []string) ([]parsedFile, error) {
 	gofiles.Parallel(len(files), func(i int) {
 		parsed[i], errs[i] = p.parseOnce(dir, files[i])
 	})
+	var kept []parsedFile
 	// The first error in file order, so that it matches a serial parse.
-	for _, err := range errs {
+	for i, err := range errs {
+		var syntax scanner.ErrorList
+		if err != nil && p.skipUnparsed && errors.As(err, &syntax) {
+			p.lock.Lock()
+			p.unparsed[files[i]] = true
+			p.lock.Unlock()
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
+		kept = append(kept, parsed[i])
 	}
-	return parsed, nil
+	return kept, nil
 }
 
 func (p *Parser) parseOnce(dir, file string) (parsedFile, error) {

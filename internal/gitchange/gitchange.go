@@ -475,3 +475,17 @@ func (c *Cache) Base(dir, rev string, files []string) (map[string]Base, error) {
 	}
 	return result, nil
 }
+
+// Repository returns the Git folder that every worktree of the repo shares, and the top folder of
+// the worktree that holds dir. Two dirs with the same shared folder are in one repo.
+func Repository(dir string) (shared, top string, err error) {
+	out, err := git(dir, "rev-parse", "--path-format=absolute", "--git-common-dir", "--show-toplevel")
+	if err != nil {
+		return "", "", err
+	}
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) != 2 {
+		return "", "", fmt.Errorf("git rev-parse: unexpected output %q", out)
+	}
+	return filepath.Clean(lines[0]), filepath.Clean(lines[1]), nil
+}
