@@ -109,7 +109,7 @@ func decodeInput(arguments json.RawMessage, input any) error {
 }
 
 func (s served) checkTool() mcp.Tool {
-	return mcp.Tool{
+	return s.tool(mcp.Tool{
 		Name: "check",
 		Description: "Check Go code against goalie's rules, with no test run. Gives up to 10 results, the worst first, " +
 			"with more: the count left out. Each result has hint: one line on how to fix it. With scope changes, it checks what changed since base, uncommitted work included. " +
@@ -125,8 +125,7 @@ func (s served) checkTool() mcp.Tool {
 				"base":  map[string]any{"type": "string", "description": "The revision to compare against. The default is base in .goalierc, then HEAD."},
 			},
 		},
-		Call: s.check,
-	}
+	}, s.check)
 }
 
 type checkInput struct {
@@ -143,7 +142,7 @@ type checkAnswer struct {
 	Unparsed []string       `json:"unparsed"`
 }
 
-func (s served) check(arguments json.RawMessage) (string, error) {
+func (s served) check(arguments json.RawMessage, run check.Scope) (string, error) {
 	var input checkInput
 	if err := decodeInput(arguments, &input); err != nil {
 		return "", err
@@ -173,8 +172,6 @@ func (s served) check(arguments json.RawMessage) (string, error) {
 	// HEAD and not an error, because an agent with uncommitted work needs an answer. CI doesn't use
 	// the server, so its guard against a forgotten revision still holds.
 	opts.base = cmp.Or(input.Base, file.Base, "HEAD")
-	run := newRun()
-	run.Parser.SkipUnparsed()
 	selected, err := selectRules(file, opts, run)
 	if err != nil {
 		return "", err

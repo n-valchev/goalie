@@ -11,7 +11,7 @@ import (
 )
 
 func (s served) similarTool() mcp.Tool {
-	return mcp.Tool{
+	return s.tool(mcp.Tool{
 		Name: "find_similar",
 		Description: "Find the functions of the repo that are similar to one Go function, with the comparison and the limits " +
 			"of the dup rule of goalie check. Call it before you write a new function, and reuse a match instead of a copy. " +
@@ -27,8 +27,7 @@ func (s served) similarTool() mcp.Tool {
 				"line": map[string]any{"type": "integer", "description": "Any line of the function in file, from 1."},
 			},
 		},
-		Call: s.similar,
-	}
+	}, s.similar)
 }
 
 type similarInput struct {
@@ -44,7 +43,7 @@ type similarAnswer struct {
 	Unparsed []string      `json:"unparsed"`
 }
 
-func (s served) similar(arguments json.RawMessage) (string, error) {
+func (s served) similar(arguments json.RawMessage, run check.Scope) (string, error) {
 	var input similarInput
 	if err := decodeInput(arguments, &input); err != nil {
 		return "", err
@@ -57,8 +56,6 @@ func (s served) similar(arguments json.RawMessage) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	run := newRun()
-	run.Parser.SkipUnparsed()
 	// all, because a match can be any function of the repo, changed or not.
 	dup, err := buildDup(file, options{all: true}, run)
 	if err != nil {

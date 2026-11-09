@@ -4,12 +4,13 @@ import (
 	"cmp"
 	"encoding/json"
 
+	"github.com/n-valchev/goalie/internal/check"
 	"github.com/n-valchev/goalie/internal/config"
 	"github.com/n-valchev/goalie/internal/mcp"
 )
 
 func (s served) rulesTool() mcp.Tool {
-	return mcp.Tool{
+	return s.tool(mcp.Tool{
 		Name: "rules",
 		Description: "Give the limit, mode, and scope of each rule of goalie check, from the .goalierc nearest to dir " +
 			"and the defaults. Call it at the start of a task, and write code within the limits.",
@@ -20,8 +21,7 @@ func (s served) rulesTool() mcp.Tool {
 				"dir": map[string]any{"type": "string", "description": "The absolute path of the folder that you work in."},
 			},
 		},
-		Call: s.rules,
-	}
+	}, s.rules)
 }
 
 type rulesInput struct {
@@ -41,7 +41,7 @@ type rulesAnswer struct {
 	Rules []ruleSummary `json:"rules"`
 }
 
-func (s served) rules(arguments json.RawMessage) (string, error) {
+func (s served) rules(arguments json.RawMessage, run check.Scope) (string, error) {
 	var input rulesInput
 	if err := decodeInput(arguments, &input); err != nil {
 		return "", err
@@ -56,7 +56,7 @@ func (s served) rules(arguments json.RawMessage) (string, error) {
 	}
 	// Built as goalie check --all builds them, so that a limit that check rejects is an error here
 	// too, and not a limit for the agent to write within.
-	if _, err := selectRules(file, options{all: true}, newRun()); err != nil {
+	if _, err := selectRules(file, options{all: true}, run); err != nil {
 		return "", err
 	}
 	var answer rulesAnswer

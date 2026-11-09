@@ -119,6 +119,13 @@ func (p *Parser) Unparsed() []string {
 	return files
 }
 
+// FilesRead returns the number of files that the parser read, those that didn't parse included.
+func (p *Parser) FilesRead() int {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	return len(p.parsed)
+}
+
 // Parse reads files, given relative to dir, and returns their functions in file order, apart from
 // those excused from rule.
 func (p *Parser) Parse(dir string, files []string, rule string) ([]Function, error) {

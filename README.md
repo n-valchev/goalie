@@ -849,6 +849,14 @@ Each result holds `hint`, one line on how to fix it, so that the agent needs no 
 - Test files, unless `includeTests` is on, and functions with `//goalie:ignore dup` are no match.
 - `code` that isn't one Go function, and a `line` outside any function, give an error.
 
+The server logs each tool call that takes longer than 5 seconds. The call still gives its answer. To check the log, run this in the folder of the nearest `.goalierc`, or at the root of your worktree if it has none:
+
+```sh
+cat .goalie/slow.log
+```
+
+Each line gives the start time, the tool, the duration, and the number of files read, for example `2026-11-09T14:03:12+01:00 check took 6.2s, read 1834 files`. Repeated lines are the sign that goalie needs an index. The server writes `.goalie/.gitignore`, so that Git ignores the folder. If the log can't be written, the server writes the reason to its stderr. The limit of 5 seconds has no setting.
+
 The server uses MCP version `2026-07-28`. It also answers a client that starts with `initialize`, with version `2025-11-25` or the older version that the client asks for.
 
 ## Map your packages
