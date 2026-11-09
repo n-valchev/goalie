@@ -132,7 +132,7 @@ Settings file:
   limit: 80 for long-function, 4 for many-arguments, 5 for
   many-dependencies, 3 for complex-condition, 15 for
   cognitive-complexity, 1 for primitive-arguments, 1000 for long-file,
-  5 for high-mean-complexity, and 1 for low-cohesion. A limit of 0 doesn't
+  7 for high-mean-complexity, and 1 for low-cohesion. A limit of 0 doesn't
   turn a rule off.
 
 Files:

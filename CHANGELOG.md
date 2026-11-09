@@ -181,7 +181,7 @@ godeps now exits with `2` on a crap report with no `score`. `goalie check crap -
   | `cognitive-complexity` | A function that is hard to follow. Each branch adds 1, plus 1 for each block that it is inside. A Go guard, such as `if err != nil { return err }`, adds 0 | 15 |
   | `primitive-arguments` | A function with a parameter of a basic type, such as `string`, that it only passes down to other code in your repo. A later change of the type then changes every function that passes the value down | 1 |
   | `long-file` | A file with more lines than the limit. With scope `changes`, a file reports only when the change takes it over the limit, or when it is new. An old long file gives no result | 1000 |
-  | `high-mean-complexity` | A file whose functions have a mean complexity over the limit. Complexity is the one that `crap` uses. Scope `changes` works as for `long-file` | 5 |
+  | `high-mean-complexity` | A file whose functions have a mean complexity over the limit. Complexity is the one that `crap` uses. Scope `changes` works as for `long-file` | 7 |
   | `low-cohesion` | A struct type whose methods fall into more groups than the limit. Two methods are in one group when they use the same field or one calls the other. Excuse a type with `//goalie:ignore low-cohesion <reason>` above it | 1 |
 
   Set each limit with `limit` in the rule's object in `rules`. Their default mode is `warn`, so they never change the exit code until you set `"mode": "fail"`. Their default scope is `changes`, so they need a revision. If your `.goalierc` sets no `base` and gives `dup` and `crap` scope `all` or mode `off`, `goalie check` with no `--base` now exits with `2`. To fix this, give the nine new rules the same scope or mode.

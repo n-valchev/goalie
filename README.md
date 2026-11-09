@@ -660,7 +660,7 @@ With scope `all` or `--all`, every file over the limit reports.
 `high-mean-complexity` reports a file whose functions have a mean complexity over its limit. A file of many complex functions is hard to change, even when no single function scores over the `crap` limit. Complexity is the cyclomatic complexity that `crap` uses: 1, plus 1 for each `if`, `for`, `range`, `&&`, and `||`, and for each `case` of a `switch` or `select` other than `default`. The result points at line 1 and names the number of functions, so that you can judge the mean:
 
 ```text
-billing/parse.go:1: warn high-mean-complexity: billing/parse.go has mean complexity 5.4 over 12 functions (limit 5)
+billing/parse.go:1: warn high-mean-complexity: billing/parse.go has mean complexity 7.4 over 12 functions (limit 7)
 ```
 
 - Every function and method in the file counts. A closure counts as part of the function that holds it.
@@ -671,7 +671,7 @@ billing/parse.go:1: warn high-mean-complexity: billing/parse.go has mean complex
 
 | Setting in `rules.high-mean-complexity` | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `limit` | Number | `5` | The highest mean that passes. `--limit` replaces it |
+| `limit` | Number | `7` | The highest mean that passes. `--limit` replaces it |
 
 - The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
 - It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.

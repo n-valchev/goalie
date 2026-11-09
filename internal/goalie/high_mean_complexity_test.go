@@ -16,14 +16,14 @@ func goFile(funcs ...string) string {
 	return "package a\n\n" + strings.Join(funcs, "")
 }
 
-func TestHighMeanComplexityReportsAMeanOverFive(t *testing.T) {
+func TestHighMeanComplexityReportsAMeanOverSeven(t *testing.T) {
 	cases := []struct {
 		name       string
 		src        string
 		wantStdout string
 	}{
-		{"a mean of 5", goFile(complexFunc("A", 5), complexFunc("B", 5)), ""},
-		{"a mean of 5.5", goFile(complexFunc("A", 5), complexFunc("B", 6)), meanWarn("5.5", "2 functions")},
+		{"a mean of 7", goFile(complexFunc("A", 7), complexFunc("B", 7)), ""},
+		{"a mean of 7.5", goFile(complexFunc("A", 7), complexFunc("B", 8)), meanWarn("7.5", "2 functions")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -46,7 +46,7 @@ func checkMeanComplexity(t *testing.T, base, now, settings, wantStdout string) {
 }
 
 func meanWarn(mean string, functions string) string {
-	return "a.go:1: warn high-mean-complexity: a.go has mean complexity " + mean + " over " + functions + " (limit 5)\n"
+	return "a.go:1: warn high-mean-complexity: a.go has mean complexity " + mean + " over " + functions + " (limit 7)\n"
 }
 
 // A limit of 0 would report the file, if it had a mean above 0.
@@ -56,14 +56,14 @@ func TestAFileWithNoFunctionsHasNoMeanComplexity(t *testing.T) {
 }
 
 func TestWhatCountsTowardsTheMeanComplexity(t *testing.T) {
-	closure := "func A() {\n\tf := func() {\n" + strings.Repeat("\t\tif true {\n\t\t}\n", 5) + "\t}\n\tf()\n}\n"
+	closure := "func A() {\n\tf := func() {\n" + strings.Repeat("\t\tif true {\n\t\t}\n", 7) + "\t}\n\tf()\n}\n"
 	cases := []struct {
 		name       string
 		src        string
 		wantStdout string
 	}{
-		{"a function with no body doesn't count", goFile(complexFunc("A", 6), "func B()\n"), meanWarn("6.0", "1 function")},
-		{"a closure adds to its function", goFile(closure), meanWarn("6.0", "1 function")},
+		{"a function with no body doesn't count", goFile(complexFunc("A", 8), "func B()\n"), meanWarn("8.0", "1 function")},
+		{"a closure adds to its function", goFile(closure), meanWarn("8.0", "1 function")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -79,10 +79,10 @@ func TestHighMeanComplexityReportsOnlyAChangeThatCrossesTheLimit(t *testing.T) {
 		wantStdout string
 	}{
 		{"an old file over the limit gives no result",
-			goFile(complexFunc("A", 6)), goFile(complexFunc("A", 6), complexFunc("B", 7)), ""},
-		{"a change from 5 to 5.5 reports",
-			goFile(complexFunc("A", 5)), goFile(complexFunc("A", 5), complexFunc("B", 6)), meanWarn("5.5", "2 functions")},
-		{"a base file that doesn't parse gives no result", "package a\n\nfunc {\n", goFile(complexFunc("A", 6)), ""},
+			goFile(complexFunc("A", 8)), goFile(complexFunc("A", 8), complexFunc("B", 9)), ""},
+		{"a change from 7 to 7.5 reports",
+			goFile(complexFunc("A", 7)), goFile(complexFunc("A", 7), complexFunc("B", 8)), meanWarn("7.5", "2 functions")},
+		{"a base file that doesn't parse gives no result", "package a\n\nfunc {\n", goFile(complexFunc("A", 8)), ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestHighMeanComplexityReportsOnlyAChangeThatCrossesTheLimit(t *testing.T) {
 
 func TestAHighMeanComplexityResultHasAJSONForm(t *testing.T) {
 	dir := gitRepo(t, map[string]string{"a.go": "package a\n", ".goalierc": onlyMeanComplexity})
-	write(t, dir, "a.go", goFile(complexFunc("A", 5), complexFunc("B", 6)))
+	write(t, dir, "a.go", goFile(complexFunc("A", 7), complexFunc("B", 8)))
 	code, stdout, stderr := runGoalie(t, dir, "check", "--format", "json", "--base", "HEAD")
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0; stderr: %s", code, stderr)
@@ -103,7 +103,7 @@ func TestAHighMeanComplexityResultHasAJSONForm(t *testing.T) {
 		t.Fatalf("got %d results, want 1: %s", len(results), stdout)
 	}
 	wantFields(t, results[0], map[string]any{
-		"rule": "high-mean-complexity", "mode": "warn", "value": 5.5, "limit": 5.0,
+		"rule": "high-mean-complexity", "mode": "warn", "value": 7.5, "limit": 7.0,
 		"file": "a.go", "line": 1.0, "functions": 2.0,
 	})
 }

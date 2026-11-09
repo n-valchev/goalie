@@ -26,7 +26,7 @@ var (
 		},
 	}
 	HighMeanComplexity = FileMeasure{
-		Name: "high-mean-complexity", DefaultLimit: 5, Of: rules.MeanComplexity,
+		Name: "high-mean-complexity", DefaultLimit: 7, Of: rules.MeanComplexity,
 		Describe: func(file string, measured rules.FileMeasurement) string {
 			functions := fmt.Sprintf("%d functions", measured.Functions)
 			if measured.Functions == 1 {
