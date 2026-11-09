@@ -1,8 +1,9 @@
-// Package rules holds the measures of the function rules. It works on parsed Go code and knows
+// Package rules holds the measures of the function and file rules. It works on Go code and knows
 // nothing about Git, settings, or output, which internal/check adds once for every rule.
 package rules
 
 import (
+	"bytes"
 	"go/ast"
 	"go/token"
 	"slices"
@@ -27,6 +28,15 @@ type Parameter struct {
 // Lines counts blank lines and comments too, because an agent reads them all.
 func Lines(fn extract.Function) Measurement {
 	return Measurement{Value: fn.Lines(), Line: fn.StartLine}
+}
+
+// FileLines counts a last line with no newline too, because an editor shows it as a line.
+func FileLines(src []byte) float64 {
+	lines := bytes.Count(src, []byte("\n"))
+	if len(src) > 0 && src[len(src)-1] != '\n' {
+		lines++
+	}
+	return float64(lines)
 }
 
 // Parameters counts an unnamed parameter as 1, so that func(int, string) is 2, as it is to a caller.

@@ -221,30 +221,43 @@ func TestALongFunctionResultHasAJSONForm(t *testing.T) {
 	})
 }
 
-// A wrapper on PATH logs each git command, so the test sees how often a run asks for the changes.
-// Each ask runs merge-base once.
-func TestAPartialCheckRunsGitOnceForEveryRule(t *testing.T) {
-	dir := repoWithNewCode(t, `{}`, longFunc("Parse", 81))
+// wrapGit puts a git first on PATH that logs each command and then runs script, before the real
+// git.
+func wrapGit(t *testing.T, script string) string {
+	t.Helper()
 	realGit, err := exec.LookPath("git")
 	if err != nil {
 		t.Fatal(err)
 	}
 	bin, log := t.TempDir(), filepath.Join(t.TempDir(), "git.log")
-	write(t, bin, "git", fmt.Sprintf("#!/bin/sh\necho \"$*\" >> %q\nexec %q \"$@\"\n", log, realGit))
+	write(t, bin, "git", fmt.Sprintf("#!/bin/sh\necho \"$*\" >> %q\n%s\nexec %q \"$@\"\n", log, script, realGit))
 	if err := os.Chmod(filepath.Join(bin, "git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return log
+}
+
+func readLog(t *testing.T, log string) string {
+	t.Helper()
+	logged, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(logged)
+}
+
+// Each ask for the changes runs merge-base once.
+func TestAPartialCheckRunsGitOnceForEveryRule(t *testing.T) {
+	dir := repoWithNewCode(t, `{}`, longFunc("Parse", 81))
+	log := wrapGit(t, "")
 
 	code, stdout, stderr := runGoalie(t, dir, "check", "--partial", "--base", "HEAD")
 	if code != 0 || stdout != longWarn {
 		t.Errorf("got exit code %d and stdout %q, want 0 and %q; stderr: %s", code, stdout, longWarn, stderr)
 	}
-	logged, err := os.ReadFile(log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if asks := strings.Count(string(logged), " merge-base "); asks != 1 {
+	logged := readLog(t, log)
+	if asks := strings.Count(logged, " merge-base "); asks != 1 {
 		t.Errorf("git merge-base ran %d times, want 1:\n%s", asks, logged)
 	}
 }

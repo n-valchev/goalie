@@ -2,12 +2,15 @@
 package gitchange
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -39,30 +42,43 @@ func (c Changes) Touches(file string, start, end int) bool {
 // Since returns what changed in the working tree since the merge base of rev and HEAD. Its paths
 // are relative to dir, which may be any directory inside the repo.
 func Since(dir, rev string) (Changes, error) {
+	d, err := diffSince(dir, rev)
+	return d.changes, err
+}
+
+// diff keeps the merge base and the path of dir from the root, so that Base can read the files
+// that changed without asking Git for them again.
+type diff struct {
+	changes      Changes
+	base, prefix string
+}
+
+func diffSince(dir, rev string) (diff, error) {
 	prefix, err := git(dir, "rev-parse", "--show-prefix")
 	if err != nil {
-		return nil, fmt.Errorf("--base needs a Git repository: %w", err)
+		return diff{}, fmt.Errorf("--base needs a Git repository: %w", err)
 	}
+	prefix = strings.TrimSuffix(prefix, "\n")
 	base, err := mergeBase(dir, rev)
 	if err != nil {
-		return nil, err
+		return diff{}, err
 	}
 	patch, err := git(dir, append(diffArgs, base)...)
 	if err != nil {
-		return nil, err
+		return diff{}, err
 	}
 	fromRoot, err := parsePatch(patch)
 	if err != nil {
-		return nil, err
+		return diff{}, err
 	}
 	// Without the :/ pathspec, ls-files lists only the files below dir.
 	listed, err := git(dir, "ls-files", "--others", "--exclude-standard", "--full-name", "-z", ":/")
 	if err != nil {
-		return nil, err
+		return diff{}, err
 	}
 	untracked, err := withoutTracked(dir, nulSeparated(listed))
 	if err != nil {
-		return nil, err
+		return diff{}, err
 	}
 	for _, file := range untracked {
 		fromRoot[file] = append(fromRoot[file], Range{1, math.MaxInt})
@@ -70,27 +86,38 @@ func Since(dir, rev string) (Changes, error) {
 
 	changes := Changes{}
 	for file, ranges := range fromRoot {
-		rel, err := filepath.Rel(strings.TrimSuffix(prefix, "\n"), file)
+		rel, err := filepath.Rel(prefix, file)
 		if err != nil {
-			return nil, err
+			return diff{}, err
 		}
 		changes[filepath.ToSlash(rel)] = ranges
 	}
-	return changes, nil
+	return diff{changes, base, prefix}, nil
 }
 
-// For returns c keyed by files, which are relative to dir. The standard library can't normalize
-// Unicode, and core.precomposeunicode can't help alone, because Git prints the stored form of a
-// tracked name and the disk may hold the other one. So a name that matches no file byte for byte
-// falls back to asking the filesystem whether both names are one file. Only a non-ASCII name can
-// have two forms, which keeps hard links between ASCII names apart.
+// For returns c keyed by files, which are relative to dir.
 func (c Changes) For(dir string, files []string) Changes {
-	result := make(Changes, len(c))
+	result := make(Changes, len(files))
+	for file, names := range c.names(dir, files) {
+		for _, name := range names {
+			// The first append copies, because rules that share a Cache read c at once.
+			result[file] = append(result[file], c[name]...)
+		}
+	}
+	return result
+}
+
+// names maps each of files to its names in c. The standard library can't normalize Unicode, and
+// core.precomposeunicode can't help alone, because Git prints the stored form of a tracked name and
+// the disk may hold the other one. So a name that matches no file byte for byte falls back to
+// asking the filesystem whether both names are one file. Only a non-ASCII name can have two forms,
+// which keeps hard links between ASCII names apart.
+func (c Changes) names(dir string, files []string) map[string][]string {
+	result := make(map[string][]string, len(files))
 	var unmatched []string
 	for _, file := range files {
-		if ranges, ok := c[file]; ok {
-			// Clipped, so that the append below copies it: rules that share a Cache read c at once.
-			result[file] = slices.Clip(ranges)
+		if _, ok := c[file]; ok {
+			result[file] = []string{file}
 		} else {
 			unmatched = append(unmatched, file)
 		}
@@ -108,11 +135,74 @@ func (c Changes) For(dir string, files []string) Changes {
 	for name, info := range identify(dir, otherForms) {
 		for file, identity := range scanned {
 			if os.SameFile(info, identity) {
-				result[file] = append(result[file], c[name]...)
+				result[file] = append(result[file], name)
 			}
 		}
 	}
 	return result
+}
+
+// Base is a file at the merge base. New means that the file doesn't exist there.
+type Base struct {
+	New     bool
+	Content []byte
+}
+
+// read reads all the files in one git call, because one call for each file could break the
+// 1-second budget of a partial check on a large change. A file that has no base value, such as a
+// folder or a submodule at the base, gets no entry.
+func (d diff) read(dir string, files []string) (map[string]Base, error) {
+	var input strings.Builder
+	var asked []string
+	for file, names := range d.changes.names(dir, files) {
+		for _, name := range names {
+			// It would split into two lines of input.
+			if strings.Contains(name, "\n") {
+				continue
+			}
+			fmt.Fprintf(&input, "%s:%s\n", d.base, path.Join(d.prefix, name))
+			asked = append(asked, file)
+		}
+	}
+	if len(asked) == 0 {
+		return map[string]Base{}, nil
+	}
+	out, err := gitWithInput(dir, input.String(), "cat-file", "--batch")
+	if err != nil {
+		return nil, err
+	}
+	reader := bufio.NewReader(strings.NewReader(out))
+	found := map[string]Base{}
+	for _, file := range asked {
+		header, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("unexpected git cat-file output: %w", err)
+		}
+		if strings.HasSuffix(header, " missing\n") {
+			// A file with two names exists when either name does.
+			if _, ok := found[file]; !ok {
+				found[file] = Base{New: true}
+			}
+			continue
+		}
+		fields := strings.Fields(header)
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("unexpected git cat-file line %q", header)
+		}
+		size, err := strconv.Atoi(fields[2])
+		if err != nil {
+			return nil, fmt.Errorf("unexpected git cat-file line %q", header)
+		}
+		// Git ends each object with a newline of its own.
+		content := make([]byte, size+1)
+		if _, err := io.ReadFull(reader, content); err != nil {
+			return nil, fmt.Errorf("unexpected git cat-file output: %w", err)
+		}
+		if fields[1] == "blob" {
+			found[file] = Base{Content: content[:size]}
+		}
+	}
+	return found, nil
 }
 
 // withoutTracked drops the names that are another form of a tracked name. ls-files compares names
@@ -284,12 +374,17 @@ func environment(env []string) []string {
 }
 
 func git(dir string, args ...string) (string, error) {
+	return gitWithInput(dir, "", args...)
+}
+
+func gitWithInput(dir, input string, args ...string) (string, error) {
 	// goalie writes no files, and each setting stops a different write. autoRefreshIndex covers the
 	// index of this repo. It doesn't reach the git status that git diff runs in each submodule, and
 	// GIT_OPTIONAL_LOCKS covers only that one.
 	settings := []string{"-c", "core.quotePath=true", "-c", "diff.autoRefreshIndex=false"}
 	cmd := exec.Command("git", append(settings, args...)...)
 	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(input)
 	cmd.Env = append(environment(cmd.Environ()), "GIT_OPTIONAL_LOCKS=0")
 	out, err := cmd.Output()
 	if err != nil {
@@ -306,7 +401,11 @@ func git(dir string, args ...string) (string, error) {
 // need the changes: with each rule running Git, a partial check goes over its 1-second budget.
 type Cache struct {
 	lock  sync.Mutex
-	since map[sinceKey]func() (Changes, error)
+	since map[sinceKey]func() (diff, error)
+	// baseLock is held across the git call, so that a second rule waits for the files that the first
+	// one reads instead of asking Git for them again.
+	baseLock sync.Mutex
+	bases    map[sinceKey]map[string]*Base
 }
 
 type sinceKey struct {
@@ -314,19 +413,65 @@ type sinceKey struct {
 }
 
 func NewCache() *Cache {
-	return &Cache{since: map[sinceKey]func() (Changes, error){}}
+	return &Cache{since: map[sinceKey]func() (diff, error){}, bases: map[sinceKey]map[string]*Base{}}
 }
 
 // Since returns the same result as the function Since, and runs Git only on the first call for
 // dir and rev.
 func (c *Cache) Since(dir, rev string) (Changes, error) {
+	d, err := c.diff(dir, rev)
+	return d.changes, err
+}
+
+func (c *Cache) diff(dir, rev string) (diff, error) {
 	key := sinceKey{dir, rev}
 	c.lock.Lock()
 	since, ok := c.since[key]
 	if !ok {
-		since = sync.OnceValues(func() (Changes, error) { return Since(dir, rev) })
+		since = sync.OnceValues(func() (diff, error) { return diffSince(dir, rev) })
 		c.since[key] = since
 	}
 	c.lock.Unlock()
 	return since()
+}
+
+// Base returns files, which are relative to dir, at the merge base that Since uses. A file with no
+// base value gets no entry. It asks Git only for the files that no earlier call read.
+func (c *Cache) Base(dir, rev string, files []string) (map[string]Base, error) {
+	d, err := c.diff(dir, rev)
+	if err != nil {
+		return nil, err
+	}
+	key := sinceKey{dir, rev}
+	c.baseLock.Lock()
+	defer c.baseLock.Unlock()
+	read := c.bases[key]
+	if read == nil {
+		read = map[string]*Base{}
+		c.bases[key] = read
+	}
+	unread := slices.DeleteFunc(slices.Clone(files), func(file string) bool {
+		_, ok := read[file]
+		return ok
+	})
+	if len(unread) > 0 {
+		found, err := d.read(dir, unread)
+		if err != nil {
+			return nil, err
+		}
+		for _, file := range unread {
+			if base, ok := found[file]; ok {
+				read[file] = &base
+			} else {
+				read[file] = nil
+			}
+		}
+	}
+	result := make(map[string]Base, len(files))
+	for _, file := range files {
+		if base := read[file]; base != nil {
+			result[file] = *base
+		}
+	}
+	return result, nil
 }

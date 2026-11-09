@@ -81,18 +81,22 @@ type ruleEntry struct {
 	defaultMode config.Mode
 	control     func(config.Rules) config.Control
 	build       func(config.Settings, options, check.Scope) (rule, error)
+	// noDirective keeps the name out of //goalie:ignore, which sits on a function. A file rule has
+	// no directive, so the user leaves out a file with the skip rules instead.
+	noDirective bool
 }
 
 // A new rule defaults to warn, so that adopting it can't block work.
 var allRules = []ruleEntry{
-	{check.DupRule, config.ModeFail, func(rules config.Rules) config.Control { return rules.Dup.Control }, newDup},
-	{check.CrapRule, config.ModeFail, func(rules config.Rules) config.Control { return rules.Crap.Control }, newCrap},
-	measureEntry(check.LongFunction, func(rules config.Rules) config.FunctionRule { return rules.LongFunction }),
-	measureEntry(check.ManyArguments, func(rules config.Rules) config.FunctionRule { return rules.ManyArguments }),
-	measureEntry(check.ManyDependencies, func(rules config.Rules) config.FunctionRule { return rules.ManyDependencies }),
-	measureEntry(check.ComplexCondition, func(rules config.Rules) config.FunctionRule { return rules.ComplexCondition }),
-	measureEntry(check.CognitiveComplexity, func(rules config.Rules) config.FunctionRule { return rules.CognitiveComplexity }),
-	measureEntry(check.PrimitiveArguments, func(rules config.Rules) config.FunctionRule { return rules.PrimitiveArguments }),
+	{name: check.DupRule, defaultMode: config.ModeFail, control: func(rules config.Rules) config.Control { return rules.Dup.Control }, build: newDup},
+	{name: check.CrapRule, defaultMode: config.ModeFail, control: func(rules config.Rules) config.Control { return rules.Crap.Control }, build: newCrap},
+	measureEntry(check.LongFunction, func(rules config.Rules) config.LimitRule { return rules.LongFunction }),
+	measureEntry(check.ManyArguments, func(rules config.Rules) config.LimitRule { return rules.ManyArguments }),
+	measureEntry(check.ManyDependencies, func(rules config.Rules) config.LimitRule { return rules.ManyDependencies }),
+	measureEntry(check.ComplexCondition, func(rules config.Rules) config.LimitRule { return rules.ComplexCondition }),
+	measureEntry(check.CognitiveComplexity, func(rules config.Rules) config.LimitRule { return rules.CognitiveComplexity }),
+	measureEntry(check.PrimitiveArguments, func(rules config.Rules) config.LimitRule { return rules.PrimitiveArguments }),
+	fileEntry(check.LongFile, func(rules config.Rules) config.LimitRule { return rules.LongFile }),
 }
 
 type selectedRule struct {
@@ -104,7 +108,9 @@ type selectedRule struct {
 func ignoreDirective() extract.Directive {
 	directive := extract.Directive{Name: extract.IgnoreDirective}
 	for _, entry := range allRules {
-		directive.Rules = append(directive.Rules, entry.name)
+		if !entry.noDirective {
+			directive.Rules = append(directive.Rules, entry.name)
+		}
 	}
 	return directive
 }
@@ -220,24 +226,41 @@ func newCrap(file config.Settings, opts options, scope check.Scope) (rule, error
 
 // measureEntry gives each function rule the same settings and flags, so that a new rule adds only
 // its measure.
-func measureEntry(measure check.Measure, settings func(config.Rules) config.FunctionRule) ruleEntry {
+func measureEntry(measure check.Measure, settings func(config.Rules) config.LimitRule) ruleEntry {
+	return limitEntry(measure.Name, settings, func(scope check.Scope) (rule, *check.Limited) {
+		function := check.NewFunction(scope, measure)
+		return function, &function.Limited
+	})
+}
+
+func fileEntry(measure check.FileMeasure, settings func(config.Rules) config.LimitRule) ruleEntry {
+	entry := limitEntry(measure.Name, settings, func(scope check.Scope) (rule, *check.Limited) {
+		file := check.NewFile(scope, measure)
+		return file, &file.Limited
+	})
+	entry.noDirective = true
+	return entry
+}
+
+func limitEntry(name string, settings func(config.Rules) config.LimitRule,
+	newRule func(check.Scope) (rule, *check.Limited)) ruleEntry {
 	return ruleEntry{
-		name:        measure.Name,
+		name:        name,
 		defaultMode: config.ModeWarn,
 		control:     func(rules config.Rules) config.Control { return settings(rules).Control },
 		build: func(file config.Settings, opts options, scope check.Scope) (rule, error) {
-			function := check.NewFunction(scope, measure)
-			function.ApplyRule(settings(file.Rules))
+			built, limited := newRule(scope)
+			limited.ApplyRule(settings(file.Rules))
 			if opts.limit != nil {
-				function.Limit = *opts.limit
+				limited.Limit = *opts.limit
 			}
-			if err := function.Apply(file, nil); err != nil {
+			if err := limited.Apply(file, nil); err != nil {
 				return nil, err
 			}
-			if err := function.Validate(); err != nil {
+			if err := limited.Validate(); err != nil {
 				return nil, fmt.Errorf("%s: %w", config.Name, err)
 			}
-			return function, nil
+			return built, nil
 		},
 	}
 }

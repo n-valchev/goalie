@@ -67,41 +67,57 @@ func NewWarnings() *Warnings {
 }
 
 func (w *Warnings) warnUnmatched(stderr io.Writer, repo config.Repo, paths []string) {
+	for _, warning := range repo.UnmatchedWarnings(tool, paths) {
+		w.warn(stderr, warning)
+	}
+}
+
+func (w *Warnings) warn(stderr io.Writer, warning string) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	for _, warning := range repo.UnmatchedWarnings(tool, paths) {
-		if !w.printed[warning] {
-			w.printed[warning] = true
-			fmt.Fprint(stderr, warning)
+	if !w.printed[warning] {
+		w.printed[warning] = true
+		fmt.Fprint(stderr, warning)
+	}
+}
+
+// changedFiles returns the Go files outside tests, and with a Base, only those that the change
+// touches, with their changes. No other file can hold a result, and parsing all of them breaks the
+// partial check's budget. changed is nil with no Base.
+func (s Scope) changedFiles(dir string, stderr io.Writer) (paths []string, changed gitchange.Changes, err error) {
+	var changes gitchange.Changes
+	if s.Base != "" {
+		if changes, err = s.Changes.Since(dir, s.Base); err != nil {
+			return nil, nil, err
 		}
 	}
+	if paths, err = s.Files.find(s.Repo, dir, false); err != nil {
+		return nil, nil, err
+	}
+	if len(paths) == 0 {
+		return nil, nil, nil
+	}
+	s.Warnings.warnUnmatched(stderr, s.Repo, paths)
+	if s.Base == "" {
+		return paths, nil, nil
+	}
+	changed = changes.For(dir, paths)
+	paths = slices.DeleteFunc(paths, func(file string) bool {
+		_, ok := changed[file]
+		return !ok
+	})
+	return paths, changed, nil
 }
 
 // functions skips test files, which no function rule checks. A notice says why there is nothing
 // to check.
 func (s Scope) functions(dir string, stderr io.Writer, rule string) (functions []extract.Function, notice string, err error) {
-	var changes gitchange.Changes
-	if s.Base != "" {
-		if changes, err = s.Changes.Since(dir, s.Base); err != nil {
-			return nil, "", err
-		}
-	}
-	paths, err := s.Files.find(s.Repo, dir, false)
+	paths, changed, err := s.changedFiles(dir, stderr)
 	if err != nil {
 		return nil, "", err
 	}
-	if len(paths) == 0 {
+	if len(paths) == 0 && changed == nil {
 		return nil, "No Go files found.", nil
-	}
-	s.Warnings.warnUnmatched(stderr, s.Repo, paths)
-	var changed gitchange.Changes
-	if s.Base != "" {
-		changed = changes.For(dir, paths)
-		// No other file can hold a result, and parsing all of them breaks the partial check's budget.
-		paths = slices.DeleteFunc(paths, func(file string) bool {
-			_, ok := changed[file]
-			return !ok
-		})
 	}
 	functions, err = s.Parser.Parse(dir, paths, rule)
 	if err != nil {
@@ -153,26 +169,33 @@ var (
 	}
 )
 
-type Function struct {
+// Limited is what every rule with one limit shares, so that a function rule and a file rule take
+// their settings and flags in the same way.
+type Limited struct {
 	Scope
-	Measure Measure
-	Limit   float64
+	Name  string
+	Limit float64
 }
 
-func NewFunction(scope Scope, measure Measure) Function {
-	return Function{Scope: scope, Measure: measure, Limit: measure.DefaultLimit}
+func (l *Limited) ApplyRule(rule config.LimitRule) {
+	fill(&l.Limit, rule.Limit)
 }
 
-func (f *Function) ApplyRule(rule config.FunctionRule) {
-	fill(&f.Limit, rule.Limit)
-}
-
-func (f Function) Validate() error {
+func (l Limited) Validate() error {
 	// Written so that NaN, which fails every comparison, is rejected too.
-	if !(f.Limit >= 0) {
-		return fmt.Errorf("invalid limit %v for %s: must not be negative", f.Limit, f.Measure.Name)
+	if !(l.Limit >= 0) {
+		return fmt.Errorf("invalid limit %v for %s: must not be negative", l.Limit, l.Name)
 	}
 	return nil
+}
+
+type Function struct {
+	Limited
+	Measure Measure
+}
+
+func NewFunction(scope Scope, measure Measure) *Function {
+	return &Function{Limited: Limited{Scope: scope, Name: measure.Name, Limit: measure.DefaultLimit}, Measure: measure}
 }
 
 type measured struct {

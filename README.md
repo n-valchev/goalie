@@ -7,7 +7,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`goalie check`](#check-your-code) | Checks Go code against a set of rules, and fails a build when a rule fails |
 | [`godeps`](#map-your-packages) | Draws the shape of a Go module as a map in one HTML file |
 
-`goalie check` has eight rules:
+`goalie check` has nine rules:
 
 | Rule | What it finds |
 | --- | --- |
@@ -19,6 +19,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`complex-condition`](#find-complex-conditions-with-complex-condition) | Functions with a condition that has more `&&` and `\|\|` operators than the limit |
 | [`cognitive-complexity`](#find-functions-that-are-hard-to-follow-with-cognitive-complexity) | Functions with more nesting and branches than the limit |
 | [`primitive-arguments`](#find-basic-types-passed-down-with-primitive-arguments) | Functions that take a `string`, an `int`, or another basic type and only pass it down to other code in your repo |
+| [`long-file`](#find-long-files-with-long-file) | Files with more lines than the limit |
 
 goalie uses only the Go standard library.
 
@@ -80,7 +81,7 @@ Each line gives the file, the line, the mode, the rule, and a message with the v
 | --- | --- | --- | --- |
 | Limit | A number | Set by each rule | The value that the code must stay within. A value equal to the limit passes |
 | Mode | `off`, `warn`, `fail` | `fail` for `dup` and `crap`. `warn` for the other rules | `off`: no output. `warn`: reports, and never changes the exit code. `fail`: reports, and exits with `1` |
-| Scope | `changes`, `all` | `changes` | `changes`: only functions that the change touches. `all`: every function |
+| Scope | `changes`, `all` | `changes` | `changes`: only functions that the change touches. For `long-file`, only a file that the change takes over the limit, or a new file over the limit. `all`: every function or file |
 
 - Only `"mode": "off"` turns a rule off. A limit of `0` is a normal limit.
 - A new rule defaults to `warn`, so that adopting it can't block work. Set `"mode": "fail"` when you have checked its limit on your repository.
@@ -125,6 +126,7 @@ billing/total.go:15: warn crap: Decide needs at least 13% coverage (complexity 6
 | `crap`, full check | `file`, `line`, `function`, `score`, `complexity`, and `coverage` (a fraction from `0` to `1`) |
 | `crap`, partial check | `file`, `line`, `function`, `complexity`, `canPass`, and `neededCoverage` (a fraction, left out when `canPass` is `false`) |
 | `long-function`, `many-arguments`, `many-dependencies`, `complex-condition`, `cognitive-complexity`, and `primitive-arguments` | `file`, `line`, and `function`. For `complex-condition`, `line` is the line of the worst condition. For `primitive-arguments`, `parameters` lists each reported parameter with its `name` and `type` |
+| `long-file` | `file` and `line`. `line` is always `1` |
 
 ### Use the exit code
 
@@ -196,6 +198,7 @@ Each rule has its own object in `rules`:
 | `complex-condition` | `limit`. See [Find complex conditions with complex-condition](#find-complex-conditions-with-complex-condition) |
 | `cognitive-complexity` | `limit`. See [Find functions that are hard to follow with cognitive-complexity](#find-functions-that-are-hard-to-follow-with-cognitive-complexity) |
 | `primitive-arguments` | `limit`. See [Find basic types passed down with primitive-arguments](#find-basic-types-passed-down-with-primitive-arguments) |
+| `long-file` | `limit`. See [Find long files with long-file](#find-long-files-with-long-file) |
 
 - Every setting is optional. A missing setting uses its default, and a missing file is not an error.
 - goalie reads `.goalierc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run goalie from the repo root in CI.
@@ -304,7 +307,7 @@ func Decide(kind string) int {
 - A `dup` directive also excuses every pair with the function in it, on either side.
 - An unknown rule name or a missing reason exits with `2`, for example `goalie: dup: billing/skip.go:16: //goalie:ignore needs a reason`.
 - `//godry:ignore` and `//gocrap:ignore` have no effect. Replace them with `//goalie:ignore dup` and `//goalie:ignore crap`.
-- A directive can't excuse a whole file. To skip a file, use `skipFiles` or `.goalieignore`. See [Choose the files to check](#choose-the-files-to-check).
+- A directive can't excuse a whole file, and `long-file` has no directive. To skip a file, use `skipFiles` or `.goalieignore`. See [Choose the files to check](#choose-the-files-to-check).
 
 ## Find duplicates with `dup`
 
@@ -616,6 +619,35 @@ To fix a result, define a type for the value, such as `type UserID string`, and 
 - The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
 - It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.
 
+## Find long files with `long-file`
+
+`long-file` reports a file with more lines than its limit. A long file is hard for a person or an agent to read and to search. Every line of the file counts, blank lines and comments too. The result points at line 1, because the whole file is the problem:
+
+```text
+billing/parse.go:1: warn long-file: billing/parse.go has 1204 lines (limit 1000)
+```
+
+With scope `changes`, a file reports only when the change takes it over the limit. An old long file gives no result, so that it doesn't report on every edit:
+
+| The file at the merge base | The file now | Result |
+| --- | --- | --- |
+| 1,000 lines or fewer | More than 1,000 lines | Reports |
+| More than 1,000 lines | More than 1,000 lines | No result, even if the change added lines |
+| Not there, because the file is new, moved, or renamed | More than 1,000 lines | Reports |
+
+With scope `all` or `--all`, every file over the limit reports.
+
+- goalie reads the changed files at the merge base with one Git call. If that call fails, `long-file` reports nothing and prints the reason on stderr. It never fails the check for this.
+- A moved or renamed file counts as new, because goalie doesn't follow renames.
+- It has no directive, so `//goalie:ignore long-file` exits with `2` as an unknown rule. To leave out a file, use `skipFiles` or `.goalieignore`.
+
+| Setting in `rules.long-file` | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `limit` | Number | `1000` | The most lines that pass. `--limit` replaces it |
+
+- The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
+- It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.
+
 ## Run goalie in CI
 
 This GitHub Actions workflow runs every rule, and fails a pull request when a rule in `fail` mode reports a result:
@@ -667,6 +699,7 @@ After you change Go code, run `goalie check --partial --base origin/main` from t
 - `complex-condition`: give parts of the condition names, such as `ready := a && b`, or move the condition into a function.
 - `cognitive-complexity`: return early in place of a nested `if`, or move a nested block into its own function.
 - `primitive-arguments`: define a type for the value, such as `type UserID string`, and use it in each function that passes the value down.
+- `long-file`: move a group of functions that belong together into a file of their own.
 
 Don't change `.goalierc` or `.goalieignore`, and don't add `//goalie:ignore`, unless a person asks you to.
 ```
