@@ -796,10 +796,11 @@ claude mcp add --scope project goalie -- goalie serve
 
 The command writes the server to `.mcp.json`. Commit that file. Each person approves the server the first time that Claude Code starts in the repo. To add the server for your own projects only, use `--scope user`.
 
-The server has two tools:
+The server has three tools:
 
 | Tool | Input | Output |
 | --- | --- | --- |
+| `find_similar` | `dir`, as in `check`, and either `code`, the source of one function, or `file`, relative to `dir`, and `line` | Up to 10 `matches`, the highest `score` first, each with `score`, `file`, `line`, and `function`. `more`, the count left out. `unparsed`, as in `check` |
 | `check` | `dir`, the absolute path of the folder that the agent works in. Optional: `scope` (`changes` or `all`, default `changes`), `path`, a package folder or a file relative to `dir`, and `base` | Up to 10 `results`, with the fields of `goalie check --format json`, `change`, and `hint`. `more`, the count left out. `base`, the revision used. `unparsed`, the files that don't parse |
 | `rules` | `dir`, as in `check` | `rules`: each rule of `goalie check`, with its `rule`, `limit`, `mode`, and `scope` |
 
@@ -838,6 +839,15 @@ Each result holds `hint`, one line on how to fix it, so that the agent needs no 
 - A rule that is `off` is in the list, with `mode` `off`.
 - For `dup`, `limit` is the `threshold`. The other settings of a rule, such as `minLines` or `sharedLimit`, are not in the answer.
 - A `.goalierc` that `goalie check` rejects gives an error with the same message.
+
+`find_similar` finds the functions that are like the one that the agent is about to write, so that it can reuse one instead of writing a copy. A match looks like this: `{"score": 0.91, "file": "internal/billing/total.go", "line": 12, "function": "Invoice.Total"}`.
+
+- A match is a pair that `goalie check dup --all` would report: the same comparison, and the `threshold`, size limits, and weak limits of `rules.dup` in the `.goalierc` nearest to `dir`. It finds a match even when `dup` is `off`.
+- `code` need not be in a file yet. The tool reads it as a function of the package in `dir`. So a function with the name of one in that package is a variant for another platform, and no match, as in `dup`.
+- With `file` and `line`, any line of the function works, and the function itself is no match.
+- A function under `minLines` or `minNodes` has no matches, because `dup` never reports it.
+- Test files, unless `includeTests` is on, and functions with `//goalie:ignore dup` are no match.
+- `code` that isn't one Go function, and a `line` outside any function, give an error.
 
 The server uses MCP version `2026-07-28`. It also answers a client that starts with `initialize`, with version `2025-11-25` or the older version that the client asks for.
 

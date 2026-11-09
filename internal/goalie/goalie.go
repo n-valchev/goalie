@@ -212,18 +212,27 @@ func (w *lockedWriter) Write(text []byte) (int, error) {
 	return w.target.Write(text)
 }
 
+// newDup returns a nil rule on an error, and not a zero Dup inside a rule, which isn't nil.
 func newDup(file config.Settings, opts options, scope check.Scope) (rule, error) {
-	ruleSettings := file.Rules.Dup
+	dup, err := buildDup(file, opts, scope)
+	if err != nil {
+		return nil, err
+	}
+	return dup, nil
+}
+
+// buildDup gives find_similar the same settings as the dup rule.
+func buildDup(file config.Settings, opts options, scope check.Scope) (check.Dup, error) {
 	dup := check.NewDup(scope)
-	dup.ApplyRule(ruleSettings)
+	dup.ApplyRule(file.Rules.Dup)
 	if opts.limit != nil {
 		dup.Threshold = *opts.limit
 	}
 	if err := dup.Apply(file, nil); err != nil {
-		return nil, err
+		return check.Dup{}, err
 	}
 	if err := dup.Validate(); err != nil {
-		return nil, fmt.Errorf("%s: %w", config.Name, err)
+		return check.Dup{}, fmt.Errorf("%s: %w", config.Name, err)
 	}
 	return dup, nil
 }

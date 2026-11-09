@@ -108,19 +108,13 @@ func (d Dup) pairs(dir string, stderr io.Writer) (pairs []compare.Pair, notice s
 			return nil, "", err
 		}
 	}
-	paths, err := d.Files.find(d.Repo, dir, d.IncludeTests)
+	all, paths, err := d.repoCandidates(dir, stderr)
 	if err != nil {
 		return nil, "", err
 	}
 	if len(paths) == 0 {
 		return nil, "No Go files found.", nil
 	}
-	d.Warnings.warnUnmatched(stderr, d.Repo, paths)
-	functions, err := d.Parser.Parse(dir, paths, DupRule)
-	if err != nil {
-		return nil, "", err
-	}
-	all := d.candidates(functions)
 	newFunctions := compare.WholeRepo()
 	if d.Base != "" {
 		newFunctions = findNew(all, changes.For(dir, paths))
@@ -141,6 +135,18 @@ func (d Dup) pairs(dir string, stderr io.Writer) (pairs []compare.Pair, notice s
 		fmt.Fprintf(stderr, "%s: %d weak findings dropped\n", tool, dropped)
 	}
 	return pairs, "", nil
+}
+
+func (d Dup) repoCandidates(dir string, stderr io.Writer) (all []compare.Candidate, paths []string, err error) {
+	if paths, err = d.Files.find(d.Repo, dir, d.IncludeTests); err != nil || len(paths) == 0 {
+		return nil, paths, err
+	}
+	d.Warnings.warnUnmatched(stderr, d.Repo, paths)
+	functions, err := d.Parser.Parse(dir, paths, DupRule)
+	if err != nil {
+		return nil, nil, err
+	}
+	return d.candidates(functions), paths, nil
 }
 
 func (d Dup) candidates(functions []extract.Function) []compare.Candidate {

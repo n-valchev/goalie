@@ -207,8 +207,9 @@ Serve:
   the agent works in, and reads the .goalierc nearest to it. With no base
   input and no base in .goalierc, it compares against HEAD. It skips a file
   that doesn't parse and lists it under unparsed. Its tool rules gives the
-  limit, mode, and scope of each rule from the same .goalierc. Logs go to
-  stderr.
+  limit, mode, and scope of each rule from the same .goalierc. Its tool
+  find_similar gives up to 10 functions that dup would pair with a function:
+  its source, or its file and line. Logs go to stderr.
 
 Exit codes:
   0  No fail result.

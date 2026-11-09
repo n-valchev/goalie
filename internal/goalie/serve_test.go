@@ -259,8 +259,8 @@ func TestServeAnswersACheckAfterInitialize(t *testing.T) {
 		t.Errorf("initialize = %s", response.Result)
 	}
 
-	if names := toolNames(t, client.request("tools/list", map[string]any{})); strings.Join(names, ",") != "check,rules" {
-		t.Errorf("tools = %v, want only check and rules", names)
+	if names := toolNames(t, client.request("tools/list", map[string]any{})); strings.Join(names, ",") != "find_similar,check,rules" {
+		t.Errorf("tools = %v, want only find_similar, check, and rules", names)
 	}
 
 	answer := client.check(map[string]any{"dir": dir})
@@ -295,8 +295,8 @@ func TestServeAnswersTheProtocolOf2026WithNoInitialize(t *testing.T) {
 		t.Errorf("server/discover = %s", response.Result)
 	}
 
-	if names := toolNames(t, client.request("tools/list", map[string]any{"_meta": meta})); strings.Join(names, ",") != "check,rules" {
-		t.Errorf("tools = %v, want only check and rules", names)
+	if names := toolNames(t, client.request("tools/list", map[string]any{"_meta": meta})); strings.Join(names, ",") != "find_similar,check,rules" {
+		t.Errorf("tools = %v, want only find_similar, check, and rules", names)
 	}
 	response = client.request("tools/call", map[string]any{"_meta": meta, "name": "check", "arguments": map[string]any{"dir": dir, "scope": "all"}})
 	var result struct {

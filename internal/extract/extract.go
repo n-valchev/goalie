@@ -132,6 +132,13 @@ func (p *Parser) Types(dir string, files []string, rule string) ([]Type, error) 
 	return notExcused(parsed, func(file parsedFile) []Type { return file.types }, rule), err
 }
 
+// ParseSource parses source as the content of file, with no rule excused. It keeps no copy and
+// skips nothing, so that a syntax error reaches the caller, who has no other way to learn of it.
+func (p *Parser) ParseSource(file string, source []byte) ([]Function, error) {
+	parsed, err := parseFile(file, source, p.directive)
+	return parsed.functions, err
+}
+
 // excuses holds the rule names that the directives above a declaration list.
 type excuses []string
 
