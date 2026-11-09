@@ -11,7 +11,7 @@ To upgrade:
 3. Move the `godry` and `gocrap` sections of `.goalierc` into `rules`. See [Settings](#settings).
 4. Change `//godry:ignore` and `//gocrap:ignore` to `//goalie:ignore`. See [Directives](#directives).
 5. If a `coverCommand` uses `GOCRAP_COVER_DIR`, change it to `GOALIE_COVER_DIR`.
-6. Run `goalie check --base origin/main` and compare the results with your last CI run. They match, apart from two differences. Functions that a `//godry:ignore` or `//gocrap:ignore` line excused, and that you didn't change in step 4, now report. The new rules `long-function`, `many-arguments`, `many-dependencies`, `complex-condition`, `cognitive-complexity`, `primitive-arguments`, and `long-file` add `warn` results, which never change the exit code.
+6. Run `goalie check --base origin/main` and compare the results with your last CI run. They match, apart from two differences. Functions that a `//godry:ignore` or `//gocrap:ignore` line excused, and that you didn't change in step 4, now report. The new rules `long-function`, `many-arguments`, `many-dependencies`, `complex-condition`, `cognitive-complexity`, `primitive-arguments`, `long-file`, and `high-mean-complexity` add `warn` results, which never change the exit code.
 
 ### Install
 
@@ -170,7 +170,7 @@ godeps now exits with `2` on a crap report with no `score`. `goalie check crap -
 - `goalie check --all` checks the whole repository and needs no revision.
 - `mode` and `scope` for each rule.
 - A rule that you name runs even if it is `off`, and reports as `warn`.
-- Seven new rules report code that is hard to change:
+- Eight new rules report code that is hard to change:
 
   | Rule | Reports | Default limit |
   | --- | --- | --- |
@@ -181,5 +181,6 @@ godeps now exits with `2` on a crap report with no `score`. `goalie check crap -
   | `cognitive-complexity` | A function that is hard to follow. Each branch adds 1, plus 1 for each block that it is inside. A Go guard, such as `if err != nil { return err }`, adds 0 | 15 |
   | `primitive-arguments` | A function with a parameter of a basic type, such as `string`, that it only passes down to other code in your repo. A later change of the type then changes every function that passes the value down | 1 |
   | `long-file` | A file with more lines than the limit. With scope `changes`, a file reports only when the change takes it over the limit, or when it is new. An old long file gives no result | 1000 |
+  | `high-mean-complexity` | A file whose functions have a mean complexity over the limit. Complexity is the one that `crap` uses. Scope `changes` works as for `long-file` | 5 |
 
-  Set each limit with `limit` in the rule's object in `rules`. Their default mode is `warn`, so they never change the exit code until you set `"mode": "fail"`. Their default scope is `changes`, so they need a revision. If your `.goalierc` sets no `base` and gives `dup` and `crap` scope `all` or mode `off`, `goalie check` with no `--base` now exits with `2`. To fix this, give the seven new rules the same scope or mode.
+  Set each limit with `limit` in the rule's object in `rules`. Their default mode is `warn`, so they never change the exit code until you set `"mode": "fail"`. Their default scope is `changes`, so they need a revision. If your `.goalierc` sets no `base` and gives `dup` and `crap` scope `all` or mode `off`, `goalie check` with no `--base` now exits with `2`. To fix this, give the eight new rules the same scope or mode.

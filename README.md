@@ -7,7 +7,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`goalie check`](#check-your-code) | Checks Go code against a set of rules, and fails a build when a rule fails |
 | [`godeps`](#map-your-packages) | Draws the shape of a Go module as a map in one HTML file |
 
-`goalie check` has nine rules:
+`goalie check` has ten rules:
 
 | Rule | What it finds |
 | --- | --- |
@@ -20,6 +20,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`cognitive-complexity`](#find-functions-that-are-hard-to-follow-with-cognitive-complexity) | Functions with more nesting and branches than the limit |
 | [`primitive-arguments`](#find-basic-types-passed-down-with-primitive-arguments) | Functions that take a `string`, an `int`, or another basic type and only pass it down to other code in your repo |
 | [`long-file`](#find-long-files-with-long-file) | Files with more lines than the limit |
+| [`high-mean-complexity`](#find-files-of-complex-functions-with-high-mean-complexity) | Files whose functions have a mean complexity over the limit |
 
 goalie uses only the Go standard library.
 
@@ -81,7 +82,7 @@ Each line gives the file, the line, the mode, the rule, and a message with the v
 | --- | --- | --- | --- |
 | Limit | A number | Set by each rule | The value that the code must stay within. A value equal to the limit passes |
 | Mode | `off`, `warn`, `fail` | `fail` for `dup` and `crap`. `warn` for the other rules | `off`: no output. `warn`: reports, and never changes the exit code. `fail`: reports, and exits with `1` |
-| Scope | `changes`, `all` | `changes` | `changes`: only functions that the change touches. For `long-file`, only a file that the change takes over the limit, or a new file over the limit. `all`: every function or file |
+| Scope | `changes`, `all` | `changes` | `changes`: only functions that the change touches. For `long-file` and `high-mean-complexity`, only a file that the change takes over the limit, or a new file over the limit. `all`: every function or file |
 
 - Only `"mode": "off"` turns a rule off. A limit of `0` is a normal limit.
 - A new rule defaults to `warn`, so that adopting it can't block work. Set `"mode": "fail"` when you have checked its limit on your repository.
@@ -127,6 +128,7 @@ billing/total.go:15: warn crap: Decide needs at least 13% coverage (complexity 6
 | `crap`, partial check | `file`, `line`, `function`, `complexity`, `canPass`, and `neededCoverage` (a fraction, left out when `canPass` is `false`) |
 | `long-function`, `many-arguments`, `many-dependencies`, `complex-condition`, `cognitive-complexity`, and `primitive-arguments` | `file`, `line`, and `function`. For `complex-condition`, `line` is the line of the worst condition. For `primitive-arguments`, `parameters` lists each reported parameter with its `name` and `type` |
 | `long-file` | `file` and `line`. `line` is always `1` |
+| `high-mean-complexity` | `file`, `line`, and `functions`, the number of functions that the mean covers. `line` is always `1` |
 
 ### Use the exit code
 
@@ -199,6 +201,7 @@ Each rule has its own object in `rules`:
 | `cognitive-complexity` | `limit`. See [Find functions that are hard to follow with cognitive-complexity](#find-functions-that-are-hard-to-follow-with-cognitive-complexity) |
 | `primitive-arguments` | `limit`. See [Find basic types passed down with primitive-arguments](#find-basic-types-passed-down-with-primitive-arguments) |
 | `long-file` | `limit`. See [Find long files with long-file](#find-long-files-with-long-file) |
+| `high-mean-complexity` | `limit`. See [Find files of complex functions with high-mean-complexity](#find-files-of-complex-functions-with-high-mean-complexity) |
 
 - Every setting is optional. A missing setting uses its default, and a missing file is not an error.
 - goalie reads `.goalierc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run goalie from the repo root in CI.
@@ -307,7 +310,7 @@ func Decide(kind string) int {
 - A `dup` directive also excuses every pair with the function in it, on either side.
 - An unknown rule name or a missing reason exits with `2`, for example `goalie: dup: billing/skip.go:16: //goalie:ignore needs a reason`.
 - `//godry:ignore` and `//gocrap:ignore` have no effect. Replace them with `//goalie:ignore dup` and `//goalie:ignore crap`.
-- A directive can't excuse a whole file, and `long-file` has no directive. To skip a file, use `skipFiles` or `.goalieignore`. See [Choose the files to check](#choose-the-files-to-check).
+- A directive can't excuse a whole file, and `long-file` and `high-mean-complexity` have no directive. To skip a file, use `skipFiles` or `.goalieignore`. See [Choose the files to check](#choose-the-files-to-check).
 
 ## Find duplicates with `dup`
 
@@ -648,6 +651,27 @@ With scope `all` or `--all`, every file over the limit reports.
 - The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
 - It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.
 
+## Find files of complex functions with `high-mean-complexity`
+
+`high-mean-complexity` reports a file whose functions have a mean complexity over its limit. A file of many complex functions is hard to change, even when no single function scores over the `crap` limit. Complexity is the cyclomatic complexity that `crap` uses: 1, plus 1 for each `if`, `for`, `range`, `&&`, and `||`, and for each `case` of a `switch` or `select` other than `default`. The result points at line 1 and names the number of functions, so that you can judge the mean:
+
+```text
+billing/parse.go:1: warn high-mean-complexity: billing/parse.go has mean complexity 5.4 over 12 functions (limit 5)
+```
+
+- Every function and method in the file counts. A closure counts as part of the function that holds it.
+- A function with no body, such as one written in assembly, doesn't count.
+- A file with no functions gives no result.
+- Scope `changes` works as it does for `long-file`: a file reports only when the change takes it over the limit, or when it is new. A file with no functions at the merge base counts as under the limit. If the file doesn't parse at the merge base, it gives no result.
+- It has no directive. `//goalie:ignore crap` on a function doesn't change the mean, and `//goalie:ignore high-mean-complexity` exits with `2` as an unknown rule.
+
+| Setting in `rules.high-mean-complexity` | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `limit` | Number | `5` | The highest mean that passes. `--limit` replaces it |
+
+- The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
+- It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.
+
 ## Run goalie in CI
 
 This GitHub Actions workflow runs every rule, and fails a pull request when a rule in `fail` mode reports a result:
@@ -700,6 +724,7 @@ After you change Go code, run `goalie check --partial --base origin/main` from t
 - `cognitive-complexity`: return early in place of a nested `if`, or move a nested block into its own function.
 - `primitive-arguments`: define a type for the value, such as `type UserID string`, and use it in each function that passes the value down.
 - `long-file`: move a group of functions that belong together into a file of their own.
+- `high-mean-complexity`: split the most complex functions, or move them into a file of their own.
 
 Don't change `.goalierc` or `.goalieignore`, and don't add `//goalie:ignore`, unless a person asks you to.
 ```

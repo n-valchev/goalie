@@ -47,7 +47,7 @@ func repoWithNewFunction(t *testing.T, settings, profile string) string {
 	dir := gitRepo(t, map[string]string{"go.mod": goMod})
 	write(t, dir, "a.go", decideFile)
 	write(t, dir, "p.out", profile)
-	write(t, dir, ".goalierc", settings)
+	write(t, dir, ".goalierc", meanComplexityOff(t, settings))
 	return dir
 }
 

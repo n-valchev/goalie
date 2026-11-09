@@ -23,7 +23,7 @@ func repoWithBothResults(t *testing.T, settings string) string {
 	write(t, dir, "b.go", "package m\n\n"+sumFunc("Copied"))
 	write(t, dir, "c.go", decideFile)
 	write(t, dir, "p.out", emptyProfile)
-	write(t, dir, ".goalierc", settings)
+	write(t, dir, ".goalierc", meanComplexityOff(t, settings))
 	return dir
 }
 
@@ -101,7 +101,7 @@ func repoWithOldResults(t *testing.T, settings string) string {
 		"b.go":      "package m\n\n" + sumFunc("Copied"),
 		"c.go":      decideFile,
 		"p.out":     emptyProfile,
-		".goalierc": settings,
+		".goalierc": meanComplexityOff(t, settings),
 	})
 }
 

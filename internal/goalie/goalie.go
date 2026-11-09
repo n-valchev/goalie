@@ -97,6 +97,7 @@ var allRules = []ruleEntry{
 	measureEntry(check.CognitiveComplexity, func(rules config.Rules) config.LimitRule { return rules.CognitiveComplexity }),
 	measureEntry(check.PrimitiveArguments, func(rules config.Rules) config.LimitRule { return rules.PrimitiveArguments }),
 	fileEntry(check.LongFile, func(rules config.Rules) config.LimitRule { return rules.LongFile }),
+	fileEntry(check.HighMeanComplexity, func(rules config.Rules) config.LimitRule { return rules.HighMeanComplexity }),
 }
 
 type selectedRule struct {

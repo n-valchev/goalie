@@ -5,12 +5,14 @@ package rules
 import (
 	"bytes"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/n-valchev/goalie/internal/crap"
 	"github.com/n-valchev/goalie/internal/extract"
 )
 
@@ -30,13 +32,42 @@ func Lines(fn extract.Function) Measurement {
 	return Measurement{Value: fn.Lines(), Line: fn.StartLine}
 }
 
+// FileMeasurement holds Functions only for a rule whose result must name how many functions the
+// value covers.
+type FileMeasurement struct {
+	Value     float64
+	Functions int
+}
+
 // FileLines counts a last line with no newline too, because an editor shows it as a line.
-func FileLines(src []byte) float64 {
+func FileLines(src []byte) (FileMeasurement, bool) {
 	lines := bytes.Count(src, []byte("\n"))
 	if len(src) > 0 && src[len(src)-1] != '\n' {
 		lines++
 	}
-	return float64(lines)
+	return FileMeasurement{Value: float64(lines)}, true
+}
+
+// MeanComplexity gives a file with no function the value 0, not no value. Every limit is at least 0,
+// so the file never reports, and a change that adds complex functions to it still crosses the limit,
+// as a new file does.
+func MeanComplexity(src []byte) (FileMeasurement, bool) {
+	file, err := parser.ParseFile(token.NewFileSet(), "", src, parser.SkipObjectResolution)
+	if err != nil {
+		return FileMeasurement{}, false
+	}
+	var total, functions int
+	for _, decl := range file.Decls {
+		// A function with no body has no complexity, and counting it as 1 would lower the mean.
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Body != nil {
+			total += crap.Complexity(fn)
+			functions++
+		}
+	}
+	if functions == 0 {
+		return FileMeasurement{}, true
+	}
+	return FileMeasurement{Value: float64(total) / float64(functions), Functions: functions}, true
 }
 
 // Parameters counts an unnamed parameter as 1, so that func(int, string) is 2, as it is to a caller.

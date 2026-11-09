@@ -62,6 +62,11 @@ Rules:
         With scope changes, a file reports only when the change takes it
         over the limit, or when the file is new. A moved or renamed file
         counts as new. It has no //goalie:ignore directive.
+  high-mean-complexity
+        Reports files whose functions have a mean complexity over the limit.
+        Complexity is the one that crap uses. A function with no body
+        doesn't count, and a file with no functions doesn't report. Scope
+        changes works as for long-file. It has no //goalie:ignore directive.
 
 With no rule names, goalie runs every rule that isn't off. A rule that you name
 runs even if it is off, and then it reports as warn.
@@ -104,9 +109,10 @@ Settings file:
   mode   off: no output. warn: reports, and never changes the exit code. fail:
          reports, and exits with 1. The default is fail for dup and crap, and
          warn for the other rules.
-  scope  changes: only functions that the change touches, and for long-file,
-         only files that the change takes over the limit. all: every
-         function or file in the whole repository. The default is changes.
+  scope  changes: only functions that the change touches, and for long-file
+         and high-mean-complexity, only files that the change takes over the
+         limit. all: every function or file in the whole repository. The
+         default is changes.
 
   The dup rule also takes threshold (default 0.82), minLines (default 9),
   minNodes (default 20), weakAnchors (default 0), weakLiterals (default 0.5),
@@ -116,8 +122,8 @@ Settings file:
   sharedLimit, coverCommand, and coverProfiles. The other rules also take
   limit: 80 for long-function, 4 for many-arguments, 5 for
   many-dependencies, 3 for complex-condition, 15 for
-  cognitive-complexity, 1 for primitive-arguments, and 1000 for
-  long-file. A limit of 0 doesn't turn a rule off.
+  cognitive-complexity, 1 for primitive-arguments, 1000 for long-file,
+  and 5 for high-mean-complexity. A limit of 0 doesn't turn a rule off.
 
 Files:
   goalie checks the Go files below the current directory, or in paths. It

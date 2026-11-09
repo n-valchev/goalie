@@ -1,6 +1,7 @@
 package goalie_test
 
 import (
+	"encoding/json"
 	"reflect"
 	"slices"
 	"strings"
@@ -28,6 +29,30 @@ func rulesOff(except ...string) string {
 		}
 	}
 	return strings.Join(off, ", ")
+}
+
+// meanComplexityOff turns high-mean-complexity off unless settings name it, because these fixtures
+// hold Decide alone in a file, and its complexity of 6 is then a mean over the limit. Settings that
+// aren't valid JSON stay as they are, for the tests of settings mistakes.
+func meanComplexityOff(t *testing.T, settings string) string {
+	t.Helper()
+	var parsed map[string]any
+	if json.Unmarshal([]byte(settings), &parsed) != nil {
+		return settings
+	}
+	rules, ok := parsed["rules"].(map[string]any)
+	if !ok {
+		rules = map[string]any{}
+		parsed["rules"] = rules
+	}
+	if _, ok := rules["high-mean-complexity"]; !ok {
+		rules["high-mean-complexity"] = map[string]any{"mode": "off"}
+	}
+	out, err := json.Marshal(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
 }
 
 // otherRulesOff keeps these tests on dup, because these repos have no module for crap to test,

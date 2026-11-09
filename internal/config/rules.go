@@ -18,6 +18,7 @@ type Rules struct {
 	CognitiveComplexity LimitRule `json:"cognitive-complexity"`
 	PrimitiveArguments  LimitRule `json:"primitive-arguments"`
 	LongFile            LimitRule `json:"long-file"`
+	HighMeanComplexity  LimitRule `json:"high-mean-complexity"`
 }
 
 // Control holds what every rule has. An empty value means that the file leaves it out.
