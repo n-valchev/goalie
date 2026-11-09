@@ -796,11 +796,12 @@ claude mcp add --scope project goalie -- goalie serve
 
 The command writes the server to `.mcp.json`. Commit that file. Each person approves the server the first time that Claude Code starts in the repo. To add the server for your own projects only, use `--scope user`.
 
-The server has one tool:
+The server has two tools:
 
 | Tool | Input | Output |
 | --- | --- | --- |
 | `check` | `dir`, the absolute path of the folder that the agent works in. Optional: `scope` (`changes` or `all`, default `changes`), `path`, a package folder or a file relative to `dir`, and `base` | Up to 10 `results`, with the fields of `goalie check --format json`, `change`, and `hint`. `more`, the count left out. `base`, the revision used. `unparsed`, the files that don't parse |
+| `rules` | `dir`, as in `check` | `rules`: each rule of `goalie check`, with its `rule`, `limit`, `mode`, and `scope` |
 
 With `scope` `changes`, each result holds `change`. It says what the change did to the result, so that the agent can tell its own results from old ones:
 
@@ -830,6 +831,13 @@ Each result holds `hint`, one line on how to fix it, so that the agent needs no 
 | Needs coverage | "Write tests that cover at least that much of the function." The message of the result gives the coverage |
 
 `goalie check` gives no `hint`.
+
+`rules` gives the settings that `check` uses, so that the agent can write code within the limits the first time. An entry looks like this: `{"rule": "long-function", "limit": 80, "mode": "warn", "scope": "changes"}`.
+
+- It reads the `.goalierc` nearest to `dir`, as `check` does. The defaults fill the settings that the file leaves out.
+- A rule that is `off` is in the list, with `mode` `off`.
+- For `dup`, `limit` is the `threshold`. The other settings of a rule, such as `minLines` or `sharedLimit`, are not in the answer.
+- A `.goalierc` that `goalie check` rejects gives an error with the same message.
 
 The server uses MCP version `2026-07-28`. It also answers a client that starts with `initialize`, with version `2025-11-25` or the older version that the client asks for.
 

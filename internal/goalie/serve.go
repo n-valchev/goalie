@@ -36,7 +36,7 @@ func runServe(args []string, dir string, stdin io.Reader, stdout, stderr io.Writ
 		return fail(stderr, fmt.Errorf("serve needs a Git repository: %w", err))
 	}
 	tools := served{shared: shared, stderr: stderr}
-	server := mcp.Server{Name: "goalie", Version: version(), Tools: []mcp.Tool{tools.checkTool()}}
+	server := mcp.Server{Name: "goalie", Version: version(), Tools: []mcp.Tool{tools.checkTool(), tools.rulesTool()}}
 	if err := server.Serve(stdin, stdout); err != nil {
 		return fail(stderr, err)
 	}

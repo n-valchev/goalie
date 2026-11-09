@@ -85,6 +85,9 @@ type ruleEntry struct {
 	defaultMode config.Mode
 	control     func(config.Rules) config.Control
 	build       func(config.Settings, options, check.Scope) (rule, error)
+	// limit starts from the rule's constructor, so that the rules tool can't give a different default
+	// from the check.
+	limit func(config.Rules) float64
 	// noDirective keeps the name out of //goalie:ignore, which sits on a function or a type. A file
 	// rule has no directive, so the user leaves out a file with the skip rules instead.
 	noDirective bool
@@ -92,8 +95,8 @@ type ruleEntry struct {
 
 // A new rule defaults to warn, so that adopting it can't block work.
 var allRules = []ruleEntry{
-	{name: check.DupRule, defaultMode: config.ModeFail, control: func(rules config.Rules) config.Control { return rules.Dup.Control }, build: newDup},
-	{name: check.CrapRule, defaultMode: config.ModeFail, control: func(rules config.Rules) config.Control { return rules.Crap.Control }, build: newCrap},
+	{name: check.DupRule, defaultMode: config.ModeFail, control: func(rules config.Rules) config.Control { return rules.Dup.Control }, build: newDup, limit: dupLimit},
+	{name: check.CrapRule, defaultMode: config.ModeFail, control: func(rules config.Rules) config.Control { return rules.Crap.Control }, build: newCrap, limit: crapLimit},
 	measureEntry(check.LongFunction, func(rules config.Rules) config.LimitRule { return rules.LongFunction }),
 	measureEntry(check.ManyArguments, func(rules config.Rules) config.LimitRule { return rules.ManyArguments }),
 	measureEntry(check.ManyDependencies, func(rules config.Rules) config.LimitRule { return rules.ManyDependencies }),
@@ -103,6 +106,10 @@ var allRules = []ruleEntry{
 	fileEntry(check.LongFile, func(rules config.Rules) config.LimitRule { return rules.LongFile }),
 	fileEntry(check.HighMeanComplexity, func(rules config.Rules) config.LimitRule { return rules.HighMeanComplexity }),
 	typeEntry(check.LowCohesion, func(rules config.Rules) config.LimitRule { return rules.LowCohesion }),
+}
+
+func (e ruleEntry) mode(rules config.Rules) config.Mode {
+	return cmp.Or(e.control(rules).Mode, e.defaultMode)
 }
 
 type selectedRule struct {
@@ -137,7 +144,7 @@ func selectRules(file config.Settings, opts options, run check.Scope) ([]selecte
 			continue
 		}
 		control := entry.control(file.Rules)
-		mode := cmp.Or(control.Mode, entry.defaultMode)
+		mode := entry.mode(file.Rules)
 		if mode == config.ModeOff {
 			if !named {
 				continue
@@ -221,6 +228,19 @@ func newDup(file config.Settings, opts options, scope check.Scope) (rule, error)
 	return dup, nil
 }
 
+// dupLimit is the threshold, because that is the value that --limit replaces.
+func dupLimit(rules config.Rules) float64 {
+	dup := check.NewDup(check.Scope{})
+	dup.ApplyRule(rules.Dup)
+	return dup.Threshold
+}
+
+func crapLimit(rules config.Rules) float64 {
+	crap := check.NewCrap(check.Scope{})
+	crap.ApplyRule(rules.Crap)
+	return crap.Limits.Limit
+}
+
 func newCrap(file config.Settings, opts options, scope check.Scope) (rule, error) {
 	ruleSettings := file.Rules.Crap
 	crap := check.NewCrap(scope)
@@ -285,6 +305,11 @@ func limitEntry(name string, settings func(config.Rules) config.LimitRule,
 				return nil, fmt.Errorf("%s: %w", config.Name, err)
 			}
 			return built, nil
+		},
+		limit: func(rules config.Rules) float64 {
+			_, limited := newRule(check.Scope{})
+			limited.ApplyRule(settings(rules))
+			return limited.Limit
 		},
 	}
 }
