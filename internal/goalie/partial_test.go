@@ -222,8 +222,12 @@ func TestOneEditedFileChecksWithinTheBudget(t *testing.T) {
 	for i := range texts {
 		repo[fmt.Sprintf("pkg%d/file%d.go", i/10, i)] = texts[i].String()
 	}
+	// low-cohesion must read store.go, which the change doesn't touch, to find the groups of Store.
+	repo["edited/store.go"] = "package edited\n\ntype Store struct {\n\titems map[string]int\n\tconn  Conn\n}\n\n" +
+		"func (s *Store) Get(k string) int { return s.items[k] }\n"
 	dir := gitRepo(t, repo)
-	write(t, dir, "edited/edited.go", "package edited\n\n"+withComplexity("Over", 31)+"\n"+sumFunc("Sum"))
+	write(t, dir, "edited/edited.go", "package edited\n\n"+withComplexity("Over", 31)+"\n"+sumFunc("Sum")+
+		"\nfunc (s *Store) Ping() error { return s.conn.Ping() }\n")
 
 	for _, names := range [][]string{{"crap"}, {"dup"}, nil} {
 		args := append(append([]string{"check"}, names...), "--partial", "--base", "HEAD")
@@ -240,6 +244,9 @@ func TestOneEditedFileChecksWithinTheBudget(t *testing.T) {
 			}
 			if !strings.Contains(stdout, "edited/edited.go") {
 				t.Errorf("%v: stdout = %.200q, want a result for the edited file", names, stdout)
+			}
+			if names == nil && !strings.Contains(stdout, "low-cohesion: Store") {
+				t.Errorf("stdout = %.400q, want a low-cohesion result for Store", stdout)
 			}
 		}
 		t.Logf("%v: %v", names, best)

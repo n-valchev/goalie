@@ -81,8 +81,8 @@ type ruleEntry struct {
 	defaultMode config.Mode
 	control     func(config.Rules) config.Control
 	build       func(config.Settings, options, check.Scope) (rule, error)
-	// noDirective keeps the name out of //goalie:ignore, which sits on a function. A file rule has
-	// no directive, so the user leaves out a file with the skip rules instead.
+	// noDirective keeps the name out of //goalie:ignore, which sits on a function or a type. A file
+	// rule has no directive, so the user leaves out a file with the skip rules instead.
 	noDirective bool
 }
 
@@ -98,6 +98,7 @@ var allRules = []ruleEntry{
 	measureEntry(check.PrimitiveArguments, func(rules config.Rules) config.LimitRule { return rules.PrimitiveArguments }),
 	fileEntry(check.LongFile, func(rules config.Rules) config.LimitRule { return rules.LongFile }),
 	fileEntry(check.HighMeanComplexity, func(rules config.Rules) config.LimitRule { return rules.HighMeanComplexity }),
+	typeEntry(check.LowCohesion, func(rules config.Rules) config.LimitRule { return rules.LowCohesion }),
 }
 
 type selectedRule struct {
@@ -241,6 +242,13 @@ func fileEntry(measure check.FileMeasure, settings func(config.Rules) config.Lim
 	})
 	entry.noDirective = true
 	return entry
+}
+
+func typeEntry(measure check.TypeMeasure, settings func(config.Rules) config.LimitRule) ruleEntry {
+	return limitEntry(measure.Name, settings, func(scope check.Scope) (rule, *check.Limited) {
+		typ := check.NewType(scope, measure)
+		return typ, &typ.Limited
+	})
 }
 
 func limitEntry(name string, settings func(config.Rules) config.LimitRule,

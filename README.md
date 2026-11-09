@@ -7,7 +7,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`goalie check`](#check-your-code) | Checks Go code against a set of rules, and fails a build when a rule fails |
 | [`godeps`](#map-your-packages) | Draws the shape of a Go module as a map in one HTML file |
 
-`goalie check` has ten rules:
+`goalie check` has eleven rules:
 
 | Rule | What it finds |
 | --- | --- |
@@ -21,6 +21,7 @@ goalie stops poor Go code before it merges. It is made for repos where coding ag
 | [`primitive-arguments`](#find-basic-types-passed-down-with-primitive-arguments) | Functions that take a `string`, an `int`, or another basic type and only pass it down to other code in your repo |
 | [`long-file`](#find-long-files-with-long-file) | Files with more lines than the limit |
 | [`high-mean-complexity`](#find-files-of-complex-functions-with-high-mean-complexity) | Files whose functions have a mean complexity over the limit |
+| [`low-cohesion`](#find-types-that-hold-two-jobs-with-low-cohesion) | Struct types whose methods fall into groups that share no field and no call |
 
 goalie uses only the Go standard library.
 
@@ -82,7 +83,7 @@ Each line gives the file, the line, the mode, the rule, and a message with the v
 | --- | --- | --- | --- |
 | Limit | A number | Set by each rule | The value that the code must stay within. A value equal to the limit passes |
 | Mode | `off`, `warn`, `fail` | `fail` for `dup` and `crap`. `warn` for the other rules | `off`: no output. `warn`: reports, and never changes the exit code. `fail`: reports, and exits with `1` |
-| Scope | `changes`, `all` | `changes` | `changes`: only functions that the change touches. For `long-file` and `high-mean-complexity`, only a file that the change takes over the limit, or a new file over the limit. `all`: every function or file |
+| Scope | `changes`, `all` | `changes` | `changes`: only functions that the change touches. For `long-file` and `high-mean-complexity`, only a file that the change takes over the limit, or a new file over the limit. For `low-cohesion`, only a type whose declaration or methods the change touches. `all`: every function, file, or type |
 
 - Only `"mode": "off"` turns a rule off. A limit of `0` is a normal limit.
 - A new rule defaults to `warn`, so that adopting it can't block work. Set `"mode": "fail"` when you have checked its limit on your repository.
@@ -129,6 +130,7 @@ billing/total.go:15: warn crap: Decide needs at least 13% coverage (complexity 6
 | `long-function`, `many-arguments`, `many-dependencies`, `complex-condition`, `cognitive-complexity`, and `primitive-arguments` | `file`, `line`, and `function`. For `complex-condition`, `line` is the line of the worst condition. For `primitive-arguments`, `parameters` lists each reported parameter with its `name` and `type` |
 | `long-file` | `file` and `line`. `line` is always `1` |
 | `high-mean-complexity` | `file`, `line`, and `functions`, the number of functions that the mean covers. `line` is always `1` |
+| `low-cohesion` | `file`, `line`, `type`, and `groups`, a list of lists of method names. `line` is the line of the type declaration |
 
 ### Use the exit code
 
@@ -202,6 +204,7 @@ Each rule has its own object in `rules`:
 | `primitive-arguments` | `limit`. See [Find basic types passed down with primitive-arguments](#find-basic-types-passed-down-with-primitive-arguments) |
 | `long-file` | `limit`. See [Find long files with long-file](#find-long-files-with-long-file) |
 | `high-mean-complexity` | `limit`. See [Find files of complex functions with high-mean-complexity](#find-files-of-complex-functions-with-high-mean-complexity) |
+| `low-cohesion` | `limit`. See [Find types that hold two jobs with low-cohesion](#find-types-that-hold-two-jobs-with-low-cohesion) |
 
 - Every setting is optional. A missing setting uses its default, and a missing file is not an error.
 - goalie reads `.goalierc` from the directory it runs in, and from no other folder. Paths and patterns start from that directory. Run goalie from the repo root in CI.
@@ -310,6 +313,7 @@ func Decide(kind string) int {
 - A `dup` directive also excuses every pair with the function in it, on either side.
 - An unknown rule name or a missing reason exits with `2`, for example `goalie: dup: billing/skip.go:16: //goalie:ignore needs a reason`.
 - `//godry:ignore` and `//gocrap:ignore` have no effect. Replace them with `//goalie:ignore dup` and `//goalie:ignore crap`.
+- For `low-cohesion`, write the directive directly above the type declaration, not above a method: `//goalie:ignore low-cohesion <reason>`.
 - A directive can't excuse a whole file, and `long-file` and `high-mean-complexity` have no directive. To skip a file, use `skipFiles` or `.goalieignore`. See [Choose the files to check](#choose-the-files-to-check).
 
 ## Find duplicates with `dup`
@@ -672,6 +676,51 @@ billing/parse.go:1: warn high-mean-complexity: billing/parse.go has mean complex
 - The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
 - It skips `*_test.go` files. It gives the same result in a full and a partial check, and it runs no tests.
 
+## Find types that hold two jobs with `low-cohesion`
+
+`low-cohesion` reports a struct type whose methods fall into more groups than its limit. It follows LCOM4 (lack of cohesion of methods, version 4). Two methods are in one group when one of these is true:
+
+- Both use the same field of the receiver, such as `s.items`.
+- One calls the other on the receiver, such as `s.load()`.
+- A third method joins them, because it is in a group with each of them.
+
+A type with 2 groups holds two jobs, and could split into two types. In this example, `Get` and `Put` share `s.items`, and `Ping` and `Close` share `s.conn`. No field or call joins the two groups:
+
+```go
+type Store struct {
+	items map[string]Item
+	conn  *sql.DB
+}
+
+func (s *Store) Get(k string) Item    { return s.items[k] }
+func (s *Store) Put(k string, v Item) { s.items[k] = v }
+func (s *Store) Ping() error          { return s.conn.Ping() }
+func (s *Store) Close() error         { return s.conn.Close() }
+```
+
+The result points at the type declaration, and names the methods of each group, so that you can see where to split the type. The methods in each group are in name order, and the groups are in the order of their first method:
+
+```text
+store.go:12: warn low-cohesion: Store has 2 groups of methods: Close, Ping; Get, Put (limit 1)
+```
+
+- The methods of the type count from every file of its package, with a pointer or a value receiver. Methods in `*_test.go` files don't count.
+- A method that uses no field and calls no method is left out, such as `func (s *Store) Name() string { return "store" }`. A method that another method calls stays in.
+- A method that passes the whole receiver to a call, such as `save(s)` or `save(*s)`, joins every group, because the function it calls can use any field.
+- A field use inside a closure in a method counts.
+- A selector on the receiver that names no field and no method, such as `s.Lock()` from an embedded `sync.Mutex`, counts as a use of one shared field. goalie reads no types, so it can't tell which embedded field holds `Lock`.
+- A copy of the receiver, such as `c := s`, is not followed, so a field use through `c` doesn't count.
+- The rule skips interfaces, defined types that aren't structs, such as `type Kind int`, and a type with fewer than 2 methods left.
+- Scope `changes` reports a type when the change touches its declaration or one of its methods, in any file of the package.
+- To excuse a type, write `//goalie:ignore low-cohesion <reason>` directly above the type declaration. A `//goalie:ignore low-cohesion` above a method has no effect: the method still counts.
+
+| Setting in `rules.low-cohesion` | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `limit` | Number | `1` | The highest number of groups that passes. `--limit` replaces it |
+
+- The default mode is `warn`, so the rule never changes the exit code until you set `"mode": "fail"`.
+- It gives the same result in a full and a partial check, and it runs no tests.
+
 ## Run goalie in CI
 
 This GitHub Actions workflow runs every rule, and fails a pull request when a rule in `fail` mode reports a result:
@@ -725,6 +774,7 @@ After you change Go code, run `goalie check --partial --base origin/main` from t
 - `primitive-arguments`: define a type for the value, such as `type UserID string`, and use it in each function that passes the value down.
 - `long-file`: move a group of functions that belong together into a file of their own.
 - `high-mean-complexity`: split the most complex functions, or move them into a file of their own.
+- `low-cohesion`: move each group of methods, with the fields that it uses, into a type of its own.
 
 Don't change `.goalierc` or `.goalieignore`, and don't add `//goalie:ignore`, unless a person asks you to.
 ```

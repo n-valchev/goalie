@@ -1,5 +1,5 @@
-// Package rules holds the measures of the function and file rules. It works on Go code and knows
-// nothing about Git, settings, or output, which internal/check adds once for every rule.
+// Package rules holds the measures of the function, file, and type rules. It works on Go code and
+// knows nothing about Git, settings, or output, which internal/check adds once for every rule.
 package rules
 
 import (
@@ -68,6 +68,147 @@ func MeanComplexity(src []byte) (FileMeasurement, bool) {
 		return FileMeasurement{}, true
 	}
 	return FileMeasurement{Value: float64(total) / float64(functions), Functions: functions}, true
+}
+
+// TypeMeasurement holds the method names of each group, ordered by name, and the groups ordered by
+// their first method.
+type TypeMeasurement struct {
+	Value  int
+	Groups [][]string
+}
+
+// LowCohesion goes by method name, so that the platform variants of one method in two files count
+// once. A method that only other methods call stays in, because the call joins it to them.
+func LowCohesion(typ extract.Type, methods []extract.Function) TypeMeasurement {
+	c := cohesion{fields: setOf(typ.Fields...), methods: map[string]bool{}, groups: unionFind{}, kept: map[string]bool{}}
+	for _, method := range methods {
+		c.methods[method.Name] = true
+	}
+	for _, method := range methods {
+		c.read(method)
+	}
+	return c.measure()
+}
+
+type cohesion struct {
+	fields, methods map[string]bool
+	groups          unionFind
+	kept            map[string]bool // The methods that use a field, call a method, or are called.
+	passers         []string
+}
+
+type nodeKind int
+
+const (
+	methodNode nodeKind = iota
+	fieldNode
+	// embeddedNode stands for every embedded field at once, because an embedded field promotes what
+	// it holds, and with no types the rule can't tell which embedded field holds it.
+	embeddedNode
+)
+
+type node struct {
+	kind nodeKind
+	name string
+}
+
+func (c *cohesion) read(method extract.Function) {
+	receiver := receiverName(method.Decl)
+	if receiver == "" {
+		return
+	}
+	ast.Inspect(method.Decl.Body, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.SelectorExpr:
+			if x, ok := n.X.(*ast.Ident); ok && x.Name == receiver {
+				c.join(method.Name, c.nodeOf(n.Sel.Name))
+			}
+		case *ast.CallExpr:
+			if slices.ContainsFunc(n.Args, func(arg ast.Expr) bool { return isName(arg, receiver) }) {
+				c.passers = append(c.passers, method.Name)
+				c.kept[method.Name] = true
+			}
+		}
+		return true
+	})
+}
+
+func (c *cohesion) nodeOf(selected string) node {
+	switch {
+	case c.fields[selected]:
+		return node{fieldNode, selected}
+	case c.methods[selected]:
+		return node{methodNode, selected}
+	}
+	return node{kind: embeddedNode}
+}
+
+func (c *cohesion) join(method string, other node) {
+	c.groups.union(node{methodNode, method}, other)
+	c.kept[method] = true
+	if other.kind == methodNode {
+		c.kept[other.name] = true
+	}
+}
+
+// isName counts &s and *s as s, because each passes the whole receiver.
+func isName(expr ast.Expr, name string) bool {
+	if unary, ok := expr.(*ast.UnaryExpr); ok && unary.Op == token.AND {
+		expr = unary.X
+	}
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
+	}
+	ident, ok := expr.(*ast.Ident)
+	return ok && ident.Name == name
+}
+
+func (c *cohesion) measure() TypeMeasurement {
+	if len(c.kept) < 2 {
+		return TypeMeasurement{}
+	}
+	// The callee may use any field, so passing the whole receiver joins every group.
+	for _, passer := range c.passers {
+		for name := range c.kept {
+			c.groups.union(node{methodNode, passer}, node{methodNode, name})
+		}
+	}
+	byRoot := map[node][]string{}
+	for name := range c.kept {
+		root := c.groups.find(node{methodNode, name})
+		byRoot[root] = append(byRoot[root], name)
+	}
+	var result TypeMeasurement
+	for _, group := range byRoot {
+		slices.Sort(group)
+		result.Groups = append(result.Groups, group)
+	}
+	slices.SortFunc(result.Groups, func(a, b []string) int { return strings.Compare(a[0], b[0]) })
+	result.Value = len(result.Groups)
+	return result
+}
+
+func receiverName(fn *ast.FuncDecl) string {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 || len(fn.Recv.List[0].Names) == 0 {
+		return ""
+	}
+	return fn.Recv.List[0].Names[0].Name
+}
+
+type unionFind map[node]node
+
+func (u unionFind) find(n node) node {
+	for {
+		parent, ok := u[n]
+		if !ok || parent == n {
+			return n
+		}
+		n = parent
+	}
+}
+
+func (u unionFind) union(a, b node) {
+	u[u.find(a)] = u.find(b)
 }
 
 // Parameters counts an unnamed parameter as 1, so that func(int, string) is 2, as it is to a caller.

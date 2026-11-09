@@ -67,6 +67,14 @@ Rules:
         Complexity is the one that crap uses. A function with no body
         doesn't count, and a file with no functions doesn't report. Scope
         changes works as for long-file. It has no //goalie:ignore directive.
+  low-cohesion
+        Reports struct types whose methods fall into more groups than the
+        limit. Two methods are in one group when they use the same field of
+        the receiver, or when one calls the other. Methods in every file of
+        the package count, apart from test files. A method that uses no
+        field and calls no method is left out. With scope changes, a type
+        reports when the change touches its declaration or one of its
+        methods. Write //goalie:ignore low-cohesion <reason> above the type.
 
 With no rule names, goalie runs every rule that isn't off. A rule that you name
 runs even if it is off, and then it reports as warn.
@@ -109,10 +117,11 @@ Settings file:
   mode   off: no output. warn: reports, and never changes the exit code. fail:
          reports, and exits with 1. The default is fail for dup and crap, and
          warn for the other rules.
-  scope  changes: only functions that the change touches, and for long-file
-         and high-mean-complexity, only files that the change takes over the
-         limit. all: every function or file in the whole repository. The
-         default is changes.
+  scope  changes: only functions that the change touches, for long-file and
+         high-mean-complexity, only files that the change takes over the
+         limit, and for low-cohesion, only types whose declaration or methods
+         the change touches. all: every function, file, or type in the whole
+         repository. The default is changes.
 
   The dup rule also takes threshold (default 0.82), minLines (default 9),
   minNodes (default 20), weakAnchors (default 0), weakLiterals (default 0.5),
@@ -123,7 +132,8 @@ Settings file:
   limit: 80 for long-function, 4 for many-arguments, 5 for
   many-dependencies, 3 for complex-condition, 15 for
   cognitive-complexity, 1 for primitive-arguments, 1000 for long-file,
-  and 5 for high-mean-complexity. A limit of 0 doesn't turn a rule off.
+  5 for high-mean-complexity, and 1 for low-cohesion. A limit of 0 doesn't
+  turn a rule off.
 
 Files:
   goalie checks the Go files below the current directory, or in paths. It
@@ -160,7 +170,8 @@ Excuse a function:
     //goalie:ignore crap,dup The table of cases needs every branch.
 
   An unknown rule name or a missing reason exits with 2. A dup directive also
-  leaves out every pair with the function in it.
+  leaves out every pair with the function in it. For low-cohesion, write the
+  directive directly above the type declaration.
   //godry:ignore and //gocrap:ignore have no effect.
 
 Coverage:
