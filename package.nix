@@ -8,10 +8,11 @@ buildGoModule {
 
   vendorHash = null;
 
-  # Do not set subPackages: buildGoModule would then run only the tests of the
-  # listed packages, and the tests live under internal/.
+  # The tests take about 90 s, and a flake update in a project that uses goalie
+  # would wait for them. Run them with `go test ./...` before a push instead.
+  doCheck = false;
+
   nativeBuildInputs = [ makeWrapper ];
-  nativeCheckInputs = [ git ];
 
   # --suffix, not --prefix: a git the user already has must win.
   postInstall = ''
