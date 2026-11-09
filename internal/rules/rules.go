@@ -49,8 +49,8 @@ func FileLines(src []byte) (FileMeasurement, bool) {
 }
 
 // MeanComplexity gives a file with no function the value 0, not no value. Every limit is at least 0,
-// so the file never reports, and a change that adds complex functions to it still crosses the limit,
-// as a new file does.
+// so the file never reports. At the base, such a file must count as a new file, and 0 does that: a
+// change that adds complex functions to it crosses the limit.
 func MeanComplexity(src []byte) (FileMeasurement, bool) {
 	file, err := parser.ParseFile(token.NewFileSet(), "", src, parser.SkipObjectResolution)
 	if err != nil {

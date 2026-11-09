@@ -83,6 +83,8 @@ func TestHighMeanComplexityReportsOnlyAChangeThatCrossesTheLimit(t *testing.T) {
 		{"a change from 7 to 7.5 reports",
 			goFile(complexFunc("A", 7)), goFile(complexFunc("A", 7), complexFunc("B", 8)), meanWarn("7.5", "2 functions")},
 		{"a base file that doesn't parse gives no result", "package a\n\nfunc {\n", goFile(complexFunc("A", 8)), ""},
+		{"a base file with no functions reports as a new file",
+			"package a\n\nvar x = 1\n", goFile(complexFunc("A", 8)), meanWarn("8.0", "1 function")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

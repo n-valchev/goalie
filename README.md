@@ -666,7 +666,7 @@ billing/parse.go:1: warn high-mean-complexity: billing/parse.go has mean complex
 - Every function and method in the file counts. A closure counts as part of the function that holds it.
 - A function with no body, such as one written in assembly, doesn't count.
 - A file with no functions gives no result.
-- Scope `changes` works as it does for `long-file`: a file reports only when the change takes it over the limit, or when it is new. A file with no functions at the merge base counts as under the limit. If the file doesn't parse at the merge base, it gives no result.
+- Scope `changes` works as it does for `long-file`: a file reports only when the change takes it over the limit, or when it is new. A file with no functions at the merge base counts as a new file, so it reports when the change takes its mean over the limit. If the file doesn't parse at the merge base, it gives no result.
 - It has no directive. `//goalie:ignore crap` on a function doesn't change the mean, and `//goalie:ignore high-mean-complexity` exits with `2` as an unknown rule.
 
 | Setting in `rules.high-mean-complexity` | Type | Default | Meaning |
